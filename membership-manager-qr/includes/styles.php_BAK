@@ -1,0 +1,1237 @@
+<?php
+if (!defined('ABSPATH')) exit;
+
+add_action('wp_head', function() {
+    ?>
+    <style>
+    /* Registration & Check-in Forms */
+    .mmgr-registration-form,
+    .mmgr-checkin-container {
+        max-width: 600px;
+        margin: 30px auto;
+        padding: 30px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    
+    .mmgr-registration-form h2,
+    .mmgr-checkin-container h2 {
+        text-align: center;
+        color: #0073aa;
+        margin-bottom: 30px;
+        font-size: 24px;
+    }
+    
+    /* Form Fields */
+    .mmgr-field {
+        margin-bottom: 20px;
+    }
+    
+    .mmgr-field label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #333;
+        font-size: 14px;
+    }
+    
+    .mmgr-field input[type="text"],
+    .mmgr-field input[type="email"],
+    .mmgr-field input[type="tel"],
+    .mmgr-field input[type="date"],
+    .mmgr-field select,
+    .mmgr-field textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        font-size: 14px;
+        transition: all 0.3s;
+        box-sizing: border-box;
+    }
+    
+    .mmgr-field input:focus,
+    .mmgr-field select:focus,
+    .mmgr-field textarea:focus {
+        border-color: #0073aa;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(0, 115, 170, 0.1);
+    }
+    
+    /* Buttons - NARROW */
+    .mmgr-submit,
+    .mmgr-button,
+    .mmgr-btn-primary {
+        background: linear-gradient(135deg, #0073aa 0%, #005a87 100%);
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 2px 8px rgba(0, 115, 170, 0.3);
+        display: inline-block;
+        text-decoration: none;
+        text-align: center;
+        min-width: auto;
+        max-width: 200px;
+    }
+    
+    .mmgr-submit:hover,
+    .mmgr-button:hover,
+    .mmgr-btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 115, 170, 0.4);
+    }
+    
+    .mmgr-submit:active,
+    .mmgr-button:active {
+        transform: translateY(0);
+    }
+    
+    /* Mode Switcher - COMPACT */
+    .mmgr-mode-switch {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 25px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .mmgr-mode-switch button {
+        flex: 0 1 auto;
+        padding: 10px 16px;
+        background: #f0f0f0;
+        border: 2px solid #e0e0e0;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        color: #666;
+        white-space: nowrap;
+    }
+    
+    .mmgr-mode-switch button:hover {
+        background: #e8f4f8;
+        border-color: #0073aa;
+        color: #0073aa;
+    }
+    
+    .mmgr-mode-switch button.active {
+        background: linear-gradient(135deg, #0073aa 0%, #005a87 100%);
+        border-color: #0073aa;
+        color: white;
+        box-shadow: 0 2px 8px rgba(0, 115, 170, 0.3);
+    }
+    
+    /* Mode Containers */
+    .mmgr-mode {
+        display: none;
+        animation: fadeIn 0.3s;
+        max-width: 100%;
+        overflow: hidden;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Hardware Scanner Input - CONTAINED */
+    #hw-input,
+    #manual-input {
+        width: 90% !important;
+        max-width: 90% !important;
+        padding: 12px 15px;
+        font-size: 16px;
+        border: 2px solid #0073aa;
+        border-radius: 6px;
+        box-sizing: border-box;
+        margin: 0 auto;
+        display: block;
+    }
+    
+    #mode-hw,
+    #mode-manual {
+        max-width: 100%;
+        overflow: hidden;
+        padding: 0 10px;
+    }
+    
+    #mode-hw p,
+    #mode-manual p {
+        font-size: 13px;
+        color: #666;
+        text-align: center;
+        margin-top: 8px;
+    }
+    
+    /* Camera View - SMALL & CONTAINED */
+    #camera-view {
+        max-width: 250px !important;
+        width: 100% !important;
+        margin: 15px auto !important;
+        border: 2px solid #0073aa;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #000;
+        aspect-ratio: 1 / 1;
+    }
+    
+    #camera-view * {
+        max-width: 100% !important;
+        width: 100% !important;
+        height: auto !important;
+    }
+    
+    #camera-view video,
+    #camera-view canvas {
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 250px !important;
+        object-fit: cover;
+        display: block;
+    }
+    
+    #camera-view > div,
+    #camera-view video,
+    #camera-view canvas,
+    #camera-view section {
+        max-width: 250px !important;
+        width: 100% !important;
+    }
+    
+    #mode-camera {
+        max-width: 100%;
+        overflow: hidden;
+        text-align: center;
+    }
+    
+    /* Start Camera Button */
+    #start-camera-btn {
+        display: block;
+        margin: 15px auto;
+        max-width: 180px;
+    }
+    
+    /* Check-in Result */
+    #checkin-result {
+        margin-top: 25px;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        font-size: 15px;
+        animation: slideIn 0.3s;
+        max-width: 100%;
+        overflow-wrap: break-word;
+    }
+    
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Success/Error Messages */
+    .mmgr-success {
+        background: #d4edda;
+        border-left: 4px solid #28a745;
+        color: #155724;
+        padding: 12px 15px;
+        border-radius: 6px;
+        margin: 15px 0;
+        font-weight: 600;
+        font-size: 14px;
+    }
+    
+    .mmgr-error {
+        background: #f8d7da;
+        border-left: 4px solid #dc3545;
+        color: #721c24;
+        padding: 12px 15px;
+        border-radius: 6px;
+        margin: 15px 0;
+        font-weight: 600;
+        font-size: 14px;
+    }
+    
+    /* Code of Conduct */
+    .mmgr-coc {
+        max-width: 800px;
+        margin: 30px auto;
+        padding: 30px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        line-height: 1.8;
+    }
+    
+    .mmgr-coc h2 {
+        color: #0073aa;
+        border-bottom: 3px solid #0073aa;
+        padding-bottom: 12px;
+        margin-bottom: 20px;
+        font-size: 22px;
+    }
+    
+    .mmgr-coc-highlight {
+        background: linear-gradient(135deg, #9b51e0 0%, #7d3cb8 100%);
+        color: white;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 12px 0;
+        font-weight: 600;
+        font-size: 14px;
+        box-shadow: 0 3px 10px rgba(155, 81, 224, 0.3);
+    }
+    
+    /* Photo Capture */
+    #camera-container {
+        max-width: 280px;
+        margin: 15px auto;
+        text-align: center;
+    }
+    
+    #camera-feed {
+        width: 100%;
+        max-width: 280px;
+        border: 2px solid #0073aa;
+        border-radius: 8px;
+        background: #000;
+    }
+    
+    #photo-preview {
+        max-width: 220px;
+        margin: 15px auto;
+        border: 2px solid #28a745;
+        border-radius: 8px;
+    }
+    
+    .camera-buttons {
+        margin-top: 15px;
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .camera-buttons button {
+        padding: 8px 18px;
+        border-radius: 20px;
+        border: none;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    #start-camera {
+        background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+        color: white;
+        box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+    }
+    
+    #capture-photo {
+        background: linear-gradient(135deg, #0073aa 0%, #005a87 100%);
+        color: white;
+        box-shadow: 0 2px 8px rgba(0, 115, 170, 0.3);
+    }
+    
+    #retake-photo {
+        background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+        color: #333;
+        box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+    }
+    
+    .camera-buttons button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .mmgr-registration-form,
+        .mmgr-checkin-container,
+        .mmgr-coc {
+            padding: 20px;
+            margin: 15px 10px;
+        }
+        
+        .mmgr-mode-switch {
+            flex-direction: column;
+        }
+        
+        .mmgr-mode-switch button {
+            width: 100%;
+        }
+        
+        #camera-view {
+            max-width: 200px !important;
+        }
+        
+        #camera-container,
+        #camera-feed {
+            max-width: 100%;
+        }
+    }
+
+ 
+    /* Hide theme navigation */
+    body > header,
+    body #masthead,
+    #site-navigation,
+    .site-header,
+    .main-navigation {
+        display: none !important;
+    }
+	.mmgr-load-more-btn {
+		text-align: center;
+		padding: 15px;
+		background: #f0f0f0;
+		border: 1px solid #ddd;
+		border-radius: 6px;
+		cursor: pointer;
+		margin-bottom: 15px;
+	}
+
+	.mmgr-load-more-btn:hover {
+		background: #e0e0e0;
+	}	
+    
+    .mmgr-portal-nav-wrapper {
+        background: linear-gradient(135deg, #9b51e0, #ce00ff);
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    
+    .mmgr-nav-toggle-btn {
+        display: none;
+        padding: 15px 20px;
+        background: rgba(0,0,0,0.2);
+        color: white;
+        border: none;
+        width: 100%;
+        text-align: left;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    
+    .mmgr-nav-items-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0;
+        justify-content: center;
+    }
+    
+    .mmgr-nav-items-container a {
+        padding: 15px 20px;
+        text-align: center;
+        color: white;
+        text-decoration: none;
+        font-weight: bold;
+        font-size: 14px;
+        transition: all 0.3s;
+        border-bottom: 3px solid transparent;
+        background: rgba(0,0,0,0.1);
+        white-space: nowrap;
+    }
+    
+    .mmgr-nav-items-container a:hover {
+        background: rgba(0,0,0,0.3);
+        border-bottom-color: white;
+    }
+    
+    .mmgr-nav-items-container a.active {
+        background: rgba(255,255,255,0.2);
+        border-bottom-color: white;
+    }
+    
+    .mmgr-nav-items-container a.logout {
+        background: rgba(214,54,56,0.8);
+    }
+    
+    .mmgr-nav-items-container a.logout:hover {
+        background: rgba(214,54,56,1);
+    }
+    
+    /* Mobile - hamburger menu */
+    @media (max-width: 600px) {
+        .mmgr-nav-toggle-btn {
+            display: flex !important;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .mmgr-nav-items-container {
+            display: none;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+        
+        .mmgr-nav-items-container.active {
+            display: flex !important;
+        }
+        
+        .mmgr-nav-items-container a {
+            width: 100%;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            font-size: 16px;
+            padding: 15px 20px;
+        }
+    }
+  
+    /* Portal Welcome/Title Styling - Purple Theme */
+    .mmgr-portal-welcome {
+        margin-bottom: 30px;
+    }
+    
+    .mmgr-portal-welcome h1 {
+        color: #9b51e0;
+        font-size: 32px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .mmgr-portal-welcome p {
+        color: #9b51e0;
+        font-size: 15px;
+        opacity: 0.8;
+        margin: 0;
+    }
+
+    /* Members Directory Table Styling */
+    .mmgr-directory-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border: 2px solid #9b51e0;
+    }
+    
+    .mmgr-directory-table thead {
+        background: linear-gradient(135deg, #9b51e0, #ce00ff);
+        color: white;
+    }
+    
+    .mmgr-directory-table thead th {
+        padding: 18px 20px;
+        text-align: left;
+        font-weight: bold;
+        font-size: 16px;
+        letter-spacing: 0.5px;
+        border-right: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .mmgr-directory-table thead th:last-child {
+        border-right: none;
+    }
+    
+    .mmgr-directory-table tbody tr {
+        border-bottom: 1px solid #e0e0e0;
+        transition: all 0.3s;
+    }
+    
+    .mmgr-directory-table tbody tr:last-child {
+        border-bottom: none;
+    }
+    
+    .mmgr-directory-table tbody tr:hover {
+        background: #f9f4ff;
+    }
+    
+    .mmgr-directory-table tbody td {
+        padding: 20px;
+        vertical-align: middle;
+    }
+    
+    .mmgr-directory-photo {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #9b51e0;
+        cursor: pointer;
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+    
+    .mmgr-directory-photo:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 12px rgba(155, 81, 224, 0.4);
+    }
+    
+    .mmgr-directory-alias {
+        font-size: 18px;
+        font-weight: bold;
+        color: #9b51e0;
+        cursor: pointer;
+        transition: color 0.3s;
+    }
+    
+    .mmgr-directory-alias:hover {
+        color: #ce00ff;
+    }
+    
+    .mmgr-directory-actions {
+        text-align: center;
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .mmgr-directory-btn {
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;
+        transition: all 0.3s;
+        white-space: nowrap;
+    }
+    
+    .mmgr-directory-btn-message {
+        background: linear-gradient(135deg, #FF2197, #FF1177);
+        color: white;
+        box-shadow: 0 2px 8px rgba(255, 33, 151, 0.3);
+    }
+    
+    .mmgr-directory-btn-message:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 33, 151, 0.5);
+    }
+    
+    .mmgr-directory-btn-like {
+        border: 2px solid #FF2197;
+        color: #FF2197;
+        background: white;
+        box-shadow: 0 1px 4px rgba(255, 33, 151, 0.2);
+    }
+    
+    .mmgr-directory-btn-like:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(255, 33, 151, 0.3);
+    }
+    
+    .mmgr-directory-btn-like.liked {
+        background: #FF2197;
+        color: white;
+        box-shadow: 0 2px 8px rgba(255, 33, 151, 0.4);
+    }
+    
+    .mmgr-directory-count {
+        text-align: center;
+        color: #666;
+        font-size: 13px;
+        margin-top: 20px;
+        font-weight: 500;
+    }
+
+    .mmgr-login-wrapper {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #000 0%, #1a1a1a 50%, #000 100%);
+        padding: 20px;
+        margin: -20px -20px -20px -20px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    
+    .mmgr-login-container {
+        width: 100%;
+        max-width: 450px;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(255, 33, 151, 0.3);
+        overflow: hidden;
+        border: 3px solid #FF2197;
+    }
+    
+    .mmgr-login-header {
+        background: linear-gradient(135deg, #000 0%, #FF2197 100%);
+        padding: 40px 30px;
+        text-align: center;
+        color: white;
+    }
+    
+    .mmgr-login-header h1 {
+        margin: 0;
+        font-size: 32px;
+        font-weight: bold;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .mmgr-login-header p {
+        margin: 10px 0 0 0;
+        opacity: 0.9;
+        font-size: 16px;
+    }
+    
+    .mmgr-login-body {
+        padding: 40px 30px;
+    }
+    
+    .mmgr-login-field {
+        margin-bottom: 25px;
+    }
+    
+    .mmgr-login-field label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #000;
+        font-size: 15px;
+    }
+    
+    .mmgr-login-field input {
+        width: 100%;
+        padding: 14px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 16px;
+        transition: all 0.3s;
+        box-sizing: border-box;
+        background: #f9f9f9;
+    }
+    
+    .mmgr-login-field input:focus {
+        border-color: #FF2197;
+        outline: none;
+        background: white;
+        box-shadow: 0 0 0 3px rgba(255, 33, 151, 0.1);
+    }
+    
+    .mmgr-login-btn {
+        width: 100%;
+        padding: 16px;
+        background: linear-gradient(135deg, #FF2197 0%, #FF1177 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: 0 4px 15px rgba(255, 33, 151, 0.4);
+    }
+    
+    .mmgr-login-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(255, 33, 151, 0.6);
+    }
+    
+    .mmgr-login-btn:active {
+        transform: translateY(0);
+    }
+    
+    .mmgr-login-error {
+        background: #ffe2e2;
+        border-left: 4px solid #d00;
+        padding: 15px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        color: #d00;
+        font-weight: 500;
+    }
+    
+    .mmgr-login-signup {
+        text-align: center;
+        padding: 25px 30px;
+        background: linear-gradient(135deg, #f9f9f9 0%, #ffffff 100%);
+        border-top: 2px solid #f0f0f0;
+    }
+    
+    .mmgr-login-signup p {
+        margin: 0 0 15px 0;
+        color: #666;
+        font-size: 15px;
+    }
+    
+    .mmgr-signup-btn {
+        display: inline-block;
+        padding: 12px 30px;
+        background: #000;
+        color: #FF2197;
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: bold;
+        border: 2px solid #FF2197;
+        transition: all 0.3s;
+        font-size: 16px;
+    }
+    
+    .mmgr-signup-btn:hover {
+        background: #FF2197;
+        color: #000;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 33, 151, 0.3);
+    }
+    
+    .mmgr-login-help {
+        text-align: center;
+        margin-top: 20px;
+        font-size: 13px;
+        color: #999;
+    }
+    
+    @media (max-width: 768px) {
+        .mmgr-login-wrapper {
+            padding: 10px;
+        }
+        
+        .mmgr-login-header {
+            padding: 30px 20px;
+        }
+        
+        .mmgr-login-header h1 {
+            font-size: 26px;
+        }
+        
+        .mmgr-login-body {
+            padding: 30px 20px;
+        }
+    }
+
+    .mmgr-admin-messages-wrap {
+        margin: 20px 20px 20px 0;
+    }
+    
+    .mmgr-admin-messages-grid {
+        display: grid;
+        grid-template-columns: 350px 1fr;
+        gap: 20px;
+        height: calc(100vh - 200px);
+        min-height: 600px;
+    }
+    
+    .mmgr-admin-sidebar {
+        background: white;
+        border: 1px solid #ccd0d4;
+        border-radius: 4px;
+        overflow-y: auto;
+    }
+    
+	.mmgr-admin-chat-area {
+		background: white;
+		border: 1px solid #ccd0d4;
+		border-radius: 4px;
+		display: flex;
+		flex-direction: column;
+		height: auto;  /* Remove fixed height */
+		max-height: 800px;  /* Optional: set a max total height */
+	}
+    
+    .mmgr-admin-conv-item {
+        padding: 15px;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .mmgr-admin-conv-item:hover {
+        background: #f6f7f7;
+    }
+    
+    .mmgr-admin-conv-item.active {
+        background: #f0f6fc;
+        border-left: 4px solid #2271b1;
+    }
+    
+    .mmgr-admin-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+    }
+    
+    .mmgr-admin-avatar-placeholder {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        flex-shrink: 0;
+    }
+    
+    .mmgr-admin-unread-badge {
+        background: #d63638;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: bold;
+        margin-left: auto;
+    }
+    
+    .mmgr-admin-chat-header {
+        padding: 20px;
+        background: #2271b1;
+        color: white;
+        border-bottom: 1px solid #135e96;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex-shrink: 0;
+    }
+    
+	.mmgr-admin-messages-list {
+		flex: 1;
+		overflow-y: auto;
+		padding: 20px;
+		background: #f6f7f7;
+		max-height: 300px;  /* Even smaller */
+		min-height: 300px;
+	}
+    
+    .mmgr-admin-message-bubble {
+        margin-bottom: 15px;
+        display: flex;
+        gap: 10px;
+    }
+    
+    .mmgr-admin-message-bubble.sent {
+        flex-direction: row-reverse;
+    }
+    
+    .mmgr-admin-message-content {
+        max-width: 60%;
+        background: white;
+        padding: 12px 16px;
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    .mmgr-admin-message-bubble.sent .mmgr-admin-message-content {
+        background: #2271b1;
+        color: white;
+    }
+    
+    .mmgr-admin-message-time {
+        font-size: 11px;
+        color: #666;
+        margin-top: 5px;
+    }
+    
+    .mmgr-admin-message-bubble.sent .mmgr-admin-message-time {
+        color: rgba(255,255,255,0.7);
+    }
+    
+    .mmgr-admin-message-image {
+        max-width: 100%;
+        border-radius: 8px;
+        margin-top: 8px;
+        cursor: pointer;
+    }
+    
+    .mmgr-admin-input-area {
+        padding: 20px;
+        background: white;
+        border-top: 1px solid #ccd0d4;
+        flex-shrink: 0;
+    }
+    
+    .mmgr-admin-input-wrapper {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+    }
+    
+    .mmgr-admin-textarea {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #8c8f94;
+        border-radius: 4px;
+        resize: none;
+        font-family: inherit;
+        font-size: 14px;
+    }
+    
+    .mmgr-admin-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #646970;
+        padding: 40px;
+        text-align: center;
+    }
+    
+    .mmgr-member-info-box {
+        background: #f0f6fc;
+        border: 1px solid #c3e0f7;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .mmgr-member-info-box h4 {
+        margin: 0 0 10px 0;
+        color: #135e96;
+    }
+    
+    .mmgr-member-info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 0;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .mmgr-member-info-row:last-child {
+        border-bottom: none;
+    }
+
+    .mmgr-messages-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .mmgr-messages-grid {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 20px;
+        height: calc(100vh - 200px);
+        min-height: 600px;
+    }
+    
+    .mmgr-sidebar {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        overflow-y: auto;
+        border: 2px solid #9b51e0;
+    }
+    
+    .mmgr-chat-area {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        border: 2px solid #9b51e0;
+        overflow: hidden;
+    }
+    
+    .mmgr-conversation-item {
+        padding: 15px;
+        border-bottom: 1px solid #e0e0e0;
+        cursor: pointer;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .mmgr-conversation-item:hover {
+        background: #f9f9f9;
+    }
+    
+    .mmgr-conversation-item.active {
+        background: #f0e6ff;
+        border-left: 4px solid #9b51e0;
+    }
+    
+    .mmgr-conversation-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #9b51e0;
+        flex-shrink: 0;
+    }
+    
+    .mmgr-avatar-placeholder {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        flex-shrink: 0;
+    }
+    
+    .mmgr-unread-badge {
+        background: #ff2197;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+        margin-left: auto;
+    }
+    
+    .mmgr-chat-header {
+        padding: 20px;
+        background: linear-gradient(135deg, #9b51e0, #ce00ff);
+        color: white;
+        border-bottom: 2px solid #7c3aed;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex-shrink: 0;
+    }
+    
+    .mmgr-chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        background: #f9f9f9;
+    }
+    
+    .mmgr-message-bubble {
+        margin-bottom: 15px;
+        display: flex;
+        gap: 10px;
+    }
+    
+    .mmgr-message-bubble.sent {
+        flex-direction: row-reverse;
+    }
+    
+    .mmgr-message-content {
+        max-width: 60%;
+        background: white;
+        padding: 12px 16px;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .mmgr-message-bubble.sent .mmgr-message-content {
+        background: #9b51e0;
+        color: white;
+    }
+    
+    .mmgr-message-image {
+        max-width: 100%;
+        border-radius: 8px;
+        margin-top: 8px;
+        cursor: pointer;
+    }
+    
+    .mmgr-message-time {
+        font-size: 11px;
+        color: #999;
+        margin-top: 5px;
+    }
+    
+    .mmgr-message-bubble.sent .mmgr-message-time {
+        color: rgba(255,255,255,0.7);
+    }
+    
+    .mmgr-chat-input {
+        padding: 20px;
+        background: white;
+        border-top: 2px solid #e0e0e0;
+        flex-shrink: 0;
+    }
+    
+    .mmgr-input-wrapper {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+    }
+    
+    .mmgr-message-textarea {
+        flex: 1;
+        padding: 12px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        resize: none;
+        font-family: inherit;
+        font-size: 15px;
+    }
+    
+    .mmgr-send-btn {
+        background: #9b51e0;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.3s;
+    }
+    
+    .mmgr-send-btn:hover {
+        background: #ce00ff;
+        transform: translateY(-2px);
+    }
+    
+    .mmgr-tabs {
+        display: flex;
+        background: #f0f0f0;
+        border-bottom: 2px solid #ddd;
+    }
+    
+    .mmgr-tab {
+        flex: 1;
+        padding: 15px;
+        text-align: center;
+        cursor: pointer;
+        font-weight: bold;
+        border: none;
+        background: none;
+        transition: all 0.3s;
+    }
+    
+    .mmgr-tab.active {
+        background: white;
+        color: #9b51e0;
+        border-bottom: 3px solid #9b51e0;
+    }
+    
+    .mmgr-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #999;
+        padding: 40px;
+        text-align: center;
+    }
+    
+    @media (max-width: 768px) {
+        .mmgr-messages-grid {
+            grid-template-columns: 1fr;
+            height: auto;
+        }
+        
+        .mmgr-sidebar {
+            max-height: 300px;
+        }
+        
+        .mmgr-chat-area {
+            min-height: 500px;
+        }
+    }	
+	
+    </style>	
+    <?php
+});
