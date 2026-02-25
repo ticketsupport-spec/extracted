@@ -1,0 +1,283 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f0f2f5;
+  color: #1a1a2e;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 640px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+}
+
+section {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #1a1a2e;
+}
+
+h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #444;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: #444;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  color: #1a1a2e;
+  transition: border-color 0.15s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #4361ee;
+  box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+}
+
+/* Camera */
+.camera-section {
+  margin-bottom: 20px;
+}
+
+.camera-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+#camera-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: none;
+}
+
+#photo-canvas {
+  display: none;
+}
+
+#photo-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.camera-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.camera-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #4361ee;
+  color: #fff;
+}
+
+.btn-primary:not(:disabled):hover {
+  background: #3451d1;
+}
+
+.btn-secondary {
+  background: #e5e7eb;
+  color: #1a1a2e;
+}
+
+.btn-secondary:not(:disabled):hover {
+  background: #d1d5db;
+}
+
+.btn-success {
+  width: 100%;
+  background: #10b981;
+  color: #fff;
+  font-size: 1rem;
+  padding: 12px;
+}
+
+.btn-success:not(:disabled):hover {
+  background: #059669;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Check-in message */
+.checkin-message {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.checkin-message.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.checkin-message.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Log panel */
+.checkin-log {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.empty-log {
+  color: #9ca3af;
+  font-size: 0.875rem;
+  text-align: center;
+  padding: 24px 0;
+}
+
+.log-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.log-entry img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: #e5e7eb;
+}
+
+.log-entry-photo-placeholder {
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.log-entry-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.log-entry-name {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-entry-id {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.log-entry-time {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 4px;
+}
