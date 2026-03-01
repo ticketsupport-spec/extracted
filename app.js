@@ -80,6 +80,12 @@
   }
 
   function retakePhoto() {
+    resetPhotoState();
+  }
+
+  // ── Check-in ─────────────────────────────────────────────────────────────────
+
+  function resetPhotoState() {
     capturedPhotoDataUrl = null;
     photoPreview.src = '';
     photoPreview.classList.add('hidden');
@@ -90,8 +96,6 @@
 
     updateCheckinButton();
   }
-
-  // ── Check-in ─────────────────────────────────────────────────────────────────
 
   function updateCheckinButton() {
     const hasName = memberNameInput.value.trim().length > 0;
@@ -118,13 +122,7 @@
     // Reset form
     memberIdInput.value = '';
     memberNameInput.value = '';
-    capturedPhotoDataUrl = null;
-    photoPreview.src = '';
-    photoPreview.classList.add('hidden');
-    cameraPlaceholder.style.display = '';
-    btnRetake.classList.add('hidden');
-    btnStartCamera.classList.remove('hidden');
-    updateCheckinButton();
+    resetPhotoState();
   }
 
   // ── Log ──────────────────────────────────────────────────────────────────────
@@ -183,7 +181,6 @@
   function showMessage(text, type) {
     checkinMessage.textContent = text;
     checkinMessage.className = 'checkin-message ' + type;
-    checkinMessage.classList.remove('hidden');
 
     clearTimeout(messageHideTimer);
     messageHideTimer = setTimeout(function () {
