@@ -6,7 +6,12 @@ if (!defined('ABSPATH')) exit;
  */
 add_action('wp_head', function() {
     // Only load on portal pages
-    if (!is_page(array('member-dashboard', 'member-login', 'member-setup', 'member-activity', 'member-profile', 'member-community'))) {
+    $portal_pages = array(
+        'member-dashboard', 'member-login', 'member-setup', 'member-activity',
+        'member-profile', 'member-community', 'member-messages',
+        'members-directory', 'member-community-profile',
+    );
+    if (!is_page($portal_pages)) {
         return;
     }
     ?>
