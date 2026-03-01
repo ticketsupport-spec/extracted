@@ -1431,7 +1431,7 @@ add_shortcode('mmgr_member_messages', function() {
  
    
     
-    <div class="mmgr-messages-container">
+    <div class="mmgr-portal-container mmgr-messages-container">
         <!-- Navigation -->
 <!-- Navigation -->
 <?php echo mmgr_get_portal_navigation('messages'); ?>
