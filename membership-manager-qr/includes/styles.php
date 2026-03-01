@@ -540,6 +540,7 @@ add_action('wp_head', function() {
     .mmgr-chat-messages,
     .mmgr-admin-messages-list {
         flex: 1;
+        max-height: 350px;
         overflow-y: auto;
         padding: 20px;
         background: var(--portal-light-bg);
