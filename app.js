@@ -55,6 +55,11 @@
     const width = cameraFeed.videoWidth;
     const height = cameraFeed.videoHeight;
 
+    if (!width || !height) {
+      showMessage('Camera is not ready yet. Please wait a moment and try again.', 'error');
+      return;
+    }
+
     photoCanvas.width = width;
     photoCanvas.height = height;
 
@@ -62,10 +67,9 @@
     ctx.drawImage(cameraFeed, 0, 0, width, height);
     capturedPhotoDataUrl = photoCanvas.toDataURL('image/jpeg', 0.85);
 
-    // Show the still image, hide the live feed
+    // Show the still image and stop the live feed
     photoPreview.src = capturedPhotoDataUrl;
     photoPreview.classList.remove('hidden');
-    cameraFeed.style.display = 'none';
 
     stopCamera();
 
