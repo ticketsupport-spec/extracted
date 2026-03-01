@@ -1569,6 +1569,13 @@ add_shortcode('mmgr_member_messages', function() {
                         <?php endif; ?>
                     </div>
                     
+					<!-- Load Earlier Messages (above scroll box so always visible) -->
+					<div id="load-more-container" style="text-align:center;padding:15px;display:<?php echo (!empty($messages) && $total_messages > 5) ? 'block' : 'none'; ?>;">
+						<button type="button" id="load-more-btn" class="mmgr-load-more-btn" onclick="loadMoreMessages()">
+							⬆️ Load Earlier Messages
+						</button>
+					</div>
+
 					<!-- Messages -->
 					<div class="mmgr-chat-messages" id="messages-container">
 						<?php if (empty($messages)): ?>
@@ -1577,13 +1584,6 @@ add_shortcode('mmgr_member_messages', function() {
 								<p>No messages yet. Say hello!</p>
 							</div>
 						<?php else: ?>
-							<!-- Load More Button -->
-							<div id="load-more-container" style="text-align:center;padding:15px;display:<?php echo $total_messages > 5 ? 'block' : 'none'; ?>;">
-								<button type="button" id="load-more-btn" class="mmgr-load-more-btn" onclick="loadMoreMessages()">
-									⬆️ Load Earlier Messages
-								</button>
-							</div>
-							
 							<!-- Messages List -->
 							<div id="messages-list">
 								<?php foreach ($messages as $msg): ?>
