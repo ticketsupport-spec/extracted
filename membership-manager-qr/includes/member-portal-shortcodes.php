@@ -1378,8 +1378,8 @@ add_shortcode('mmgr_member_messages', function() {
             if (empty($error) && (!empty($message) || !empty($image_url))) {
                 $result = mmgr_send_message($member['id'], $to_member_id, $message, $image_url);
                 if ($result['success']) {
-                    $success = $result['message'];
-                    $active_conversation = $to_member_id;
+                    wp_redirect(add_query_arg('chat', $to_member_id, get_permalink()));
+                    exit;
                 } else {
                     $error = $result['message'];
                 }
