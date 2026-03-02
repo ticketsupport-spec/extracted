@@ -310,6 +310,49 @@ function mmgr_settings_admin() {
         </form>
         
         <hr>
+        <h2>📱 PWA & Push Notifications</h2>
+        <div style="background:#f9f0ff;padding:20px;border-radius:6px;border-left:4px solid #9b51e0;margin-bottom:20px;">
+            <p>The member portal is configured as a <strong>Progressive Web App (PWA)</strong>. Members can:</p>
+            <ul style="list-style:disc;margin-left:20px;line-height:1.8;">
+                <li>Tap <em>"Add to Home Screen"</em> in their mobile browser to install the portal as an app.</li>
+                <li>Receive <strong>push notifications</strong> when they get a new message (permission is requested automatically on first visit).</li>
+            </ul>
+            <?php
+            if (function_exists('mmgr_pwa_get_vapid_keys')) {
+                $vapid = mmgr_pwa_get_vapid_keys();
+                if (!empty($vapid['public'])):
+            ?>
+            <table class="widefat" style="margin-top:15px;">
+                <tr>
+                    <th style="width:200px;">VAPID Public Key</th>
+                    <td><code style="word-break:break-all;"><?php echo esc_html($vapid['public']); ?></code></td>
+                </tr>
+                <tr>
+                    <th>Service Worker URL</th>
+                    <td><code><?php echo esc_html(home_url('/mmgr-sw.js')); ?></code></td>
+                </tr>
+                <tr>
+                    <th>Manifest URL</th>
+                    <td><code><?php echo esc_html(home_url('/mmgr-manifest.webmanifest')); ?></code></td>
+                </tr>
+                <tr>
+                    <th>Active Subscriptions</th>
+                    <td><?php
+                        global $wpdb;
+                        $count = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}mmgr_push_subscriptions");
+                        echo intval($count);
+                    ?> device(s) subscribed</td>
+                </tr>
+            </table>
+            <?php else: ?>
+            <p style="color:#c00;">⚠️ Could not generate VAPID keys – ensure PHP's OpenSSL extension is enabled.</p>
+            <?php
+                endif;
+            }
+            ?>
+        </div>
+
+        <hr>
         <h2>🧪 Test Email</h2>
         <form method="post" style="background:#f0f8ff;padding:20px;border-radius:6px;">
             <?php wp_nonce_field('mmgr_test_email', 'mmgr_test_email_nonce'); ?>

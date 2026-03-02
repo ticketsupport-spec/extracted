@@ -32,9 +32,27 @@ function mmgr_send_message($from_member_id, $to_member_id, $message, $image_url 
     ));
     
     if ($result) {
+        // Send push notification to the recipient (skip admin id = 0)
+        if ($to_member_id != 0 && function_exists('mmgr_pwa_send_push_to_member')) {
+            if ($from_member_id == 0) {
+                $sender_name = 'Admin / Support';
+            } else {
+                $sender = $wpdb->get_row($wpdb->prepare(
+                    "SELECT name FROM {$wpdb->prefix}memberships WHERE id = %d",
+                    $from_member_id
+                ), ARRAY_A);
+                $sender_name = $sender ? $sender['name'] : 'Member';
+            }
+            $body = !empty($message) ? wp_trim_words($message, 10) : '[Image attached]';
+            mmgr_pwa_send_push_to_member(
+                intval($to_member_id),
+                'New message from ' . $sender_name,
+                $body
+            );
+        }
         return array('success' => true, 'message' => 'Message sent!');
     }
-    
+
     return array('success' => false, 'message' => 'Failed to send message.');
 }
 

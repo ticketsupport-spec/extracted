@@ -27,6 +27,7 @@ add_action('plugins_loaded', function() {
     require_once MMGR_PLUGIN_DIR . 'includes/admin-menu.php';  // This needs the function to exist first
     require_once MMGR_PLUGIN_DIR . 'includes/styles.php';
     require_once MMGR_PLUGIN_DIR . 'includes/member-portal-shortcodes.php';
+    require_once MMGR_PLUGIN_DIR . 'includes/pwa-functions.php';
 });
 
 // Register activation hooks

@@ -326,6 +326,21 @@ function mmgr_create_tables() {
         INDEX idx_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     
+    // ===========================
+    // PWA PUSH SUBSCRIPTIONS TABLE
+    // ===========================
+    $push_table = $wpdb->prefix . 'mmgr_push_subscriptions';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$push_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        endpoint VARCHAR(700) NOT NULL,
+        p256dh VARCHAR(255) NOT NULL,
+        auth VARCHAR(100) NOT NULL,
+        created_at DATETIME NOT NULL,
+        UNIQUE KEY unique_endpoint (endpoint(700)),
+        INDEX idx_member_id (member_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     // Update plugin version
     update_option('mmgr_db_version', '1.0.0');
     
