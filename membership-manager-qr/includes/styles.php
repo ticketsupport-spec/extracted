@@ -1045,3 +1045,205 @@ add_action('wp_head', function() {
     </style>	
     <?php
 });
+
+add_action('admin_head', function() {
+    ?>
+    <style>
+    .mmgr-admin-messages-wrap {
+        margin: 20px 20px 20px 0;
+    }
+    
+    .mmgr-admin-messages-grid {
+        display: grid;
+        grid-template-columns: 350px 1fr;
+        gap: 20px;
+        height: calc(100vh - 200px);
+        min-height: 600px;
+    }
+    
+    .mmgr-admin-sidebar {
+        background: white;
+        border: 1px solid #ccd0d4;
+        border-radius: 4px;
+        overflow-y: auto;
+    }
+    
+    .mmgr-admin-chat-area {
+        background: white;
+        border: 1px solid #ccd0d4;
+        border-radius: 4px;
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        max-height: 800px;
+    }
+    
+    .mmgr-admin-conv-item {
+        padding: 15px;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .mmgr-admin-conv-item:hover {
+        background: #f6f7f7;
+    }
+    
+    .mmgr-admin-conv-item.active {
+        background: #f0f6fc;
+        border-left: 4px solid #2271b1;
+    }
+    
+    .mmgr-admin-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+    }
+    
+    .mmgr-admin-avatar-placeholder {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        flex-shrink: 0;
+    }
+    
+    .mmgr-admin-unread-badge {
+        background: #d63638;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: bold;
+        margin-left: auto;
+    }
+    
+    .mmgr-admin-chat-header {
+        padding: 20px;
+        background: #2271b1;
+        color: white;
+        border-bottom: 1px solid #135e96;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex-shrink: 0;
+    }
+    
+    .mmgr-admin-messages-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        background: #f6f7f7;
+        max-height: 300px;
+        min-height: 300px;
+    }
+    
+    .mmgr-admin-message-bubble {
+        margin-bottom: 15px;
+        display: flex;
+        gap: 10px;
+    }
+    
+    .mmgr-admin-message-bubble.sent {
+        flex-direction: row-reverse;
+    }
+    
+    .mmgr-admin-message-content {
+        max-width: 60%;
+        background: white;
+        padding: 12px 16px;
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    .mmgr-admin-message-bubble.sent .mmgr-admin-message-content {
+        background: #2271b1;
+        color: white;
+    }
+    
+    .mmgr-admin-message-time {
+        font-size: 11px;
+        color: #666;
+        margin-top: 5px;
+    }
+    
+    .mmgr-admin-message-bubble.sent .mmgr-admin-message-time {
+        color: rgba(255,255,255,0.7);
+    }
+    
+    .mmgr-admin-message-image {
+        max-width: 100%;
+        border-radius: 8px;
+        margin-top: 8px;
+        cursor: pointer;
+    }
+    
+    .mmgr-admin-input-area {
+        padding: 20px;
+        background: white;
+        border-top: 1px solid #ccd0d4;
+        flex-shrink: 0;
+    }
+    
+    .mmgr-admin-input-wrapper {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+    }
+    
+    .mmgr-admin-textarea {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #8c8f94;
+        border-radius: 4px;
+        resize: none;
+        font-family: inherit;
+        font-size: 14px;
+    }
+    
+    .mmgr-admin-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #646970;
+        padding: 40px;
+        text-align: center;
+    }
+    
+    .mmgr-member-info-box {
+        background: #f0f6fc;
+        border: 1px solid #c3e0f7;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .mmgr-member-info-box h4 {
+        margin: 0 0 10px 0;
+        color: #135e96;
+    }
+    
+    .mmgr-member-info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 0;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .mmgr-member-info-row:last-child {
+        border-bottom: none;
+    }
+    </style>
+    <?php
+});
