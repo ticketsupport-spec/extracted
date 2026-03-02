@@ -156,7 +156,7 @@ add_shortcode('membership_registration', function($atts){
                 <input type="date" name="dob" required max="<?php echo date('Y-m-d', strtotime('-18 years')); ?>">
             </div>
             
-            <div id="partner_fields" style="display:none;border-top:2px solid #ccc;margin-top:20px;padding-top:20px;">
+            <div id="partner_fields" style="display:none;border-top:2px solid #FF2197;margin-top:20px;padding-top:20px;">
                 <h3>Partner Information</h3>
                 <div class="mmgr-field">
                     <label>Partner First Name</label>
@@ -203,13 +203,13 @@ add_shortcode('membership_registration', function($atts){
 $coc_content = get_option('mmgr_code_of_conduct', '');
 if (!empty($coc_content)): ?>
 <div class="mmgr-field">
-    <label style="font-weight:bold;display:block;margin-bottom:10px;">Code of Conduct</label>
- <div style="max-height:300px;overflow-y:auto;padding:3px;border:2px solid #0073aa;border-radius:6px;background:#f9f9f9;margin-bottom:15px;">
+    <label style="font-weight:bold;display:block;margin-bottom:10px;color:#FF2197;">Code of Conduct</label>
+ <div style="max-height:300px;overflow-y:auto;padding:12px;border:2px solid #FF2197;border-radius:6px;background:#1a1a1a;margin-bottom:15px;color:#ccc;">
     <?php 
-    // Process the code of conduct content - replace <hr> with purple styled version
+    // Process the code of conduct content - replace <hr> with pink styled version
     $coc_processed = str_replace(
         array('<hr>', '<hr/>', '<hr />'),
-        '<hr style="border:none;border-top:3px solid #9b51e0;margin:15px 0;">',
+        '<hr style="border:none;border-top:3px solid #FF2197;margin:15px 0;">',
         $coc_content
     );
     
@@ -224,23 +224,23 @@ if (!empty($coc_content)): ?>
         }
         // Lines starting with "-" are highlighted
         elseif (strpos($line, '-') === 0) {
-            echo '<p style="background:#9b51e0;color:white;padding:3px;margin:5px 0;border-radius:4px;font-weight:bold;">' . esc_html(ltrim($line, '- ')) . '</p>';
+            echo '<p style="background:#FF2197;color:white;padding:3px;margin:5px 0;border-radius:4px;font-weight:bold;">' . esc_html(ltrim($line, '- ')) . '</p>';
         }
         // Regular text
         else {
-            echo '<p style="margin:8px 0;line-height:1.6;padding:3px;">' . esc_html($line) . '</p>';
+            echo '<p style="margin:8px 0;line-height:1.6;color:#ccc;">' . esc_html($line) . '</p>';
         }
     }
     ?>
 </div>
-    <label style="display:flex;align-items:center;gap:8px;">
+    <label style="display:flex;align-items:center;gap:8px;color:#fff;">
         <input type="checkbox" name="agreed_coc" value="1" required>
         <strong>I agree to follow the rules and Code of Conduct listed above *</strong>
     </label>
 </div>
 <?php else: ?>
 <div class="mmgr-field">
-    <label>
+    <label style="color:#fff;">
         <input type="checkbox" name="agreed_coc" value="1" required>
         <strong>I agree to follow the rules and Code of Conduct *</strong>
     </label>
@@ -508,7 +508,7 @@ add_shortcode('membership_checkin', function($atts){
 
 // Code of Conduct Display Shortcode
 add_shortcode('membership_code_of_conduct', function($atts){
-    $content = get_option('mmgr_coc_content', '');
+    $content = get_option('mmgr_code_of_conduct', '');
     return '<div class="mmgr-coc">' . wp_kses_post($content) . '</div>';
 });
 

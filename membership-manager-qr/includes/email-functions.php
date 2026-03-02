@@ -2,6 +2,32 @@
 if (!defined('ABSPATH')) exit;
 
 /**
+ * Build an inline QR code <img> tag for use in emails.
+ */
+function mmgr_qr_img_tag($member_code) {
+    $qr_url = mmgr_generate_qr_code($member_code);
+    if (!$qr_url) {
+        return '';
+    }
+    return '<img src="' . esc_url($qr_url) . '" alt="Your QR Code" style="display:block;width:200px;height:200px;margin:10px 0;">';
+}
+
+/**
+ * Allowed HTML tags/attributes for outgoing email bodies.
+ */
+function mmgr_email_kses_tags() {
+    return array(
+        'a'   => array('href' => array(), 'target' => array(), 'style' => array()),
+        'br'  => array(),
+        'strong' => array(),
+        'b'   => array(),
+        'em'  => array(),
+        'i'   => array(),
+        'img' => array('src' => array(), 'alt' => array(), 'style' => array(), 'width' => array(), 'height' => array()),
+    );
+}
+
+/**
  * Send welcome email to new member with QR code
  */
 function mmgr_send_welcome_email($member_id) {
@@ -35,6 +61,9 @@ function mmgr_send_welcome_email($member_id) {
         $portal_link = home_url('/member-setup/?token=' . $token);
     }
     
+    // Generate inline QR code image tag
+    $qr_img_tag = mmgr_qr_img_tag($member['member_code']);
+
     // Prepare placeholders
     $placeholders = array(
         '{member_name}' => $member['name'],
@@ -48,6 +77,7 @@ function mmgr_send_welcome_email($member_id) {
         '{site_url}' => home_url(),
         '{code_of_conduct}' => home_url('/code-of-conduct'),
         '{portal_link}' => $portal_link ? '<a href="' . esc_url($portal_link) . '">Click here to set up your account password</a>' : '',
+        '{qr_code}' => $qr_img_tag,
     );
     
     // Replace placeholders in subject, template, and footer
@@ -58,15 +88,8 @@ function mmgr_send_welcome_email($member_id) {
     // Combine body and footer
     $full_body = $body . "\n\n" . $footer_content;
     
-// Convert to HTML email - allow links
-$html_body = wp_kses($full_body, array(
-    'a' => array('href' => array(), 'target' => array(), 'style' => array()),
-    'br' => array(),
-    'strong' => array(),
-    'b' => array(),
-    'em' => array(),
-    'i' => array(),
-));
+// Convert to HTML email - allow links and inline images
+$html_body = wp_kses($full_body, mmgr_email_kses_tags());
 $html_body = nl2br($html_body);
 $html_body = '
 <html>
@@ -215,7 +238,8 @@ Type: {membership_type}
 Expires: {expire_date}
 
 🎫 YOUR QR CODE
-Your QR code is attached to this email. Show it on your phone when you check in, or print it for a physical card.
+{qr_code}
+Your QR code is shown above and also attached to this email. Show it on your phone when you check in, or print it for a physical card.
 
 🔐 SET UP YOUR ACCOUNT
 {portal_link}
@@ -262,6 +286,7 @@ function mmgr_send_test_email($recipient_email) {
         '{site_url}' => home_url(),
         '{code_of_conduct}' => home_url('/code-of-conduct'),
         '{portal_link}' => '<a href="' . home_url('/member-setup/?token=TEST') . '">Click here to set up your account password (TEST LINK)</a>',
+        '{qr_code}' => mmgr_qr_img_tag('MB123456TEST'),
     );
     
     // Replace placeholders
@@ -271,15 +296,8 @@ function mmgr_send_test_email($recipient_email) {
     
     $full_body = $body . "\n\n" . $footer_content;
     
-    // Convert to HTML email - allow links
-    $html_body = wp_kses($full_body, array(
-        'a' => array('href' => array(), 'target' => array()),
-        'br' => array(),
-        'strong' => array(),
-        'b' => array(),
-        'em' => array(),
-        'i' => array(),
-    ));
+    // Convert to HTML email - allow links and inline images
+    $html_body = wp_kses($full_body, mmgr_email_kses_tags());
     $html_body = nl2br($html_body);
     $html_body = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' . $html_body . '</div>';
     

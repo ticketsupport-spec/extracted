@@ -185,26 +185,95 @@ add_action('wp_head', function() {
     .mmgr-registration-form {
         max-width: 600px;
         margin: 20px auto;
-        background: white;
-        border-radius: 8px;
-        padding: 30px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        background: #000;
+        border-radius: 12px;
+        padding: 0;
+        box-shadow: 0 4px 20px rgba(255,33,151,0.3);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        overflow: hidden;
+        border: 2px solid #FF2197;
+    }
+
+    .mmgr-registration-form > .mmgr-registration-logo,
+    .mmgr-registration-form > .mmgr-registration-blurb,
+    .mmgr-registration-form > h2,
+    .mmgr-registration-form > form {
+        padding-left: 30px;
+        padding-right: 30px;
+    }
+
+    .mmgr-registration-form > .mmgr-registration-logo {
+        padding-top: 30px;
+    }
+
+    .mmgr-registration-form > form {
+        padding-bottom: 30px;
     }
 
     .mmgr-registration-form h2 {
         margin-top: 0;
-        color: var(--portal-blue);
-        border-bottom: 2px solid var(--portal-border);
+        padding-top: 24px;
+        color: #FF2197;
+        border-bottom: 2px solid #FF2197;
         padding-bottom: 12px;
         margin-bottom: 24px;
         font-size: 22px;
     }
 
     .mmgr-registration-form h3 {
-        color: #333;
+        color: #FF2197;
         font-size: 16px;
         margin-bottom: 15px;
+    }
+
+    .mmgr-registration-form .mmgr-field label {
+        color: #fff;
+    }
+
+    .mmgr-registration-form .mmgr-field input[type="text"],
+    .mmgr-registration-form .mmgr-field input[type="email"],
+    .mmgr-registration-form .mmgr-field input[type="tel"],
+    .mmgr-registration-form .mmgr-field input[type="date"],
+    .mmgr-registration-form .mmgr-field select,
+    .mmgr-registration-form .mmgr-field textarea {
+        background: #1a1a1a;
+        color: #fff;
+        border-color: #FF2197;
+    }
+
+    .mmgr-registration-form .mmgr-field input:focus,
+    .mmgr-registration-form .mmgr-field select:focus,
+    .mmgr-registration-form .mmgr-field textarea:focus {
+        border-color: #FF2197;
+        box-shadow: 0 0 0 3px rgba(255, 33, 151, 0.25);
+    }
+
+    .mmgr-registration-form .mmgr-field select option {
+        background: #1a1a1a;
+        color: #fff;
+    }
+
+    .mmgr-registration-form #partner_fields {
+        border-top-color: #FF2197;
+    }
+
+    .mmgr-registration-form .mmgr-submit {
+        background: linear-gradient(135deg, #FF2197 0%, #ce00ff 100%);
+        box-shadow: 0 2px 8px rgba(255, 33, 151, 0.4);
+        color: #fff;
+        max-width: none;
+        width: 100%;
+        padding: 14px;
+        font-size: 16px;
+        border-radius: 6px;
+    }
+
+    .mmgr-registration-form .mmgr-submit:hover {
+        box-shadow: 0 4px 14px rgba(255, 33, 151, 0.6);
+    }
+
+    .mmgr-registration-blurb {
+        color: #ccc;
     }
 
     /* ============================================
