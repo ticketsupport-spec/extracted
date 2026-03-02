@@ -427,7 +427,10 @@ add_shortcode('mmgr_member_dashboard', function() {
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
             <h1>Welcome back, <?php echo esc_html($member['first_name']); ?>! 👋</h1>
-            <p>You have <?php echo esc_html($unread_messages); ?> unread <?php echo $unread_messages === 1 ? 'message' : 'messages'; ?> and <?php echo esc_html($total_likes); ?> <?php echo $total_likes === 1 ? 'like' : 'likes'; ?></p>
+            <p>You have <a href="<?php echo esc_url(home_url('/member-messages/')); ?>" aria-label="View your unread messages"><?php echo esc_html($unread_messages); ?> unread <?php echo $unread_messages === 1 ? 'message' : 'messages'; ?></a> and <a href="<?php echo esc_url(home_url('/members-directory/')); ?>" aria-label="View members who liked your content"><?php echo esc_html($total_likes); ?> <?php echo $total_likes === 1 ? 'like' : 'likes'; ?></a></p>
+            <?php if (empty($member['community_alias']) || empty($member['community_bio']) || empty($member['community_photo_url'])): ?>
+            <p>Set up your community profile. Add a Photo, Bio and an Alias - <a href="<?php echo esc_url(home_url('/member-profile/')); ?>">Click Here</a></p>
+            <?php endif; ?>
         </div>
         
         <div class="mmgr-portal-grid">
