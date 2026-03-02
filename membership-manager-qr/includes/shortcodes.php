@@ -540,7 +540,12 @@ add_shortcode('membership_code_of_conduct', function($atts){
         <div class="mmgr-portal-container">
             <!-- Navigation -->
             <?php echo mmgr_get_portal_navigation('coc'); ?>
-            <div class="mmgr-coc"></div>
+            <div class="mmgr-portal-titlecc">
+                <h1>Code of Conduct 📜</h1>
+            </div>
+            <div class="mmgr-portal-card">
+                <div class="mmgr-coc"></div>
+            </div>
         </div>
         <?php
         return ob_get_clean();
@@ -601,7 +606,12 @@ add_shortcode('membership_code_of_conduct', function($atts){
     <div class="mmgr-portal-container">
         <!-- Navigation -->
         <?php echo mmgr_get_portal_navigation('coc'); ?>
-        <div class="mmgr-coc"><?php echo $html; ?></div>
+        <div class="mmgr-portal-titlecc">
+            <h1>Code of Conduct 📜</h1>
+        </div>
+        <div class="mmgr-portal-card">
+            <div class="mmgr-coc"><?php echo $html; ?></div>
+        </div>
     </div>
     <?php
     return ob_get_clean();
