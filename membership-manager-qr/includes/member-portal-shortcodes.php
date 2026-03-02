@@ -2166,6 +2166,20 @@ add_shortcode('mmgr_members_directory', function() {
          ORDER BY community_alias ASC",
         $member['id']
     ), ARRAY_A);
+
+    // Get members who checked in today and have a community alias (excluding current user)
+    $today_start = date('Y-m-d 00:00:00');
+    $today_end   = date('Y-m-d 23:59:59');
+    $online_members = $wpdb->get_results($wpdb->prepare(
+        "SELECT DISTINCT m.id, m.community_alias, m.community_photo_url
+         FROM {$wpdb->prefix}memberships m
+         INNER JOIN {$wpdb->prefix}membership_visits v ON v.member_id = m.id
+         WHERE v.visit_time BETWEEN %s AND %s
+           AND m.community_alias IS NOT NULL AND m.community_alias != ''
+           AND m.id != %d AND m.banned = 0
+         ORDER BY m.community_alias ASC",
+        $today_start, $today_end, $member['id']
+    ), ARRAY_A);
     
     ob_start();
     ?>
@@ -2177,7 +2191,35 @@ add_shortcode('mmgr_members_directory', function() {
         <div class="mmgr-portal-titlecc">
             <h1>Members Directory 👥</h1>
         </div>
-        
+
+        <!-- Who's Online Today -->
+        <div class="mmgr-portal-card" id="mmgr-who-online-card">
+            <h3 style="color:var(--portal-primary);margin-bottom:14px;">
+                🟢 Who's Online Today
+                <span id="mmgr-online-count" style="font-size:13px;font-weight:normal;color:#666;margin-left:8px;">(<?php echo count($online_members); ?>)</span>
+            </h3>
+            <div id="mmgr-online-list">
+            <?php if (empty($online_members)): ?>
+                <p style="color:#888;font-size:14px;">No members have checked in today yet.</p>
+            <?php else: ?>
+                <div style="display:flex;flex-wrap:wrap;gap:12px;">
+                <?php foreach ($online_members as $om): ?>
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;" onclick="viewCommunityProfile(<?php echo intval($om['id']); ?>)">
+                        <?php if (!empty($om['community_photo_url'])): ?>
+                            <img src="<?php echo esc_url($om['community_photo_url']); ?>"
+                                 alt="<?php echo esc_attr($om['community_alias']); ?>"
+                                 style="width:54px;height:54px;border-radius:50%;object-fit:cover;border:3px solid #28a745;">
+                        <?php else: ?>
+                            <div style="width:54px;height:54px;border-radius:50%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:26px;border:3px solid #28a745;">👤</div>
+                        <?php endif; ?>
+                        <span style="font-size:12px;color:#333;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo esc_html($om['community_alias']); ?></span>
+                    </div>
+                <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            </div>
+        </div>
+
         <!-- Members Table -->
         <div class="mmgr-portal-card">
             <?php if (empty($members)): ?>
@@ -2299,6 +2341,66 @@ add_shortcode('mmgr_members_directory', function() {
                 }
             });
         }
+
+        // Who's Online auto-refresh (every 2 minutes)
+        var MMGR_ONLINE_REFRESH_MS = 120000;
+
+        function mmgrBuildOnlineCard(m) {
+            var wrapper = document.createElement('div');
+            wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;';
+            wrapper.addEventListener('click', function() { viewCommunityProfile(m.id); });
+
+            if (m.photo) {
+                var img = document.createElement('img');
+                img.src = m.photo;
+                img.alt = m.alias;
+                img.style.cssText = 'width:54px;height:54px;border-radius:50%;object-fit:cover;border:3px solid #28a745;';
+                wrapper.appendChild(img);
+            } else {
+                var avatar = document.createElement('div');
+                avatar.style.cssText = 'width:54px;height:54px;border-radius:50%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:26px;border:3px solid #28a745;';
+                avatar.textContent = '👤';
+                wrapper.appendChild(avatar);
+            }
+
+            var label = document.createElement('span');
+            label.style.cssText = 'font-size:12px;color:#333;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+            label.textContent = m.alias;
+            wrapper.appendChild(label);
+
+            return wrapper;
+        }
+
+        function mmgrRefreshOnline() {
+            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'action=mmgr_who_is_online&nonce=<?php echo wp_create_nonce('mmgr_who_is_online'); ?>'
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) return;
+                var list = document.getElementById('mmgr-online-list');
+                var countEl = document.getElementById('mmgr-online-count');
+                if (!list) return;
+                countEl.textContent = '(' + d.data.count + ')';
+                list.innerHTML = '';
+                if (d.data.count === 0) {
+                    var msg = document.createElement('p');
+                    msg.style.cssText = 'color:#888;font-size:14px;';
+                    msg.textContent = 'No members have checked in today yet.';
+                    list.appendChild(msg);
+                    return;
+                }
+                var grid = document.createElement('div');
+                grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;';
+                d.data.members.forEach(function(m) {
+                    grid.appendChild(mmgrBuildOnlineCard(m));
+                });
+                list.appendChild(grid);
+            });
+        }
+        setInterval(mmgrRefreshOnline, MMGR_ONLINE_REFRESH_MS);
     </script>
     <?php
     return ob_get_clean();
@@ -2349,6 +2451,44 @@ add_action('wp_ajax_mmgr_toggle_like', function() {
         
         wp_send_json_success(array('liked' => true));
     }
+});
+
+/**
+ * AJAX: Who is Online Today
+ */
+add_action('wp_ajax_mmgr_who_is_online', function() {
+    check_ajax_referer('mmgr_who_is_online', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(['message' => 'Not logged in']);
+        return;
+    }
+
+    global $wpdb;
+    $today_start = date('Y-m-d 00:00:00');
+    $today_end   = date('Y-m-d 23:59:59');
+
+    $online = $wpdb->get_results($wpdb->prepare(
+        "SELECT DISTINCT m.id, m.community_alias, m.community_photo_url
+         FROM {$wpdb->prefix}memberships m
+         INNER JOIN {$wpdb->prefix}membership_visits v ON v.member_id = m.id
+         WHERE v.visit_time BETWEEN %s AND %s
+           AND m.community_alias IS NOT NULL AND m.community_alias != ''
+           AND m.id != %d AND m.banned = 0
+         ORDER BY m.community_alias ASC",
+        $today_start, $today_end, intval($member['id'])
+    ), ARRAY_A);
+
+    $result = array_map(function($m) {
+        return [
+            'id'    => intval($m['id']),
+            'alias' => esc_html($m['community_alias']),
+            'photo' => !empty($m['community_photo_url']) ? esc_url($m['community_photo_url']) : '',
+        ];
+    }, $online);
+
+    wp_send_json_success(['members' => $result, 'count' => count($result)]);
 });
 
 /**
