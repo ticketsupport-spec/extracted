@@ -540,6 +540,7 @@ add_action('wp_head', function() {
     .mmgr-chat-messages,
     .mmgr-admin-messages-list {
         flex: 1;
+        max-height: 350px;
         overflow-y: auto;
         padding: 20px;
         background: var(--portal-light-bg);
@@ -873,6 +874,172 @@ add_action('wp_head', function() {
             padding: 30px 20px;
         }
     }	
+
+    /* ============================================
+       PORTAL LAYOUT
+       ============================================ */
+    .mmgr-portal-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .mmgr-portal-card {
+        background: white;
+        border-radius: 8px;
+        padding: 25px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+
+    .mmgr-portal-card h2 {
+        margin-top: 0;
+        color: #0073aa;
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+
+    .mmgr-portal-card h3 {
+        margin-top: 0;
+        color: #333;
+        font-size: 18px;
+        margin-bottom: 15px;
+    }
+
+    .mmgr-portal-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+        .mmgr-portal-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ============================================
+       BUTTONS
+       ============================================ */
+    .mmgr-btn-secondary {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-decoration: none;
+        display: inline-block;
+        background: #f0f0f0;
+        color: #333;
+    }
+
+    .mmgr-btn-secondary:hover {
+        background: #e0e0e0;
+    }
+
+    /* ============================================
+       INFO TABLE
+       ============================================ */
+    .mmgr-info-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .mmgr-info-table tr {
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .mmgr-info-table td {
+        padding: 12px 8px;
+    }
+
+    .mmgr-info-table td:first-child {
+        width: 40%;
+        color: #666;
+    }
+
+    .mmgr-info-table td:last-child {
+        font-weight: 500;
+    }
+
+    /* ============================================
+       STATUS BADGE
+       ============================================ */
+    .mmgr-status-badge {
+        display: inline-block;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 14px;
+        margin-bottom: 15px;
+    }
+
+    .status-pending {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .status-ready {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .status-completed {
+        background: #e7f3ff;
+        color: #0073aa;
+    }
+
+    /* ============================================
+       MISC COMPONENTS
+       ============================================ */
+    .mmgr-portal-footer {
+        background: #f9f9f9;
+        padding: 30px;
+        margin-top: 40px;
+        border-top: 3px solid #ce00ff;
+    }
+
+    .mmgr-activity-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+        margin-bottom: 30px;
+    }
+
+    @media (max-width: 768px) {
+        .mmgr-activity-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .mmgr-events-widget {
+        margin-top: 20px;
+    }
+
+    .mmgr-post-like-btn {
+        background: white;
+        color: #FF2197;
+        border: 2px solid #FF2197;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;
+        transition: all 0.3s;
+    }
+
+    .mmgr-post-like-btn.liked {
+        background: #FF2197;
+        color: white;
+    }
+
+    .mmgr-tab-content {
+        display: block;
+    }
 	
 	
     </style>	
