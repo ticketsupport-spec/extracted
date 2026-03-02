@@ -19,6 +19,7 @@ function mmgr_get_portal_navigation($active_page = '') {
             <a href="<?php echo home_url('/member-profile/'); ?>" class="<?php echo $active_page === 'profile' ? 'active' : ''; ?>">👤 Profile</a>
             <a href="<?php echo home_url('/member-community/'); ?>" class="<?php echo $active_page === 'community' ? 'active' : ''; ?>">👥 Community</a>
 			<a href="<?php echo home_url('/members-directory/'); ?>" class="<?php echo $active_page === 'directory' ? 'active' : ''; ?>">📋 Directory</a>
+			<a href="<?php echo home_url('/member-code-of-conduct/'); ?>" class="<?php echo $active_page === 'coc' ? 'active' : ''; ?>">📜 Code of Conduct</a>
 			<a href="<?php echo home_url('/member-dashboard/?action=logout'); ?>" class="logout">🚪 Logout</a>
         </div>
     </div>
