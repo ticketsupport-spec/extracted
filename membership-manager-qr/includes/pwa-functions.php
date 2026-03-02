@@ -324,8 +324,426 @@ function mmgr_pwa_inject_head() {
 }
 
 // ---------------------------------------------------------------------------
-// AJAX: save push subscription (logged-in members only)
+// Install banner + instructions modal (injected into page footer)
 // ---------------------------------------------------------------------------
+
+add_action('wp_footer', 'mmgr_pwa_inject_install_banner', 20);
+function mmgr_pwa_inject_install_banner() {
+    // Only on member portal pages
+    $current_slug = get_post_field('post_name', get_the_ID());
+    $portal_slugs = [
+        'member-dashboard', 'member-messages', 'member-activity',
+        'member-profile',   'member-community', 'members-directory',
+        'member-login',
+    ];
+    if (!in_array($current_slug, $portal_slugs, true)) {
+        return;
+    }
+
+    $site_name = esc_html(get_bloginfo('name'));
+    $icon_url  = esc_url(home_url('/mmgr-icon-192.png'));
+    ?>
+<!-- MMGR PWA Install Banner -->
+<style>
+#mmgr-install-banner {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 99999;
+    background: linear-gradient(135deg, #9b51e0, #ce00ff);
+    color: #fff;
+    padding: 10px 16px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+#mmgr-install-banner.mmgr-banner-visible {
+    display: flex;
+}
+#mmgr-install-banner-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+#mmgr-install-banner-text {
+    flex: 1;
+    line-height: 1.3;
+}
+#mmgr-install-banner-text strong {
+    display: block;
+    font-size: 13px;
+}
+#mmgr-install-banner-text span {
+    font-size: 12px;
+    opacity: 0.9;
+}
+#mmgr-install-banner-cta {
+    background: rgba(255,255,255,0.25);
+    border: 1px solid rgba(255,255,255,0.5);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+#mmgr-install-banner-dismiss {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.8);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    flex-shrink: 0;
+}
+/* Modal overlay */
+#mmgr-install-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: rgba(0,0,0,0.55);
+    align-items: flex-end;
+    justify-content: center;
+}
+#mmgr-install-modal.mmgr-modal-open {
+    display: flex;
+}
+#mmgr-install-modal-box {
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    padding: 24px 20px 32px;
+    width: 100%;
+    max-width: 480px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.2);
+    animation: mmgrSlideUp 0.25s ease;
+}
+@keyframes mmgrSlideUp {
+    from { transform: translateY(40px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+#mmgr-install-modal-box h3 {
+    margin: 0 0 6px;
+    font-size: 18px;
+    color: #9b51e0;
+}
+#mmgr-install-modal-box p.mmgr-modal-sub {
+    margin: 0 0 20px;
+    font-size: 13px;
+    color: #666;
+}
+.mmgr-install-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+.mmgr-install-step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #9b51e0, #ce00ff);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.mmgr-install-step-body {
+    flex: 1;
+    padding-top: 2px;
+}
+.mmgr-install-step-body strong {
+    display: block;
+    font-size: 14px;
+    color: #222;
+    margin-bottom: 2px;
+}
+.mmgr-install-step-body span {
+    font-size: 13px;
+    color: #555;
+}
+#mmgr-install-modal-close {
+    display: block;
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px;
+    background: #f0e6ff;
+    color: #9b51e0;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+#mmgr-android-install-btn {
+    display: none;
+    width: 100%;
+    margin-top: 12px;
+    padding: 13px;
+    background: linear-gradient(135deg, #9b51e0, #ce00ff);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+}
+</style>
+
+<!-- Banner HTML -->
+<div id="mmgr-install-banner" role="button" aria-label="Add this app to your home screen">
+    <img id="mmgr-install-banner-icon" src="<?php echo $icon_url; ?>" alt="">
+    <div id="mmgr-install-banner-text">
+        <strong>📲 Add <?php echo $site_name; ?> to your home screen</strong>
+        <span>Get push notifications &amp; quick access</span>
+    </div>
+    <button id="mmgr-install-banner-cta" type="button">Install</button>
+    <button id="mmgr-install-banner-dismiss" type="button" aria-label="Dismiss">✕</button>
+</div>
+
+<!-- Instructions Modal -->
+<div id="mmgr-install-modal" role="dialog" aria-modal="true" aria-labelledby="mmgr-modal-title">
+    <div id="mmgr-install-modal-box">
+        <h3 id="mmgr-modal-title">📱 Add to Home Screen</h3>
+        <p class="mmgr-modal-sub">Follow these steps to install the app:</p>
+
+        <!-- iOS steps (shown by JS when on iOS) -->
+        <div id="mmgr-steps-ios">
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">1</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Tap the Share button 📤</strong>
+                    <span>At the bottom of Safari, tap the Share icon (box with upward arrow)</span>
+                </div>
+            </div>
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">2</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Tap "Add to Home Screen"</strong>
+                    <span>Scroll down in the share sheet and tap <em>Add to Home Screen</em></span>
+                </div>
+            </div>
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">3</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Tap "Add"</strong>
+                    <span>Confirm by tapping <em>Add</em> in the top-right corner</span>
+                </div>
+            </div>
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">4</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Open the app and allow notifications</strong>
+                    <span>Launch from your home screen — you'll be prompted to allow push notifications</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Android/Chrome steps -->
+        <div id="mmgr-steps-android" style="display:none;">
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">1</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Tap "Install" below</strong>
+                    <span>Your browser will ask you to confirm adding this app to your home screen</span>
+                </div>
+            </div>
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">2</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Tap "Install" in the browser prompt</strong>
+                    <span>The app icon will be added to your home screen automatically</span>
+                </div>
+            </div>
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">3</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Allow notifications when asked</strong>
+                    <span>This lets us send you a notification whenever you receive a new message</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generic/desktop steps (fallback) -->
+        <div id="mmgr-steps-generic" style="display:none;">
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">1</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Open your browser menu</strong>
+                    <span>Tap the three-dot ⋮ or settings menu in your browser</span>
+                </div>
+            </div>
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">2</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Tap "Install app" or "Add to Home screen"</strong>
+                    <span>The exact label depends on your browser</span>
+                </div>
+            </div>
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">3</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Confirm installation</strong>
+                    <span>Follow the on-screen prompts to finish</span>
+                </div>
+            </div>
+        </div>
+
+        <button id="mmgr-android-install-btn" type="button">⬇️ Install App Now</button>
+        <button id="mmgr-install-modal-close" type="button">Got it — close</button>
+    </div>
+</div>
+
+<script>
+(function() {
+    var DISMISS_KEY    = 'mmgr_install_dismissed';
+    var DISMISS_DAYS   = 7;
+    var banner         = document.getElementById('mmgr-install-banner');
+    var modal          = document.getElementById('mmgr-install-modal');
+    var ctaBtn         = document.getElementById('mmgr-install-banner-cta');
+    var dismissBtn     = document.getElementById('mmgr-install-banner-dismiss');
+    var closeBtn       = document.getElementById('mmgr-install-modal-close');
+    var androidInstall = document.getElementById('mmgr-android-install-btn');
+    var deferredPrompt = null;
+
+    // Don't show if already running as standalone (installed)
+    if (window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true) {
+        return;
+    }
+
+    // Don't show if recently dismissed
+    var dismissed = localStorage.getItem(DISMISS_KEY);
+    if (dismissed && Date.now() < parseInt(dismissed, 10)) {
+        return;
+    }
+
+    // Detect platform
+    var ua       = navigator.userAgent || '';
+    var isIOS    = /iphone|ipad|ipod/i.test(ua);
+    var isSafari = /safari/i.test(ua) && !/chrome|crios|fxios/i.test(ua);
+    var isAndroidChrome = /android/i.test(ua) && /chrome/i.test(ua) && !/opr/i.test(ua);
+
+    // For iOS Safari: show banner immediately (no beforeinstallprompt)
+    if (isIOS && isSafari) {
+        showBanner('ios');
+        return;
+    }
+
+    // For browsers that fire beforeinstallprompt (Chrome/Edge on Android & desktop)
+    window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        showBanner(isAndroidChrome ? 'android' : 'generic');
+    });
+
+    // Capture successful install
+    window.addEventListener('appinstalled', function() {
+        hideBanner();
+    });
+
+    // Current platform — set by showBanner(), read by modal handlers
+    var activePlatform = 'generic';
+
+    // Wire up banner/CTA clicks once (not inside showBanner)
+    ctaBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        openModal(activePlatform);
+    });
+    banner.addEventListener('click', function() {
+        openModal(activePlatform);
+    });
+
+    function showBanner(platform) {
+        activePlatform = platform;
+        banner.classList.add('mmgr-banner-visible');
+
+        // Add top-padding to body so fixed banner doesn't cover content
+        var bannerH = banner.offsetHeight || 58;
+        var currentPad = parseFloat(window.getComputedStyle(document.body).paddingTop) || 0;
+        document.body.style.paddingTop = (currentPad + bannerH) + 'px';
+    }
+
+    function hideBanner() {
+        if (!banner.classList.contains('mmgr-banner-visible')) return;
+        var bannerH = banner.offsetHeight || 58;
+        banner.classList.remove('mmgr-banner-visible');
+        var currentPad = parseFloat(window.getComputedStyle(document.body).paddingTop) || 0;
+        document.body.style.paddingTop = Math.max(0, currentPad - bannerH) + 'px';
+    }
+
+    function openModal(platform) {
+        // Show correct steps
+        document.getElementById('mmgr-steps-ios').style.display     = 'none';
+        document.getElementById('mmgr-steps-android').style.display = 'none';
+        document.getElementById('mmgr-steps-generic').style.display = 'none';
+
+        if (platform === 'ios') {
+            document.getElementById('mmgr-steps-ios').style.display = 'block';
+        } else if (platform === 'android') {
+            document.getElementById('mmgr-steps-android').style.display = 'block';
+            if (deferredPrompt) androidInstall.style.display = 'block';
+        } else {
+            document.getElementById('mmgr-steps-generic').style.display = 'block';
+            if (deferredPrompt) androidInstall.style.display = 'block';
+        }
+
+        modal.classList.add('mmgr-modal-open');
+    }
+
+    function closeModal() {
+        modal.classList.remove('mmgr-modal-open');
+    }
+
+    // Dismiss banner
+    dismissBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        hideBanner();
+        localStorage.setItem(DISMISS_KEY, Date.now() + DISMISS_DAYS * 86400000);
+    });
+
+    // Close modal
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeModal();
+    });
+
+    // Android native install button
+    androidInstall.addEventListener('click', function() {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(function(result) {
+            deferredPrompt = null;
+            androidInstall.style.display = 'none';
+            if (result.outcome === 'accepted') {
+                closeModal();
+                hideBanner();
+            }
+        });
+    });
+}());
+</script>
+    <?php
+}
+
+
 
 add_action('wp_ajax_mmgr_save_push_subscription', 'mmgr_ajax_save_push_subscription');
 function mmgr_ajax_save_push_subscription() {
