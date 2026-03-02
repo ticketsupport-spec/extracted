@@ -376,6 +376,21 @@ add_shortcode('mmgr_member_dashboard', function() {
     
     $qr_url = admin_url('admin-ajax.php?action=mmgr_qrcode&code=' . urlencode($member['member_code']));
     $card_request = mmgr_get_card_request_status($member['id']);
+
+    // Get unread messages count
+    global $wpdb;
+    $messages_table = $wpdb->prefix . 'membership_messages';
+    $unread_messages = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $messages_table WHERE to_member_id = %d AND read_at IS NULL AND deleted_by_receiver = 0",
+        $member['id']
+    ));
+
+    // Get total likes received count
+    $likes_table = $wpdb->prefix . 'membership_likes';
+    $total_likes = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $likes_table WHERE liked_member_id = %d",
+        $member['id']
+    ));
     
     // Calculate days until expiration (only if paid and has expiry date)
     $is_expired = false;
@@ -405,6 +420,7 @@ add_shortcode('mmgr_member_dashboard', function() {
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
             <h1>Welcome back, <?php echo esc_html($member['first_name']); ?>! 👋</h1>
+            <p>You have <?php echo esc_html($unread_messages); ?> unread <?php echo $unread_messages === 1 ? 'message' : 'messages'; ?> and <?php echo esc_html($total_likes); ?> <?php echo $total_likes === 1 ? 'like' : 'likes'; ?></p>
         </div>
         
         <div class="mmgr-portal-grid">
