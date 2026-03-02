@@ -676,26 +676,25 @@ function mmgr_pwa_inject_install_banner() {
     var isSafari = /safari/i.test(ua) && !/chrome|crios|fxios/i.test(ua);
     var isAndroidChrome = /android/i.test(ua) && /chrome/i.test(ua) && !/opr/i.test(ua);
 
+    // Current platform — set by showBanner(), read by modal handlers
+    var activePlatform = 'generic';
+
     // For iOS Safari: show banner immediately (no beforeinstallprompt)
     if (isIOS && isSafari) {
         showBanner('ios');
-        return;
+    } else {
+        // For browsers that fire beforeinstallprompt (Chrome/Edge on Android & desktop)
+        window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            deferredPrompt = e;
+            showBanner(isAndroidChrome ? 'android' : 'generic');
+        });
+
+        // Capture successful install
+        window.addEventListener('appinstalled', function() {
+            hideBanner();
+        });
     }
-
-    // For browsers that fire beforeinstallprompt (Chrome/Edge on Android & desktop)
-    window.addEventListener('beforeinstallprompt', function(e) {
-        e.preventDefault();
-        deferredPrompt = e;
-        showBanner(isAndroidChrome ? 'android' : 'generic');
-    });
-
-    // Capture successful install
-    window.addEventListener('appinstalled', function() {
-        hideBanner();
-    });
-
-    // Current platform — set by showBanner(), read by modal handlers
-    var activePlatform = 'generic';
 
     // Wire up banner/CTA clicks once (not inside showBanner)
     ctaBtn.addEventListener('click', function(e) {
