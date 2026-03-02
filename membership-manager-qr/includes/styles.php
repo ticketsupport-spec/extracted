@@ -1353,7 +1353,7 @@ add_action('admin_head', function() {
     }
 
     .mmgr-coc h3 {
-        color: var(--portal-primary);
+        color: var(--portal-accent);
         font-size: 1.1rem;
         font-weight: 700;
         margin: 24px 0 10px;
@@ -1374,11 +1374,12 @@ add_action('admin_head', function() {
         position: relative;
         border-bottom: 1px solid rgba(155,81,224,0.1);
         line-height: 1.6;
+        color: var(--portal-primary);
     }
 
     .mmgr-coc ul li::before {
         content: '●';
-        color: var(--portal-accent);
+        color: var(--portal-primary);
         position: absolute;
         left: 8px;
         font-size: 0.6em;
