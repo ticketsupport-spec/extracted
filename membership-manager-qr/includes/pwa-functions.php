@@ -328,6 +328,7 @@ function mmgr_pwa_inject_head() {
         if (!('PushManager' in window) || !('Notification' in window) || !vapidKey) return;
 
         var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent || '');
+        var isAndroid = /android/i.test(navigator.userAgent || '');
         var isStandalone = window.matchMedia('(display-mode: standalone)').matches
                         || window.navigator.standalone === true;
 
@@ -344,7 +345,13 @@ function mmgr_pwa_inject_head() {
                 return;
             }
 
-            // Non-iOS: automatic permission request works fine
+            if (!isAndroid) {
+                // Desktop/PC: show a button so the user opts in consciously
+                mmgrShowDesktopNotifyPrompt(reg, vapidKey);
+                return;
+            }
+
+            // Android: automatic permission request works fine
             Notification.requestPermission().then(function(perm) {
                 if (perm !== 'granted') return;
                 mmgrSubscribePush(reg, vapidKey);
@@ -360,6 +367,37 @@ function mmgr_pwa_inject_head() {
             mmgrSaveSubscription(sub);
         }).catch(function(e) {
             console.log('[MMGR PWA] Push subscribe error:', e);
+        });
+    }
+
+    function mmgrShowDesktopNotifyPrompt(reg, vapidKey) {
+        // If already granted subscribe directly; if denied nothing we can do
+        if (Notification.permission === 'granted') {
+            mmgrSubscribePush(reg, vapidKey);
+            return;
+        }
+        if (Notification.permission === 'denied') return;
+
+        var stale = document.getElementById('mmgr-desktop-notify-btn');
+        if (stale) stale.remove();
+
+        var btn = document.createElement('button');
+        btn.id = 'mmgr-desktop-notify-btn';
+        btn.textContent = '\uD83D\uDD14 Enable Push Notifications';
+        btn.style.cssText = 'position:fixed;bottom:24px;right:24px;'
+            + 'background:linear-gradient(135deg,#9b51e0,#ce00ff);color:#fff;border:none;'
+            + 'padding:12px 20px;border-radius:30px;font-size:14px;font-weight:700;'
+            + 'box-shadow:0 4px 16px rgba(155,81,224,0.4);z-index:99998;cursor:pointer;'
+            + 'white-space:nowrap;';
+        document.body.appendChild(btn);
+
+        btn.addEventListener('click', function() {
+            Notification.requestPermission().then(function(perm) {
+                btn.remove();
+                if (perm === 'granted') {
+                    mmgrSubscribePush(reg, vapidKey);
+                }
+            });
         });
     }
 
