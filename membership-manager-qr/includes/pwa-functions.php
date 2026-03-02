@@ -126,9 +126,27 @@ self.addEventListener('notificationclick', event => {
 // Web App Manifest
 // ---------------------------------------------------------------------------
 
+/**
+ * Return the URL for the custom PWA icon, or null if none is set.
+ * Only returns a URL for valid image attachments.
+ */
+function mmgr_get_pwa_icon_url(): ?string {
+    $icon_id = intval(get_option('mmgr_pwa_icon_id', 0));
+    if ($icon_id && wp_attachment_is_image($icon_id)) {
+        $url = wp_get_attachment_url($icon_id);
+        return $url ?: null;
+    }
+    return null;
+}
+
 function mmgr_pwa_serve_manifest() {
     $site_name = get_bloginfo('name');
     $base      = home_url('/');
+
+    // Use uploaded icon if available, otherwise fall back to dynamic endpoints.
+    $custom_icon_url = mmgr_get_pwa_icon_url();
+    $icon_192 = $custom_icon_url ?: home_url('/mmgr-icon-192.png');
+    $icon_512 = $custom_icon_url ?: home_url('/mmgr-icon-512.png');
 
     $manifest = [
         'name'             => $site_name . ' Member Portal',
@@ -143,13 +161,13 @@ function mmgr_pwa_serve_manifest() {
         'lang'             => get_locale(),
         'icons'            => [
             [
-                'src'     => home_url('/mmgr-icon-192.png'),
+                'src'     => $icon_192,
                 'sizes'   => '192x192',
                 'type'    => 'image/png',
                 'purpose' => 'any maskable',
             ],
             [
-                'src'     => home_url('/mmgr-icon-512.png'),
+                'src'     => $icon_512,
                 'sizes'   => '512x512',
                 'type'    => 'image/png',
                 'purpose' => 'any maskable',
@@ -165,11 +183,28 @@ function mmgr_pwa_serve_manifest() {
 }
 
 // ---------------------------------------------------------------------------
-// Icon endpoint (GD-generated purple square with "M")
+// Icon endpoint (custom upload or GD-generated purple square with "M")
 // ---------------------------------------------------------------------------
 
 function mmgr_pwa_serve_icon(int $size) {
     $size = max(16, min(1024, $size));
+
+    // If the admin uploaded a custom PWA icon, serve it directly.
+    $icon_id = intval(get_option('mmgr_pwa_icon_id', 0));
+    if ($icon_id && wp_attachment_is_image($icon_id)) {
+        $icon_path = get_attached_file($icon_id);
+        if ($icon_path && file_exists($icon_path)) {
+            $allowed_mime = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+            $mime = function_exists('mime_content_type') ? mime_content_type($icon_path) : 'image/png';
+            if (!in_array($mime, $allowed_mime, true)) {
+                $mime = 'image/png';
+            }
+            header('Content-Type: ' . $mime);
+            header('Cache-Control: public, max-age=604800');
+            readfile($icon_path);
+            exit;
+        }
+    }
 
     if (!function_exists('imagecreatetruecolor')) {
         // GD not available – send a 1×1 purple PNG
@@ -254,6 +289,8 @@ function mmgr_pwa_inject_head() {
     $ajax_url        = esc_url(admin_url('admin-ajax.php'));
     $save_nonce      = wp_create_nonce('mmgr_save_push_subscription');
     $site_name       = esc_js(get_bloginfo('name'));
+    $pwa_icon        = mmgr_get_pwa_icon_url();
+    $touch_icon_url  = $pwa_icon ? esc_url($pwa_icon) : esc_url(home_url('/mmgr-icon-192.png'));
     ?>
 <!-- PWA Manifest -->
 <link rel="manifest" href="<?php echo $manifest_url; ?>">
@@ -262,7 +299,7 @@ function mmgr_pwa_inject_head() {
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="<?php echo esc_attr(get_bloginfo('name')); ?>">
-<link rel="apple-touch-icon" href="<?php echo esc_url(home_url('/mmgr-icon-192.png')); ?>">
+<link rel="apple-touch-icon" href="<?php echo $touch_icon_url; ?>">
 
 <script>
 (function() {
@@ -341,7 +378,8 @@ function mmgr_pwa_inject_install_banner() {
     }
 
     $site_name = esc_html(get_bloginfo('name'));
-    $icon_url  = esc_url(home_url('/mmgr-icon-192.png'));
+    $pwa_icon  = mmgr_get_pwa_icon_url();
+    $icon_url  = $pwa_icon ? esc_url($pwa_icon) : esc_url(home_url('/mmgr-icon-192.png'));
     ?>
 <!-- MMGR PWA Install Banner -->
 <style>
