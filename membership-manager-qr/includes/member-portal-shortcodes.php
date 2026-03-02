@@ -385,12 +385,19 @@ add_shortcode('mmgr_member_dashboard', function() {
         $member['id']
     ));
 
-    // Get total likes received count
+    // Get total likes received count (profile likes + post likes)
     $likes_table = $wpdb->prefix . 'membership_likes';
-    $total_likes = (int) $wpdb->get_var($wpdb->prepare(
+    $profile_likes = (int) $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM $likes_table WHERE liked_member_id = %d",
         $member['id']
     ));
+    $post_likes_tbl = $wpdb->prefix . 'membership_forum_post_likes';
+    $forum_tbl = $wpdb->prefix . 'mmgr_forum_posts';
+    $post_likes_count = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $post_likes_tbl WHERE post_id IN (SELECT id FROM $forum_tbl WHERE member_id = %d)",
+        $member['id']
+    ));
+    $total_likes = $profile_likes + $post_likes_count;
     
     // Calculate days until expiration (only if paid and has expiry date)
     $is_expired = false;
