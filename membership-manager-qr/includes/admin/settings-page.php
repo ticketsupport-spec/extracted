@@ -109,6 +109,15 @@ if (!function_exists('mmgr_create_plugin_pages')) {
 }
 
 function mmgr_settings_admin() {
+    // Enqueue media uploader scripts before any HTML output
+    wp_enqueue_media();
+
+    // Handle PWA icon save (separate form, only saves the icon ID)
+    if (isset($_POST['mmgr_save_pwa_icon']) && isset($_POST['mmgr_pwa_icon_nonce']) && wp_verify_nonce($_POST['mmgr_pwa_icon_nonce'], 'mmgr_pwa_icon') && current_user_can('manage_options')) {
+        update_option('mmgr_pwa_icon_id', isset($_POST['mmgr_pwa_icon_id']) ? absint($_POST['mmgr_pwa_icon_id']) : 0);
+        echo '<div class="notice notice-success"><p>✓ PWA icon saved successfully!</p></div>';
+    }
+
     // Handle manual page creation
     if (isset($_POST['mmgr_create_pages']) && isset($_POST['mmgr_create_pages_nonce']) && wp_verify_nonce($_POST['mmgr_create_pages_nonce'], 'mmgr_create_pages')) {
         $result = mmgr_create_plugin_pages();
@@ -162,7 +171,10 @@ function mmgr_settings_admin() {
         update_option('mmgr_email_footer', wp_kses_post($_POST['mmgr_email_footer']));
         update_option('mmgr_welcome_pm_enabled', isset($_POST['mmgr_welcome_pm_enabled']) ? 1 : 0);
         update_option('mmgr_welcome_pm_message', wp_kses_post($_POST['mmgr_welcome_pm_message']));
-        update_option('mmgr_pwa_icon_id', isset($_POST['mmgr_pwa_icon_id']) ? intval($_POST['mmgr_pwa_icon_id']) : 0);
+        update_option('mmgr_registration_logo_id', isset($_POST['mmgr_registration_logo_id']) ? absint($_POST['mmgr_registration_logo_id']) : 0);
+        if (isset($_POST['mmgr_registration_blurb'])) {
+            update_option('mmgr_registration_blurb', wp_kses_post($_POST['mmgr_registration_blurb']));
+        }
         
         echo '<div class="notice notice-success"><p>✓ Settings saved successfully!</p></div>';
     }
@@ -190,6 +202,9 @@ function mmgr_settings_admin() {
 
     $coc = get_option('mmgr_code_of_conduct', 'Add your code of conduct here.');
     $reg_title = get_option('mmgr_registration_title', 'Membership Signup');
+    $reg_logo_id = intval(get_option('mmgr_registration_logo_id', 0));
+    $reg_logo_url = $reg_logo_id ? wp_get_attachment_url($reg_logo_id) : '';
+    $reg_blurb = get_option('mmgr_registration_blurb', '');
     $checkin_title = get_option('mmgr_checkin_title', 'QR Code Scanner');
     $checkin_default_mode = get_option('mmgr_checkin_default_mode', 'hw');
     $enable_email = get_option('mmgr_enable_welcome_email', 1);
@@ -233,6 +248,72 @@ function mmgr_settings_admin() {
                 <tr>
                     <th><label for="reg_title">Registration Form Title</label></th>
                     <td><input name="mmgr_registration_title" id="reg_title" class="regular-text" value="<?php echo esc_attr($reg_title); ?>"></td>
+                </tr>
+                <tr>
+                    <th><label>Registration Page Logo</label></th>
+                    <td>
+                        <input type="hidden" name="mmgr_registration_logo_id" id="mmgr_registration_logo_id" value="<?php echo esc_attr($reg_logo_id); ?>">
+                        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                            <div id="mmgr-reg-logo-preview" style="max-width:200px;max-height:100px;border:2px dashed #0073aa;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden;flex-shrink:0;padding:4px;">
+                                <?php if ($reg_logo_url): ?>
+                                    <img src="<?php echo esc_url($reg_logo_url); ?>" style="max-width:100%;max-height:96px;object-fit:contain;" alt="Registration Logo">
+                                <?php else: ?>
+                                    <span style="font-size:28px;">🖼️</span>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <button type="button" id="mmgr-reg-logo-upload" class="button button-secondary">📤 Upload / Change Logo</button>
+                                <button type="button" id="mmgr-reg-logo-remove" class="button" style="margin-left:8px;color:#d63638;<?php echo $reg_logo_id ? '' : 'display:none;'; ?>">✕ Remove</button>
+                                <p class="description" style="margin-top:6px;">Logo displayed at the top of the membership registration page.</p>
+                            </div>
+                        </div>
+                        <script>
+                        (function() {
+                            var regLogoIdField  = document.getElementById('mmgr_registration_logo_id');
+                            var regPreviewBox   = document.getElementById('mmgr-reg-logo-preview');
+                            var regUploadBtn    = document.getElementById('mmgr-reg-logo-upload');
+                            var regRemoveBtn    = document.getElementById('mmgr-reg-logo-remove');
+                            var regFrame;
+
+                            regUploadBtn.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                if (regFrame) { regFrame.open(); return; }
+                                regFrame = wp.media({
+                                    title:    'Select Registration Logo',
+                                    button:   { text: 'Use this image' },
+                                    multiple: false,
+                                    library:  { type: 'image' }
+                                });
+                                regFrame.on('select', function() {
+                                    var attachment = regFrame.state().get('selection').first().toJSON();
+                                    regLogoIdField.value = attachment.id;
+                                    var img = document.createElement('img');
+                                    img.src = attachment.url;
+                                    img.alt = 'Registration Logo';
+                                    img.style.cssText = 'max-width:100%;max-height:96px;object-fit:contain;';
+                                    regPreviewBox.innerHTML = '';
+                                    regPreviewBox.appendChild(img);
+                                    regRemoveBtn.style.display = '';
+                                });
+                                regFrame.open();
+                            });
+
+                            regRemoveBtn.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                regLogoIdField.value = '0';
+                                regPreviewBox.innerHTML = '<span style="font-size:28px;">🖼️</span>';
+                                regRemoveBtn.style.display = 'none';
+                            });
+                        }());
+                        </script>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="reg_blurb">Club Blurb (above registration form)</label></th>
+                    <td>
+                        <textarea name="mmgr_registration_blurb" id="reg_blurb" class="large-text" rows="5"><?php echo esc_textarea($reg_blurb); ?></textarea>
+                        <p class="description">Short description about the club shown above the registration form. HTML is allowed.</p>
+                    </td>
                 </tr>
                 <tr>
                     <th><label for="reg_success_url">Registration Success Redirect URL</label></th>
@@ -313,14 +394,13 @@ function mmgr_settings_admin() {
         <hr>
         <h2>📱 PWA App Icon</h2>
         <?php
-        wp_enqueue_media();
         $pwa_icon_id  = intval(get_option('mmgr_pwa_icon_id', 0));
         $pwa_icon_url = $pwa_icon_id ? wp_get_attachment_url($pwa_icon_id) : '';
         ?>
         <div style="background:#f9f0ff;padding:20px;border-radius:6px;border-left:4px solid #9b51e0;margin-bottom:20px;">
             <p>Upload a custom icon that will appear on the <strong>PWA install banner</strong> and on members' home screens after installation. Recommended size: <strong>512×512 px PNG</strong>.</p>
             <form method="post">
-                <?php wp_nonce_field('mmgr_settings', 'mmgr_settings_nonce'); ?>
+                <?php wp_nonce_field('mmgr_pwa_icon', 'mmgr_pwa_icon_nonce'); ?>
                 <input type="hidden" name="mmgr_pwa_icon_id" id="mmgr_pwa_icon_id" value="<?php echo esc_attr($pwa_icon_id); ?>">
                 <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:10px;">
                     <div id="mmgr-pwa-icon-preview" style="width:80px;height:80px;border:2px dashed #9b51e0;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden;flex-shrink:0;">
@@ -341,7 +421,7 @@ function mmgr_settings_admin() {
                     </div>
                 </div>
                 <p style="margin-top:16px;">
-                    <button type="submit" name="mmgr_save_settings" class="button button-primary">💾 Save Icon</button>
+                    <button type="submit" name="mmgr_save_pwa_icon" class="button button-primary">💾 Save Icon</button>
                 </p>
             </form>
         </div>
