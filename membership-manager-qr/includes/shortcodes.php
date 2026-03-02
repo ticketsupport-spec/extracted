@@ -509,7 +509,61 @@ add_shortcode('membership_checkin', function($atts){
 // Code of Conduct Display Shortcode
 add_shortcode('membership_code_of_conduct', function($atts){
     $content = get_option('mmgr_code_of_conduct', '');
-    return '<div class="mmgr-coc">' . wp_kses_post($content) . '</div>';
+    if (empty($content)) {
+        return '<div class="mmgr-coc"></div>';
+    }
+
+    $lines    = explode("\n", $content);
+    $html     = '';
+    $in_list  = false;
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+
+        if (empty($line)) {
+            if ($in_list) {
+                $html .= '</ul>';
+                $in_list = false;
+            }
+            continue;
+        }
+
+        // Skip unreasonably long lines to prevent regex backtracking issues.
+        if (strlen($line) > 500) {
+            continue;
+        }
+
+        // ## Heading ## → <h3>
+        if (preg_match('/^##\s+(.+?)\s+##$/', $line, $matches)) {
+            if ($in_list) {
+                $html .= '</ul>';
+                $in_list = false;
+            }
+            $html .= '<h3>' . esc_html($matches[1]) . '</h3>';
+        }
+        // * bullet → <li>
+        elseif (preg_match('/^\*\s+(.+)$/', $line, $matches)) {
+            if (!$in_list) {
+                $html .= '<ul>';
+                $in_list = true;
+            }
+            $html .= '<li>' . esc_html($matches[1]) . '</li>';
+        }
+        // Regular text → <p>
+        else {
+            if ($in_list) {
+                $html .= '</ul>';
+                $in_list = false;
+            }
+            $html .= '<p>' . esc_html($line) . '</p>';
+        }
+    }
+
+    if ($in_list) {
+        $html .= '</ul>';
+    }
+
+    return '<div class="mmgr-coc">' . $html . '</div>';
 });
 
 // Admin Quick Links Shortcode - Only visible to administrators
