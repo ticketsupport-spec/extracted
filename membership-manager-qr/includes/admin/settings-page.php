@@ -389,7 +389,8 @@ function mmgr_settings_admin() {
                             <code>{site_name}</code> – Your site name<br>
                             <code>{site_url}</code> – Your site URL<br>
                             <code>{code_of_conduct}</code> – Link to the Code of Conduct page<br>
-                            <code>{portal_link}</code> – Link for the member to set up their portal password
+                            <code>{portal_link}</code> – Link for the member to set up their portal password<br>
+                            <code>{qr_code}</code> – Inline QR code image (shows the member's QR code directly in the email body)
                         </p>
                     </td>
                 </tr>
