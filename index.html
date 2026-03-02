@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Member Check-In</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Member Check-In</h1>
+    </header>
+
+    <main>
+      <section class="checkin-panel" aria-label="Check-in form">
+        <h2>New Check-In</h2>
+
+        <div class="form-group">
+          <label for="member-id">Member ID</label>
+          <input type="text" id="member-id" placeholder="Enter member ID" autocomplete="off" />
+        </div>
+
+        <div class="form-group">
+          <label for="member-name">Member Name</label>
+          <input type="text" id="member-name" placeholder="Enter member name" autocomplete="off" />
+        </div>
+
+        <div class="camera-section">
+          <h3>Photo</h3>
+          <div class="camera-container" id="camera-container">
+            <video id="camera-feed" autoplay playsinline aria-label="Camera feed"></video>
+            <canvas id="photo-canvas" aria-hidden="true"></canvas>
+            <img id="photo-preview" class="hidden" alt="Captured photo" />
+            <div id="camera-placeholder" class="camera-placeholder">
+              <span>Camera not started</span>
+            </div>
+          </div>
+
+          <div class="camera-controls">
+            <button id="btn-start-camera" class="btn btn-secondary">Start Camera</button>
+            <button id="btn-capture" class="btn btn-primary hidden">Capture Photo</button>
+            <button id="btn-retake" class="btn btn-secondary hidden">Retake</button>
+          </div>
+        </div>
+
+        <button id="btn-checkin" class="btn btn-success" disabled>Check In</button>
+        <p id="checkin-message" class="checkin-message hidden" role="alert"></p>
+      </section>
+
+      <section class="log-panel" aria-label="Check-in log">
+        <h2>Check-In Log</h2>
+        <div id="checkin-log" class="checkin-log">
+          <p class="empty-log">No check-ins yet.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
