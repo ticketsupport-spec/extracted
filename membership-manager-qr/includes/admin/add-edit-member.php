@@ -218,13 +218,9 @@ $levels = $wpdb->get_results("SELECT level_name, price FROM {$wpdb->prefix}membe
                 <td>
                     <?php
                     if ($editing) {
-                        $pwd_table = $wpdb->prefix . 'membership_passwords';
-                        $has_pwd = $wpdb->get_var($wpdb->prepare(
-                            "SELECT COUNT(*) FROM $pwd_table WHERE member_id = %d",
-                            $member['id']
-                        ));
+                        $has_pwd = !empty($member['password_hash']);
                         
-                        if ($has_pwd > 0) {
+                        if ($has_pwd) {
                             echo '<span style="background:#00a32a;color:white;padding:8px 12px;border-radius:4px;font-weight:bold;">✓ Password Set</span>';
                             echo '<p class="description" style="margin-top:10px;">Member has a password and can log in to the portal.</p>';
                         } else {
