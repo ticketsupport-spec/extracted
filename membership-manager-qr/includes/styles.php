@@ -272,6 +272,10 @@ add_action('wp_head', function() {
         box-shadow: 0 4px 14px rgba(255, 33, 151, 0.6);
     }
 
+    .mmgr-registration-form .mmgr-coc ul li {
+        color: #fff;
+    }
+
     .mmgr-registration-blurb {
         color: #ccc;
     }

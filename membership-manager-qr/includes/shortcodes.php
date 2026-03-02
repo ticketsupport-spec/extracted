@@ -535,7 +535,15 @@ add_shortcode('membership_checkin', function($atts){
 add_shortcode('membership_code_of_conduct', function($atts){
     $content = get_option('mmgr_code_of_conduct', '');
     if (empty($content)) {
-        return '<div class="mmgr-coc"></div>';
+        ob_start();
+        ?>
+        <div class="mmgr-portal-container">
+            <!-- Navigation -->
+            <?php echo mmgr_get_portal_navigation('coc'); ?>
+            <div class="mmgr-coc"></div>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 
     $lines    = explode("\n", $content);
@@ -588,7 +596,15 @@ add_shortcode('membership_code_of_conduct', function($atts){
         $html .= '</ul>';
     }
 
-    return '<div class="mmgr-coc">' . $html . '</div>';
+    ob_start();
+    ?>
+    <div class="mmgr-portal-container">
+        <!-- Navigation -->
+        <?php echo mmgr_get_portal_navigation('coc'); ?>
+        <div class="mmgr-coc"><?php echo $html; ?></div>
+    </div>
+    <?php
+    return ob_get_clean();
 });
 
 // Admin Quick Links Shortcode - Only visible to administrators
