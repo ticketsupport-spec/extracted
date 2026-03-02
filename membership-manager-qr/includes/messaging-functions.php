@@ -2,6 +2,13 @@
 if (!defined('ABSPATH')) exit;
 
 /**
+ * Return a member's display name, preferring their community alias when set.
+ */
+function mmgr_get_display_name(array $member): string {
+    return !empty($member['community_alias']) ? $member['community_alias'] : $member['name'];
+}
+
+/**
  * Send a message
  */
 function mmgr_send_message($from_member_id, $to_member_id, $message, $image_url = null) {
@@ -38,10 +45,10 @@ function mmgr_send_message($from_member_id, $to_member_id, $message, $image_url 
                 $sender_name = 'Admin / Support';
             } else {
                 $sender = $wpdb->get_row($wpdb->prepare(
-                    "SELECT name FROM {$wpdb->prefix}memberships WHERE id = %d",
+                    "SELECT name, community_alias FROM {$wpdb->prefix}memberships WHERE id = %d",
                     $from_member_id
                 ), ARRAY_A);
-                $sender_name = $sender ? $sender['name'] : 'Member';
+                $sender_name = $sender ? mmgr_get_display_name($sender) : 'Member';
             }
             $body = !empty($message) ? wp_trim_words($message, 10) : '[Image attached]';
             mmgr_pwa_send_push_to_member(
@@ -83,10 +90,10 @@ function mmgr_get_conversation($member1_id, $member2_id, $limit = 50, $offset = 
             $msg['from_photo'] = null;
         } else {
             $from = $wpdb->get_row($wpdb->prepare(
-                "SELECT name, photo_url FROM {$wpdb->prefix}memberships WHERE id = %d",
+                "SELECT name, community_alias, photo_url FROM {$wpdb->prefix}memberships WHERE id = %d",
                 $msg['from_member_id']
             ), ARRAY_A);
-            $msg['from_name'] = $from ? $from['name'] : 'Unknown';
+            $msg['from_name'] = $from ? mmgr_get_display_name($from) : 'Unknown';
             $msg['from_photo'] = $from ? $from['photo_url'] : null;
         }
         
@@ -95,10 +102,10 @@ function mmgr_get_conversation($member1_id, $member2_id, $limit = 50, $offset = 
             $msg['to_photo'] = null;
         } else {
             $to = $wpdb->get_row($wpdb->prepare(
-                "SELECT name, photo_url FROM {$wpdb->prefix}memberships WHERE id = %d",
+                "SELECT name, community_alias, photo_url FROM {$wpdb->prefix}memberships WHERE id = %d",
                 $msg['to_member_id']
             ), ARRAY_A);
-            $msg['to_name'] = $to ? $to['name'] : 'Unknown';
+            $msg['to_name'] = $to ? mmgr_get_display_name($to) : 'Unknown';
             $msg['to_photo'] = $to ? $to['photo_url'] : null;
         }
     }
@@ -161,7 +168,7 @@ function mmgr_get_conversations_list($member_id) {
             );
         } else {
             $other_member = $wpdb->get_row($wpdb->prepare(
-                "SELECT id, name, photo_url FROM $members_table WHERE id = %d",
+                "SELECT id, name, community_alias, photo_url FROM $members_table WHERE id = %d",
                 $conv['other_member_id']
             ), ARRAY_A);
         }
@@ -291,7 +298,7 @@ function mmgr_get_contacts($member_id) {
     $members_table = $wpdb->prefix . 'memberships';
     
     return $wpdb->get_results($wpdb->prepare(
-        "SELECT m.id, m.name, m.photo_url, c.added_at
+        "SELECT m.id, m.name, m.community_alias, m.photo_url, c.added_at
          FROM $contacts_table c
          LEFT JOIN $members_table m ON c.contact_member_id = m.id
          WHERE c.member_id = %d

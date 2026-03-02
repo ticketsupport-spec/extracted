@@ -327,20 +327,74 @@ function mmgr_pwa_inject_head() {
     function mmgrSetupPush(reg, vapidKey) {
         if (!('PushManager' in window) || !('Notification' in window) || !vapidKey) return;
 
+        var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent || '');
+        var isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                        || window.navigator.standalone === true;
+
+        // iOS push only works when running as an installed standalone app
+        if (isIOS && !isStandalone) return;
+
         reg.pushManager.getSubscription().then(function(existing) {
             if (existing) return; // already subscribed
 
-            // Request permission
+            if (isIOS) {
+                // iOS requires Notification.requestPermission() to be initiated
+                // by a user gesture — calling it automatically is silently ignored
+                mmgrShowIosNotifyPrompt(reg, vapidKey);
+                return;
+            }
+
+            // Non-iOS: automatic permission request works fine
             Notification.requestPermission().then(function(perm) {
                 if (perm !== 'granted') return;
-                reg.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: mmgrUrlB64ToUint8(vapidKey)
-                }).then(function(sub) {
-                    mmgrSaveSubscription(sub);
-                }).catch(function(e) {
-                    console.log('[MMGR PWA] Push subscribe error:', e);
-                });
+                mmgrSubscribePush(reg, vapidKey);
+            });
+        });
+    }
+
+    function mmgrSubscribePush(reg, vapidKey) {
+        reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: mmgrUrlB64ToUint8(vapidKey)
+        }).then(function(sub) {
+            mmgrSaveSubscription(sub);
+        }).catch(function(e) {
+            console.log('[MMGR PWA] Push subscribe error:', e);
+        });
+    }
+
+    function mmgrShowIosNotifyPrompt(reg, vapidKey) {
+        // If already granted (e.g. subscription was lost after reinstall), subscribe directly
+        if (Notification.permission === 'granted') {
+            mmgrSubscribePush(reg, vapidKey);
+            return;
+        }
+        // If already denied, nothing we can do programmatically
+        if (Notification.permission === 'denied') return;
+
+        // Remove any stale button left from a previous page load
+        var stale = document.getElementById('mmgr-ios-notify-btn');
+        if (stale) stale.remove();
+
+        var btn = document.createElement('button');
+        btn.id = 'mmgr-ios-notify-btn';
+        btn.textContent = '\uD83D\uDD14 Enable Notifications';
+        btn.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);'
+            + 'background:linear-gradient(135deg,#9b51e0,#ce00ff);color:#fff;border:none;'
+            + 'padding:13px 24px;border-radius:30px;font-size:15px;font-weight:700;'
+            + 'box-shadow:0 4px 16px rgba(155,81,224,0.4);z-index:99998;cursor:pointer;'
+            + 'white-space:nowrap;';
+        document.body.appendChild(btn);
+
+        btn.addEventListener('click', function() {
+            Notification.requestPermission().then(function(perm) {
+                if (perm === 'granted') {
+                    btn.remove();
+                    mmgrSubscribePush(reg, vapidKey);
+                } else {
+                    // Permission denied — button is no longer useful; remove it
+                    btn.remove();
+                }
             });
         });
     }

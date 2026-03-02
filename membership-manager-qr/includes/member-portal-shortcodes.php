@@ -1492,7 +1492,7 @@ add_shortcode('mmgr_member_messages', function() {
                                 
                                 <div style="flex:1;min-width:0;">
                                     <div style="font-weight:bold;color:#000;margin-bottom:3px;">
-                                        <?php echo esc_html($conv['member']['name']); ?>
+                                        <?php echo esc_html(mmgr_get_display_name($conv['member'])); ?>
                                     </div>
                                     <div style="font-size:12px;color:#666;">
                                         <?php echo human_time_diff(strtotime($conv['last_message_time']), current_time('timestamp')) . ' ago'; ?>
@@ -1521,7 +1521,7 @@ add_shortcode('mmgr_member_messages', function() {
                             
                             <div style="flex:1;">
                                 <div style="font-weight:bold;color:#000;">
-                                    <?php echo esc_html($contact['name']); ?>
+                                    <?php echo esc_html(mmgr_get_display_name($contact)); ?>
                                     <?php if (isset($contact['is_admin'])): ?>
                                         <span style="background:#ff9800;color:white;padding:2px 6px;border-radius:10px;font-size:10px;margin-left:5px;">ADMIN</span>
                                     <?php endif; ?>

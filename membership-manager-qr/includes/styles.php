@@ -180,6 +180,34 @@ add_action('wp_head', function() {
     }
 
     /* ============================================
+       REGISTRATION FORM
+       ============================================ */
+    .mmgr-registration-form {
+        max-width: 600px;
+        margin: 20px auto;
+        background: white;
+        border-radius: 8px;
+        padding: 30px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .mmgr-registration-form h2 {
+        margin-top: 0;
+        color: var(--portal-blue);
+        border-bottom: 2px solid var(--portal-border);
+        padding-bottom: 12px;
+        margin-bottom: 24px;
+        font-size: 22px;
+    }
+
+    .mmgr-registration-form h3 {
+        color: #333;
+        font-size: 16px;
+        margin-bottom: 15px;
+    }
+
+    /* ============================================
        FORM FIELDS
        ============================================ */
     .mmgr-field {
