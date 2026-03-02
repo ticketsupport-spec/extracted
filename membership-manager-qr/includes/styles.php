@@ -1341,6 +1341,54 @@ add_action('admin_head', function() {
     .mmgr-member-info-row:last-child {
         border-bottom: none;
     }
+
+    /* ============================================
+       CODE OF CONDUCT PAGE
+       ============================================ */
+    .mmgr-coc {
+        max-width: 800px;
+        margin: 20px auto;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: #1a1a1a;
+    }
+
+    .mmgr-coc h3 {
+        color: var(--portal-primary);
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 24px 0 10px;
+        padding: 8px 14px;
+        background: linear-gradient(44deg, rgba(85,0,251,0.10), rgba(229,39,179,0.10));
+        border-left: 4px solid var(--portal-accent);
+        border-radius: 4px;
+    }
+
+    .mmgr-coc ul {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 12px 0;
+    }
+
+    .mmgr-coc ul li {
+        padding: 6px 10px 6px 28px;
+        position: relative;
+        border-bottom: 1px solid rgba(155,81,224,0.1);
+        line-height: 1.6;
+    }
+
+    .mmgr-coc ul li::before {
+        content: '●';
+        color: var(--portal-accent);
+        position: absolute;
+        left: 8px;
+        font-size: 0.6em;
+        top: 11px;
+    }
+
+    .mmgr-coc p {
+        margin: 10px 0;
+        line-height: 1.6;
+    }
     </style>
     <?php
 });
