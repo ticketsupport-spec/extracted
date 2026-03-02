@@ -338,7 +338,13 @@ function mmgr_settings_admin() {
                 </tr>
                 <tr>
                     <th><label for="coc">Code of Conduct</label></th>
-                    <td><textarea name="mmgr_code_of_conduct" id="coc" class="large-text" rows="10"><?php echo esc_textarea($coc); ?></textarea></td>
+                    <td>
+                        <textarea name="mmgr_code_of_conduct" id="coc" class="large-text" rows="10"><?php echo esc_textarea($coc); ?></textarea>
+                        <p class="description">
+                            Display this content on its own page using the shortcode <code>[membership_code_of_conduct]</code>.<br>
+                            It is also shown inline on the registration form so members can read and agree to it before signing up.
+                        </p>
+                    </td>
                 </tr>
             </table>
             
