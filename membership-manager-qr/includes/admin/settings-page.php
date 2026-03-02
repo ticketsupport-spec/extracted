@@ -109,6 +109,15 @@ if (!function_exists('mmgr_create_plugin_pages')) {
 }
 
 function mmgr_settings_admin() {
+    // Enqueue media uploader scripts before any HTML output
+    wp_enqueue_media();
+
+    // Handle PWA icon save (separate form, only saves the icon ID)
+    if (isset($_POST['mmgr_save_pwa_icon']) && isset($_POST['mmgr_pwa_icon_nonce']) && wp_verify_nonce($_POST['mmgr_pwa_icon_nonce'], 'mmgr_pwa_icon') && current_user_can('manage_options')) {
+        update_option('mmgr_pwa_icon_id', isset($_POST['mmgr_pwa_icon_id']) ? absint($_POST['mmgr_pwa_icon_id']) : 0);
+        echo '<div class="notice notice-success"><p>✓ PWA icon saved successfully!</p></div>';
+    }
+
     // Handle manual page creation
     if (isset($_POST['mmgr_create_pages']) && isset($_POST['mmgr_create_pages_nonce']) && wp_verify_nonce($_POST['mmgr_create_pages_nonce'], 'mmgr_create_pages')) {
         $result = mmgr_create_plugin_pages();
@@ -162,9 +171,10 @@ function mmgr_settings_admin() {
         update_option('mmgr_email_footer', wp_kses_post($_POST['mmgr_email_footer']));
         update_option('mmgr_welcome_pm_enabled', isset($_POST['mmgr_welcome_pm_enabled']) ? 1 : 0);
         update_option('mmgr_welcome_pm_message', wp_kses_post($_POST['mmgr_welcome_pm_message']));
-        update_option('mmgr_pwa_icon_id', isset($_POST['mmgr_pwa_icon_id']) ? intval($_POST['mmgr_pwa_icon_id']) : 0);
-        update_option('mmgr_registration_logo_id', isset($_POST['mmgr_registration_logo_id']) ? intval($_POST['mmgr_registration_logo_id']) : 0);
-        update_option('mmgr_registration_blurb', wp_kses_post($_POST['mmgr_registration_blurb']));
+        update_option('mmgr_registration_logo_id', isset($_POST['mmgr_registration_logo_id']) ? absint($_POST['mmgr_registration_logo_id']) : 0);
+        if (isset($_POST['mmgr_registration_blurb'])) {
+            update_option('mmgr_registration_blurb', wp_kses_post($_POST['mmgr_registration_blurb']));
+        }
         
         echo '<div class="notice notice-success"><p>✓ Settings saved successfully!</p></div>';
     }
@@ -242,7 +252,6 @@ function mmgr_settings_admin() {
                 <tr>
                     <th><label>Registration Page Logo</label></th>
                     <td>
-                        <?php wp_enqueue_media(); ?>
                         <input type="hidden" name="mmgr_registration_logo_id" id="mmgr_registration_logo_id" value="<?php echo esc_attr($reg_logo_id); ?>">
                         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
                             <div id="mmgr-reg-logo-preview" style="max-width:200px;max-height:100px;border:2px dashed #0073aa;border-radius:6px;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden;flex-shrink:0;padding:4px;">
@@ -385,14 +394,13 @@ function mmgr_settings_admin() {
         <hr>
         <h2>📱 PWA App Icon</h2>
         <?php
-        wp_enqueue_media();
         $pwa_icon_id  = intval(get_option('mmgr_pwa_icon_id', 0));
         $pwa_icon_url = $pwa_icon_id ? wp_get_attachment_url($pwa_icon_id) : '';
         ?>
         <div style="background:#f9f0ff;padding:20px;border-radius:6px;border-left:4px solid #9b51e0;margin-bottom:20px;">
             <p>Upload a custom icon that will appear on the <strong>PWA install banner</strong> and on members' home screens after installation. Recommended size: <strong>512×512 px PNG</strong>.</p>
             <form method="post">
-                <?php wp_nonce_field('mmgr_settings', 'mmgr_settings_nonce'); ?>
+                <?php wp_nonce_field('mmgr_pwa_icon', 'mmgr_pwa_icon_nonce'); ?>
                 <input type="hidden" name="mmgr_pwa_icon_id" id="mmgr_pwa_icon_id" value="<?php echo esc_attr($pwa_icon_id); ?>">
                 <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:10px;">
                     <div id="mmgr-pwa-icon-preview" style="width:80px;height:80px;border:2px dashed #9b51e0;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden;flex-shrink:0;">
@@ -413,7 +421,7 @@ function mmgr_settings_admin() {
                     </div>
                 </div>
                 <p style="margin-top:16px;">
-                    <button type="submit" name="mmgr_save_settings" class="button button-primary">💾 Save Icon</button>
+                    <button type="submit" name="mmgr_save_pwa_icon" class="button button-primary">💾 Save Icon</button>
                 </p>
             </form>
         </div>
