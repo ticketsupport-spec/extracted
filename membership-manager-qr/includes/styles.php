@@ -1348,18 +1348,24 @@ add_action('admin_head', function() {
     .mmgr-coc {
         max-width: 800px;
         margin: 20px auto;
+        background: #000;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 4px 20px rgba(255,33,151,0.3);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        color: #1a1a1a;
+        overflow: hidden;
+        border: 2px solid #FF2197;
+        color: #fff;
     }
 
     .mmgr-coc h3 {
-        color: var(--portal-accent);
+        color: #FF2197;
         font-size: 1.1rem;
         font-weight: 700;
         margin: 24px 0 10px;
         padding: 8px 14px;
         background: linear-gradient(44deg, rgba(85,0,251,0.10), rgba(229,39,179,0.10));
-        border-left: 4px solid var(--portal-accent);
+        border-left: 4px solid #FF2197;
         border-radius: 4px;
     }
 
@@ -1372,14 +1378,14 @@ add_action('admin_head', function() {
     .mmgr-coc ul li {
         padding: 6px 10px 6px 28px;
         position: relative;
-        border-bottom: 1px solid rgba(155,81,224,0.1);
+        border-bottom: 1px solid rgba(255,33,151,0.2);
         line-height: 1.6;
-        color: var(--portal-primary);
+        color: #fff;
     }
 
     .mmgr-coc ul li::before {
         content: '●';
-        color: var(--portal-primary);
+        color: #FF2197;
         position: absolute;
         left: 8px;
         font-size: 0.6em;
@@ -1389,6 +1395,7 @@ add_action('admin_head', function() {
     .mmgr-coc p {
         margin: 10px 0;
         line-height: 1.6;
+        color: #ccc;
     }
     </style>
     <?php
