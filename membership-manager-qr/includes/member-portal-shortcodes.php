@@ -635,7 +635,7 @@ add_shortcode('mmgr_member_activity', function() {
         </div>
         
         <!-- Main Grid - Responsive -->
-        <div class="mmgr-activity-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px;">
+        <div class="mmgr-activity-grid">
             <!-- Total Visits Card -->
             <div class="mmgr-portal-card">
                 <h3>📈 Total Visits</h3>
