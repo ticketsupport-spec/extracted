@@ -815,6 +815,7 @@ add_shortcode('mmgr_member_profile', function() {
             $phone = sanitize_text_field($_POST['phone']);
             $email = sanitize_email($_POST['email']);
             $community_alias = sanitize_text_field($_POST['community_alias']);
+            $community_bio = sanitize_textarea_field($_POST['community_bio'] ?? '');
             $community_photo_url = $member['community_photo_url']; // Keep existing unless replaced
             
             // Handle community photo upload
@@ -839,6 +840,7 @@ add_shortcode('mmgr_member_profile', function() {
 					'phone' => $phone,
 					'email' => $email,
 					'community_alias' => $community_alias,
+					'community_bio' => $community_bio,
 					'community_photo_url' => $community_photo_url
 				),
 				array('id' => $member['id'])
@@ -936,6 +938,12 @@ add_shortcode('mmgr_member_profile', function() {
                     <label style="display:block;font-weight:bold;margin-bottom:5px;">Community Alias</label>
                     <input type="text" name="community_alias" value="<?php echo esc_attr($member['community_alias'] ?? ''); ?>" placeholder="Name for community posts (optional)" style="width:100%;padding:12px;border:2px solid #ddd;border-radius:6px;font-size:16px;">
                     <p style="margin:5px 0 0 0;font-size:13px;color:#999;">This name will be used in community forums instead of your real name</p>
+                </div>
+
+                <div class="mmgr-field" style="margin-bottom:20px;">
+                    <label style="display:block;font-weight:bold;margin-bottom:5px;">Community Bio</label>
+                    <textarea name="community_bio" rows="4" style="width:100%;padding:12px;border:2px solid #ddd;border-radius:6px;font-size:16px;resize:vertical;" placeholder="Tell other members about yourself (optional)"><?php echo esc_textarea($member['community_bio'] ?? ''); ?></textarea>
+                    <p style="margin:5px 0 0 0;font-size:13px;color:#999;">A short bio shown on your community profile page</p>
                 </div>
                 
                 <div class="mmgr-field" style="margin-bottom:20px;">
@@ -2364,9 +2372,9 @@ add_shortcode('mmgr_member_community_profile', function() {
     
     global $wpdb;
     
-    // Get member info
+    // Get member info (including bio)
     $profile_member = $wpdb->get_row($wpdb->prepare(
-        "SELECT id, name, community_alias, community_photo_url FROM {$wpdb->prefix}memberships WHERE id = %d AND active = 1",
+        "SELECT id, name, community_alias, community_photo_url, community_bio FROM {$wpdb->prefix}memberships WHERE id = %d AND active = 1",
         $profile_member_id
     ), ARRAY_A);
     
@@ -2392,6 +2400,37 @@ add_shortcode('mmgr_member_community_profile', function() {
         "SELECT COUNT(*) FROM $posts_table WHERE member_id = %d",
         $profile_member_id
     ));
+
+    // Check if current member has liked this profile
+    $is_liked = false;
+    $is_blocked = false;
+    $private_note = '';
+    if ($profile_member_id != $current_member['id']) {
+        $is_liked = (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}membership_likes WHERE member_id = %d AND liked_member_id = %d",
+            $current_member['id'],
+            $profile_member_id
+        ));
+
+        $is_blocked = (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$wpdb->prefix}membership_blocks WHERE member_id = %d AND blocked_member_id = %d",
+            $current_member['id'],
+            $profile_member_id
+        ));
+
+        // Load existing private note
+        $private_note = (string) $wpdb->get_var($wpdb->prepare(
+            "SELECT note FROM {$wpdb->prefix}membership_member_notes WHERE viewer_member_id = %d AND profile_member_id = %d",
+            $current_member['id'],
+            $profile_member_id
+        ));
+    }
+
+    // Get total likes this profile has received
+    $total_likes = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}membership_likes WHERE liked_member_id = %d",
+        $profile_member_id
+    ));
     
     ob_start();
     ?>
@@ -2410,23 +2449,30 @@ add_shortcode('mmgr_member_community_profile', function() {
                 </div>
             <?php endif; ?>
             
-            <h1 style="margin:0 0 20px 0;"><?php echo esc_html($profile_member['community_alias']); ?></h1>
+            <h1 style="margin:0 0 10px 0;"><?php echo esc_html($profile_member['community_alias']); ?></h1>
+
+            <!-- Like count display -->
+            <p style="margin:0 0 15px 0;color:#888;font-size:15px;">❤️ <span id="profile-like-count"><?php echo $total_likes; ?></span> <?php echo $total_likes === 1 ? 'like' : 'likes'; ?></p>
+
+            <?php if (!empty($profile_member['community_bio'])): ?>
+                <!-- Member Bio -->
+                <div style="background:#f9f9f9;padding:15px 20px;border-radius:8px;margin-bottom:20px;text-align:left;font-size:15px;color:#444;line-height:1.6;">
+                    <?php echo nl2br(esc_html($profile_member['community_bio'])); ?>
+                </div>
+            <?php endif; ?>
             
             <!-- Action Buttons -->
             <?php if ($profile_member_id != $current_member['id']): ?>
-                <div style="display:flex;gap:10px;justify-content:center;margin-bottom:20px;">
+                <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;">
                     <button onclick="openPMModal(<?php echo $profile_member_id; ?>, '<?php echo esc_attr($profile_member['community_alias']); ?>')" 
                             style="background:#FF2197;color:white;padding:12px 30px;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:16px;">
                         ✉️ Send Message
                     </button>
-                    
-                    <?php
-                    $is_blocked = $wpdb->get_var($wpdb->prepare(
-                        "SELECT id FROM {$wpdb->prefix}membership_blocks WHERE member_id = %d AND blocked_member_id = %d",
-                        $current_member['id'],
-                        $profile_member_id
-                    ));
-                    ?>
+
+                    <button id="like-btn" onclick="toggleProfileLike(<?php echo $profile_member_id; ?>, this)"
+                            style="background:<?php echo $is_liked ? '#FF2197' : 'white'; ?>;color:<?php echo $is_liked ? 'white' : '#FF2197'; ?>;border:2px solid #FF2197;padding:12px 30px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:16px;">
+                        ❤️ <?php echo $is_liked ? 'Unlike' : 'Like'; ?>
+                    </button>
                     
                     <button onclick="toggleBlock(<?php echo $profile_member_id; ?>, this)" 
                             style="background:<?php echo $is_blocked ? '#d00' : '#999'; ?>;color:white;padding:12px 30px;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:16px;">
@@ -2461,6 +2507,21 @@ add_shortcode('mmgr_member_community_profile', function() {
                 <?php endif; ?>
             </div>
         </div>
+
+        <?php if ($profile_member_id != $current_member['id']): ?>
+        <!-- Private Notes (only visible to the viewer) -->
+        <div class="mmgr-portal-card" style="margin-top:20px;">
+            <h2>🔒 My Private Notes</h2>
+            <p style="color:#888;font-size:14px;margin-top:0;">Only you can see these notes.</p>
+            <textarea id="private-note-text" rows="4" style="width:100%;padding:12px;border:2px solid #ddd;border-radius:6px;font-size:15px;resize:vertical;"
+                      placeholder="Add a private note about this member..."><?php echo esc_textarea($private_note); ?></textarea>
+            <button onclick="savePrivateNote(<?php echo $profile_member_id; ?>)"
+                    style="margin-top:10px;background:#0073aa;color:white;padding:10px 24px;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:15px;">
+                💾 Save Note
+            </button>
+            <span id="note-save-status" style="margin-left:12px;color:#00a32a;font-size:14px;display:none;"></span>
+        </div>
+        <?php endif; ?>
     </div>
     
     <script>
@@ -2491,6 +2552,35 @@ add_shortcode('mmgr_member_community_profile', function() {
                 alert('❌ Error sending message: ' + error);
             });
         }
+
+        function toggleProfileLike(memberId, button) {
+            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: 'action=mmgr_toggle_like&member_id=' + memberId + '&nonce=<?php echo wp_create_nonce('mmgr_toggle_like'); ?>'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const liked = data.data.liked;
+                    button.textContent = liked ? '❤️ Unlike' : '❤️ Like';
+                    button.style.background = liked ? '#FF2197' : 'white';
+                    button.style.color = liked ? 'white' : '#FF2197';
+                    // Update like count
+                    const countEl = document.getElementById('profile-like-count');
+                    if (countEl) {
+                        countEl.textContent = parseInt(countEl.textContent) + (liked ? 1 : -1);
+                    }
+                } else {
+                    alert('❌ ' + data.data);
+                }
+            })
+            .catch(error => {
+                alert('❌ Error: ' + error);
+            });
+        }
         
         function toggleBlock(memberId, button) {
             fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
@@ -2514,9 +2604,99 @@ add_shortcode('mmgr_member_community_profile', function() {
                 alert('❌ Error: ' + error);
             });
         }
+
+        function savePrivateNote(profileMemberId) {
+            const note = document.getElementById('private-note-text').value;
+            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: 'action=mmgr_save_member_note&profile_member_id=' + profileMemberId + '&note=' + encodeURIComponent(note) + '&nonce=<?php echo wp_create_nonce('mmgr_save_member_note'); ?>'
+            })
+            .then(response => response.json())
+            .then(data => {
+                const status = document.getElementById('note-save-status');
+                if (data.success) {
+                    status.textContent = '✅ Saved!';
+                    status.style.color = '#00a32a';
+                } else {
+                    status.textContent = '❌ ' + data.data;
+                    status.style.color = '#d00';
+                }
+                status.style.display = 'inline';
+                setTimeout(() => { status.style.display = 'none'; }, 3000);
+            })
+            .catch(error => {
+                alert('❌ Error saving note: ' + error);
+            });
+        }
     </script>
     <?php
     return ob_get_clean();
+});
+
+/**
+ * AJAX: Save private member note
+ */
+add_action('wp_ajax_mmgr_save_member_note', function() {
+    check_ajax_referer('mmgr_save_member_note', 'nonce');
+
+    $current_member = mmgr_get_current_member();
+    if (!$current_member) {
+        wp_send_json_error('Not logged in');
+    }
+
+    $profile_member_id = intval($_POST['profile_member_id']);
+    if ($profile_member_id <= 0 || $profile_member_id === $current_member['id']) {
+        wp_send_json_error('Invalid member');
+    }
+
+    global $wpdb;
+
+    // Verify the profile member exists and is active
+    $profile_exists = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}memberships WHERE id = %d AND active = 1",
+        $profile_member_id
+    ));
+    if (!$profile_exists) {
+        wp_send_json_error('Member not found');
+    }
+
+    $note = sanitize_textarea_field($_POST['note'] ?? '');
+
+    $notes_table = $wpdb->prefix . 'membership_member_notes';
+
+    // Check if note exists
+    $existing = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $notes_table WHERE viewer_member_id = %d AND profile_member_id = %d",
+        $current_member['id'],
+        $profile_member_id
+    ));
+
+    if ($existing) {
+        if ($note === '') {
+            $wpdb->delete($notes_table, array(
+                'viewer_member_id' => $current_member['id'],
+                'profile_member_id' => $profile_member_id
+            ));
+        } else {
+            $wpdb->update(
+                $notes_table,
+                array('note' => $note, 'updated_at' => current_time('mysql')),
+                array('viewer_member_id' => $current_member['id'], 'profile_member_id' => $profile_member_id)
+            );
+        }
+    } elseif ($note !== '') {
+        $wpdb->insert($notes_table, array(
+            'viewer_member_id' => $current_member['id'],
+            'profile_member_id' => $profile_member_id,
+            'note' => $note,
+            'updated_at' => current_time('mysql')
+        ));
+    }
+
+    wp_send_json_success();
 });
 
 add_action('wp_ajax_mmgr_get_member_alias', function() {
