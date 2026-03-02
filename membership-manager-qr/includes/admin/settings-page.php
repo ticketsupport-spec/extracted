@@ -362,15 +362,37 @@ function mmgr_settings_admin() {
                 </tr>
                 <tr>
                     <th><label for="email_subject">Subject</label></th>
-                    <td><input name="mmgr_email_subject" id="email_subject" class="large-text" value="<?php echo esc_attr($email_subject); ?>"></td>
+                    <td>
+                        <input name="mmgr_email_subject" id="email_subject" class="large-text" value="<?php echo esc_attr($email_subject); ?>">
+                        <p class="description">Available placeholders: <code>{site_name}</code>, <code>{first_name}</code>, <code>{last_name}</code>, <code>{member_name}</code>, <code>{member_code}</code>, <code>{membership_type}</code>, <code>{expire_date}</code>, <code>{start_date}</code></p>
+                    </td>
                 </tr>
                 <tr>
                     <th><label for="email_template">Email Template</label></th>
-                    <td><textarea name="mmgr_email_template" id="email_template" class="large-text" rows="15"><?php echo esc_textarea($email_template); ?></textarea></td>
+                    <td>
+                        <textarea name="mmgr_email_template" id="email_template" class="large-text" rows="15"><?php echo esc_textarea($email_template); ?></textarea>
+                        <p class="description">
+                            <strong>Available placeholders:</strong><br>
+                            <code>{first_name}</code> – Member's first name<br>
+                            <code>{last_name}</code> – Member's last name<br>
+                            <code>{member_name}</code> – Member's full name<br>
+                            <code>{member_code}</code> – Unique membership code (also used for the QR code)<br>
+                            <code>{membership_type}</code> – Membership level (e.g. Single, Family)<br>
+                            <code>{expire_date}</code> – Membership expiry date<br>
+                            <code>{start_date}</code> – Membership start date<br>
+                            <code>{site_name}</code> – Your site name<br>
+                            <code>{site_url}</code> – Your site URL<br>
+                            <code>{code_of_conduct}</code> – Link to the Code of Conduct page<br>
+                            <code>{portal_link}</code> – Link for the member to set up their portal password
+                        </p>
+                    </td>
                 </tr>
                 <tr>
                     <th><label for="email_footer">Email Footer</label></th>
-                    <td><textarea name="mmgr_email_footer" id="email_footer" class="large-text" rows="5"><?php echo esc_textarea($email_footer); ?></textarea></td>
+                    <td>
+                        <textarea name="mmgr_email_footer" id="email_footer" class="large-text" rows="5"><?php echo esc_textarea($email_footer); ?></textarea>
+                        <p class="description">Available placeholders: <code>{site_name}</code>, <code>{site_url}</code>, <code>{first_name}</code>, <code>{member_name}</code>, <code>{member_code}</code>, <code>{membership_type}</code>, <code>{expire_date}</code></p>
+                    </td>
                 </tr>
                 <tr>
                     <th colspan="2"><h2 style="margin:20px 0;">💬 Welcome Message (Private Message)</h2></th>
