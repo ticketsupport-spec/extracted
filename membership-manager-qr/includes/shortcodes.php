@@ -9,6 +9,9 @@ add_shortcode('membership_registration', function($atts){
     $reg_title = get_option('mmgr_registration_title', 'Membership Signup');
     $coc_url = get_option('mmgr_coc_url', '');
     $success_url = get_option('mmgr_registration_success_url', '');
+    $reg_logo_id = intval(get_option('mmgr_registration_logo_id', 0));
+    $reg_logo_url = $reg_logo_id ? wp_get_attachment_url($reg_logo_id) : '';
+    $reg_blurb = get_option('mmgr_registration_blurb', '');
     
     // Process form submission
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mmgr_register'])) {
@@ -100,6 +103,16 @@ add_shortcode('membership_registration', function($atts){
     
     ?>
     <div class="mmgr-registration-form">
+        <?php if ($reg_logo_url): ?>
+        <div class="mmgr-registration-logo" style="text-align:center;margin-bottom:20px;">
+            <img src="<?php echo esc_url($reg_logo_url); ?>" alt="<?php echo esc_attr(get_bloginfo('name')); ?>" style="max-width:100%;max-height:150px;object-fit:contain;">
+        </div>
+        <?php endif; ?>
+        <?php if (!empty($reg_blurb)): ?>
+        <div class="mmgr-registration-blurb" style="margin-bottom:24px;">
+            <?php echo wp_kses_post($reg_blurb); ?>
+        </div>
+        <?php endif; ?>
         <h2><?php echo esc_html($reg_title); ?></h2>
         <form method="POST">
             <?php wp_nonce_field('mmgr_register', 'reg_nonce'); ?>
