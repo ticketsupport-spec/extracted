@@ -162,6 +162,7 @@ function mmgr_settings_admin() {
         update_option('mmgr_email_footer', wp_kses_post($_POST['mmgr_email_footer']));
         update_option('mmgr_welcome_pm_enabled', isset($_POST['mmgr_welcome_pm_enabled']) ? 1 : 0);
         update_option('mmgr_welcome_pm_message', wp_kses_post($_POST['mmgr_welcome_pm_message']));
+        update_option('mmgr_pwa_icon_id', isset($_POST['mmgr_pwa_icon_id']) ? intval($_POST['mmgr_pwa_icon_id']) : 0);
         
         echo '<div class="notice notice-success"><p>✓ Settings saved successfully!</p></div>';
     }
@@ -309,6 +310,86 @@ function mmgr_settings_admin() {
             <p><button type="submit" name="mmgr_save_settings" class="button button-primary button-large">💾 Save Settings</button></p>
         </form>
         
+        <hr>
+        <h2>📱 PWA App Icon</h2>
+        <?php
+        wp_enqueue_media();
+        $pwa_icon_id  = intval(get_option('mmgr_pwa_icon_id', 0));
+        $pwa_icon_url = $pwa_icon_id ? wp_get_attachment_url($pwa_icon_id) : '';
+        ?>
+        <div style="background:#f9f0ff;padding:20px;border-radius:6px;border-left:4px solid #9b51e0;margin-bottom:20px;">
+            <p>Upload a custom icon that will appear on the <strong>PWA install banner</strong> and on members' home screens after installation. Recommended size: <strong>512×512 px PNG</strong>.</p>
+            <form method="post">
+                <?php wp_nonce_field('mmgr_settings', 'mmgr_settings_nonce'); ?>
+                <input type="hidden" name="mmgr_pwa_icon_id" id="mmgr_pwa_icon_id" value="<?php echo esc_attr($pwa_icon_id); ?>">
+                <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:10px;">
+                    <div id="mmgr-pwa-icon-preview" style="width:80px;height:80px;border:2px dashed #9b51e0;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden;flex-shrink:0;">
+                        <?php if ($pwa_icon_url): ?>
+                            <img src="<?php echo esc_url($pwa_icon_url); ?>" style="width:100%;height:100%;object-fit:cover;" alt="PWA Icon">
+                        <?php else: ?>
+                            <span style="font-size:32px;">🖼️</span>
+                        <?php endif; ?>
+                    </div>
+                    <div>
+                        <button type="button" id="mmgr-pwa-icon-upload" class="button button-secondary">📤 Upload / Change Icon</button>
+                        <?php if ($pwa_icon_id): ?>
+                            <button type="button" id="mmgr-pwa-icon-remove" class="button" style="margin-left:8px;color:#d63638;">✕ Remove</button>
+                        <?php else: ?>
+                            <button type="button" id="mmgr-pwa-icon-remove" class="button" style="margin-left:8px;color:#d63638;display:none;">✕ Remove</button>
+                        <?php endif; ?>
+                        <p class="description" style="margin-top:6px;">If no custom icon is set, a default purple "M" icon will be generated automatically.</p>
+                    </div>
+                </div>
+                <p style="margin-top:16px;">
+                    <button type="submit" name="mmgr_save_settings" class="button button-primary">💾 Save Icon</button>
+                </p>
+            </form>
+        </div>
+
+        <script>
+        (function() {
+            var iconIdField  = document.getElementById('mmgr_pwa_icon_id');
+            var previewBox   = document.getElementById('mmgr-pwa-icon-preview');
+            var uploadBtn    = document.getElementById('mmgr-pwa-icon-upload');
+            var removeBtn    = document.getElementById('mmgr-pwa-icon-remove');
+            var frame;
+
+            uploadBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (frame) { frame.open(); return; }
+                frame = wp.media({
+                    title:    'Select PWA App Icon',
+                    button:   { text: 'Use this image' },
+                    multiple: false,
+                    library:  { type: 'image' }
+                });
+                frame.on('select', function() {
+                    var attachment = frame.state().get('selection').first().toJSON();
+                    iconIdField.value = attachment.id;
+                    var img = document.createElement('img');
+                    img.src = attachment.url;
+                    img.alt = 'PWA Icon';
+                    img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+                    previewBox.innerHTML = '';
+                    previewBox.appendChild(img);
+                    removeBtn.style.display = '';
+                });
+                frame.open();
+            });
+
+            removeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                iconIdField.value = '0';
+                previewBox.innerHTML = '';
+                var placeholder = document.createElement('span');
+                placeholder.style.fontSize = '32px';
+                placeholder.textContent = '🖼️';
+                previewBox.appendChild(placeholder);
+                removeBtn.style.display = 'none';
+            });
+        }());
+        </script>
+
         <hr>
         <h2>📱 PWA & Push Notifications</h2>
         <div style="background:#f9f0ff;padding:20px;border-radius:6px;border-left:4px solid #9b51e0;margin-bottom:20px;">
