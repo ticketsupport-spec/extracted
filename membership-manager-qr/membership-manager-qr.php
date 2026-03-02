@@ -77,6 +77,12 @@ function mmgr_create_plugin_pages() {
             'option' => 'mmgr_page_coc'
         ),
         array(
+            'title' => 'Member Code of Conduct',
+            'slug' => 'member-code-of-conduct',
+            'content' => '[membership_code_of_conduct]',
+            'option' => 'mmgr_page_member_coc'
+        ),
+        array(
             'title' => 'Member Setup',
             'slug' => 'member-setup',
             'content' => '[mmgr_password_setup]',

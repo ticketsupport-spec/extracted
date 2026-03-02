@@ -5,6 +5,7 @@ $pages = array(
     'mmgr_page_registration' => 'Member Registration',
     'mmgr_page_checkin' => 'Member Check-In',
     'mmgr_page_coc' => 'Code of Conduct',
+    'mmgr_page_member_coc' => 'Member Code of Conduct',
     'mmgr_page_setup' => 'Member Setup',
     'mmgr_page_login' => 'Member Login',
     'mmgr_page_dashboard' => 'Member Dashboard',
