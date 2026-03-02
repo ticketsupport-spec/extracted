@@ -122,9 +122,9 @@ add_shortcode('membership_registration', function($atts){
                 <select name="level" id="mmgr_level" required onchange="document.getElementById('partner_fields').style.display=this.value=='Couple'?'block':'none';">
                     <?php
                     global $wpdb;
-                    $levels = $wpdb->get_results("SELECT level_name, price FROM {$wpdb->prefix}membership_levels ORDER BY id", ARRAY_A);
+                    $levels = $wpdb->get_results("SELECT level_name FROM {$wpdb->prefix}membership_levels ORDER BY id", ARRAY_A);
                     foreach($levels as $lvl) {
-                        echo '<option value="'.esc_attr($lvl['level_name']).'">'.esc_html($lvl['level_name']).' - $'.number_format($lvl['price'], 2).'</option>';
+                        echo '<option value="'.esc_attr($lvl['level_name']).'">'.esc_html($lvl['level_name']).'</option>';
                     }
                     ?>
                 </select>
