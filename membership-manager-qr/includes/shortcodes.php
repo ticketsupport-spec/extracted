@@ -204,33 +204,58 @@ $coc_content = get_option('mmgr_code_of_conduct', '');
 if (!empty($coc_content)): ?>
 <div class="mmgr-field">
     <label style="font-weight:bold;display:block;margin-bottom:10px;color:#FF2197;">Code of Conduct</label>
- <div style="max-height:300px;overflow-y:auto;padding:12px;border:2px solid #FF2197;border-radius:6px;background:#1a1a1a;margin-bottom:15px;color:#ccc;">
-    <?php 
-    // Process the code of conduct content - replace <hr> with pink styled version
-    $coc_processed = str_replace(
-        array('<hr>', '<hr/>', '<hr />'),
-        '<hr style="border:none;border-top:3px solid #FF2197;margin:15px 0;">',
-        $coc_content
-    );
-    
-    $lines = explode("\n", $coc_processed);
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if (empty($line)) continue;
-        
-        // Check if line contains the styled <hr>
-        if (strpos($line, '<hr style=') !== false) {
-            echo $line;
+ <div style="max-height:300px;overflow-y:auto;padding:12px;border:2px solid #FF2197;border-radius:6px;margin-bottom:15px;">
+    <?php
+    $coc_lines   = explode("\n", $coc_content);
+    $coc_html    = '';
+    $coc_in_list = false;
+
+    foreach ($coc_lines as $coc_line) {
+        $coc_line = trim($coc_line);
+
+        if (empty($coc_line)) {
+            if ($coc_in_list) {
+                $coc_html .= '</ul>';
+                $coc_in_list = false;
+            }
+            continue;
         }
-        // Lines starting with "-" are highlighted
-        elseif (strpos($line, '-') === 0) {
-            echo '<p style="background:#FF2197;color:white;padding:3px;margin:5px 0;border-radius:4px;font-weight:bold;">' . esc_html(ltrim($line, '- ')) . '</p>';
+
+        if (strlen($coc_line) > 500) {
+            continue;
         }
-        // Regular text
+
+        // ## Heading ## → <h3>
+        if (preg_match('/^##\s+(.+?)\s+##$/', $coc_line, $coc_matches)) {
+            if ($coc_in_list) {
+                $coc_html .= '</ul>';
+                $coc_in_list = false;
+            }
+            $coc_html .= '<h3>' . esc_html($coc_matches[1]) . '</h3>';
+        }
+        // * bullet → <li>
+        elseif (preg_match('/^\*\s+(.+)$/', $coc_line, $coc_matches)) {
+            if (!$coc_in_list) {
+                $coc_html .= '<ul>';
+                $coc_in_list = true;
+            }
+            $coc_html .= '<li>' . esc_html($coc_matches[1]) . '</li>';
+        }
+        // Regular text → <p>
         else {
-            echo '<p style="margin:8px 0;line-height:1.6;color:#ccc;">' . esc_html($line) . '</p>';
+            if ($coc_in_list) {
+                $coc_html .= '</ul>';
+                $coc_in_list = false;
+            }
+            $coc_html .= '<p>' . esc_html($coc_line) . '</p>';
         }
     }
+
+    if ($coc_in_list) {
+        $coc_html .= '</ul>';
+    }
+
+    echo '<div class="mmgr-coc">' . $coc_html . '</div>';
     ?>
 </div>
     <label style="display:flex;align-items:center;gap:8px;color:#fff;">
