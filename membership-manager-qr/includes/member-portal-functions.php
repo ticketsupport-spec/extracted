@@ -22,7 +22,67 @@ function mmgr_create_portal_tables() {
     if(empty($row)) {
         $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN profile_photo_url VARCHAR(500) DEFAULT NULL");
     }
-    
+
+    // Check if community_alias column exists
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = 'community_alias'");
+    if(empty($row)) {
+        $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN community_alias VARCHAR(100) DEFAULT NULL");
+    }
+
+    // Check if community_photo_url column exists
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = 'community_photo_url'");
+    if(empty($row)) {
+        $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN community_photo_url VARCHAR(500) DEFAULT NULL");
+    }
+
+    // Check if community_bio column exists
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = 'community_bio'");
+    if(empty($row)) {
+        $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN community_bio TEXT DEFAULT NULL");
+    }
+
+    // Check if active column exists
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = 'active'");
+    if(empty($row)) {
+        $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN active TINYINT(1) DEFAULT 1");
+    }
+
+    // Member likes table
+    $likes_tbl = $wpdb->prefix . 'membership_likes';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$likes_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        liked_member_id INT NOT NULL,
+        liked_at DATETIME NOT NULL,
+        UNIQUE KEY unique_like (member_id, liked_member_id),
+        INDEX idx_member_id (member_id),
+        INDEX idx_liked_member_id (liked_member_id)
+    ) $charset_collate");
+
+    // Forum post likes table
+    $post_likes_tbl = $wpdb->prefix . 'membership_forum_post_likes';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$post_likes_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        post_id INT NOT NULL,
+        liked_at DATETIME NOT NULL,
+        UNIQUE KEY unique_post_like (member_id, post_id),
+        INDEX idx_member_id (member_id),
+        INDEX idx_post_id (post_id)
+    ) $charset_collate");
+
+    // Private member notes table (notes a viewer leaves on another member's profile, only visible to them)
+    $member_notes_tbl = $wpdb->prefix . 'membership_member_notes';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$member_notes_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        viewer_member_id INT NOT NULL,
+        profile_member_id INT NOT NULL,
+        note TEXT NOT NULL,
+        updated_at DATETIME NOT NULL,
+        UNIQUE KEY unique_note (viewer_member_id, profile_member_id),
+        INDEX idx_viewer_member_id (viewer_member_id)
+    ) $charset_collate");
+
     // Card requests table
     $card_requests_tbl = $wpdb->prefix . 'mmgr_card_requests';
     $sql_card = "CREATE TABLE IF NOT EXISTS $card_requests_tbl (
