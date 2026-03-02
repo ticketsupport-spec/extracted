@@ -345,17 +345,15 @@ function mmgr_pwa_inject_head() {
                 return;
             }
 
-            if (!isAndroid) {
-                // Desktop/PC: show a button so the user opts in consciously
-                mmgrShowDesktopNotifyPrompt(reg, vapidKey);
+            if (isAndroid) {
+                // Modern Chrome on Android also requires a user gesture for
+                // Notification.requestPermission() — show a button like iOS
+                mmgrShowAndroidNotifyPrompt(reg, vapidKey);
                 return;
             }
 
-            // Android: automatic permission request works fine
-            Notification.requestPermission().then(function(perm) {
-                if (perm !== 'granted') return;
-                mmgrSubscribePush(reg, vapidKey);
-            });
+            // Desktop/PC: show a button so the user opts in consciously
+            mmgrShowDesktopNotifyPrompt(reg, vapidKey);
         });
     }
 
@@ -367,6 +365,37 @@ function mmgr_pwa_inject_head() {
             mmgrSaveSubscription(sub);
         }).catch(function(e) {
             console.log('[MMGR PWA] Push subscribe error:', e);
+        });
+    }
+
+    function mmgrShowAndroidNotifyPrompt(reg, vapidKey) {
+        // If already granted subscribe directly; if denied nothing we can do
+        if (Notification.permission === 'granted') {
+            mmgrSubscribePush(reg, vapidKey);
+            return;
+        }
+        if (Notification.permission === 'denied') return;
+
+        var stale = document.getElementById('mmgr-android-notify-btn');
+        if (stale) stale.remove();
+
+        var btn = document.createElement('button');
+        btn.id = 'mmgr-android-notify-btn';
+        btn.textContent = '\uD83D\uDD14 Enable Notifications';
+        btn.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);'
+            + 'background:linear-gradient(135deg,#9b51e0,#ce00ff);color:#fff;border:none;'
+            + 'padding:13px 24px;border-radius:30px;font-size:15px;font-weight:700;'
+            + 'box-shadow:0 4px 16px rgba(155,81,224,0.4);z-index:99998;cursor:pointer;'
+            + 'white-space:nowrap;';
+        document.body.appendChild(btn);
+
+        btn.addEventListener('click', function() {
+            Notification.requestPermission().then(function(perm) {
+                btn.remove();
+                if (perm === 'granted') {
+                    mmgrSubscribePush(reg, vapidKey);
+                }
+            });
         });
     }
 
@@ -708,6 +737,38 @@ function mmgr_pwa_inject_install_banner() {
             </div>
         </div>
 
+        <!-- Android manual steps (shown when beforeinstallprompt has not fired) -->
+        <div id="mmgr-steps-android-manual" style="display:none;">
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">1</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Tap the Chrome menu ⋮</strong>
+                    <span>Tap the three-dot menu in the top-right corner of Chrome</span>
+                </div>
+            </div>
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">2</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Tap "Add to Home Screen" or "Install App"</strong>
+                    <span>The option may appear as <em>Add to Home screen</em> or <em>Install App</em> depending on your Chrome version</span>
+                </div>
+            </div>
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">3</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Tap "Add" or "Install" to confirm</strong>
+                    <span>The app icon will be placed on your home screen</span>
+                </div>
+            </div>
+            <div class="mmgr-install-step">
+                <div class="mmgr-install-step-num">4</div>
+                <div class="mmgr-install-step-body">
+                    <strong>Open the app and allow notifications</strong>
+                    <span>Launch from your home screen — tap Allow when prompted for push notifications</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Generic/desktop steps (fallback) -->
         <div id="mmgr-steps-generic" style="display:none;">
             <div class="mmgr-install-step">
@@ -766,7 +827,8 @@ function mmgr_pwa_inject_install_banner() {
     var ua       = navigator.userAgent || '';
     var isIOS    = /iphone|ipad|ipod/i.test(ua);
     var isSafari = /safari/i.test(ua) && !/chrome|crios|fxios/i.test(ua);
-    var isAndroidChrome = /android/i.test(ua) && /chrome/i.test(ua) && !/opr/i.test(ua);
+    var isAndroid       = /android/i.test(ua);
+    var isAndroidChrome = isAndroid && /chrome/i.test(ua) && !/opr/i.test(ua);
 
     // Current platform — set by showBanner(), read by modal handlers
     var activePlatform = 'generic';
@@ -774,12 +836,28 @@ function mmgr_pwa_inject_install_banner() {
     // For iOS Safari: show banner immediately (no beforeinstallprompt)
     if (isIOS && isSafari) {
         showBanner('ios');
-    } else {
-        // For browsers that fire beforeinstallprompt (Chrome/Edge on Android & desktop)
+    } else if (isAndroid) {
+        // Show manual Android instructions immediately (like iOS).
+        // If Chrome fires beforeinstallprompt, the native "Install App Now"
+        // button will also be made available when the modal is opened.
+        showBanner('android-manual');
+
         window.addEventListener('beforeinstallprompt', function(e) {
             e.preventDefault();
             deferredPrompt = e;
-            showBanner(isAndroidChrome ? 'android' : 'generic');
+            // deferredPrompt being set is enough; openModal() will show the
+            // native "Install App Now" button alongside the manual steps.
+        });
+
+        window.addEventListener('appinstalled', function() {
+            hideBanner();
+        });
+    } else {
+        // For browsers that fire beforeinstallprompt (Chrome/Edge on desktop)
+        window.addEventListener('beforeinstallprompt', function(e) {
+            e.preventDefault();
+            deferredPrompt = e;
+            showBanner('generic');
         });
 
         // Capture successful install
@@ -817,14 +895,18 @@ function mmgr_pwa_inject_install_banner() {
 
     function openModal(platform) {
         // Show correct steps
-        document.getElementById('mmgr-steps-ios').style.display     = 'none';
-        document.getElementById('mmgr-steps-android').style.display = 'none';
-        document.getElementById('mmgr-steps-generic').style.display = 'none';
+        document.getElementById('mmgr-steps-ios').style.display            = 'none';
+        document.getElementById('mmgr-steps-android').style.display        = 'none';
+        document.getElementById('mmgr-steps-android-manual').style.display = 'none';
+        document.getElementById('mmgr-steps-generic').style.display        = 'none';
 
         if (platform === 'ios') {
             document.getElementById('mmgr-steps-ios').style.display = 'block';
         } else if (platform === 'android') {
             document.getElementById('mmgr-steps-android').style.display = 'block';
+            if (deferredPrompt) androidInstall.style.display = 'block';
+        } else if (platform === 'android-manual') {
+            document.getElementById('mmgr-steps-android-manual').style.display = 'block';
             if (deferredPrompt) androidInstall.style.display = 'block';
         } else {
             document.getElementById('mmgr-steps-generic').style.display = 'block';
