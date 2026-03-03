@@ -3,12 +3,30 @@ if (!defined('ABSPATH')) exit;
 
 /**
  * Build an inline QR code <img> tag for use in emails.
+ * Embeds the QR code as a base64 data URI so email clients display it
+ * without needing to load an external URL.
  */
 function mmgr_qr_img_tag($member_code) {
+    // Ensure the QR code file exists
     $qr_url = mmgr_generate_qr_code($member_code);
     if (!$qr_url) {
         return '';
     }
+
+    // Resolve the local file path so we can embed it inline
+    $upload_dir = wp_upload_dir();
+    $safe_code  = sanitize_file_name($member_code);
+    $qr_file    = $upload_dir['basedir'] . '/membership-qr-codes/qr-' . $safe_code . '.png';
+
+    if (file_exists($qr_file)) {
+        $image_data = file_get_contents($qr_file);
+        if ($image_data !== false) {
+            $src = 'data:image/png;base64,' . base64_encode($image_data);
+            return '<img src="' . esc_attr($src) . '" alt="Your QR Code" style="display:block;width:200px;height:200px;margin:10px 0;">';
+        }
+    }
+
+    // Fallback: use the URL (may not display in some email clients)
     return '<img src="' . esc_url($qr_url) . '" alt="Your QR Code" style="display:block;width:200px;height:200px;margin:10px 0;">';
 }
 
@@ -64,7 +82,7 @@ function mmgr_send_welcome_email($member_id) {
     // Generate inline QR code image tag
     $qr_img_tag = mmgr_qr_img_tag($member['member_code']);
 
-    // Prepare placeholders
+    // Prepare placeholders (exclude {qr_code} — replaced after sanitisation to preserve the data URI)
     $placeholders = array(
         '{member_name}' => $member['name'],
         '{first_name}' => $member['first_name'],
@@ -77,7 +95,6 @@ function mmgr_send_welcome_email($member_id) {
         '{site_url}' => home_url(),
         '{code_of_conduct}' => home_url('/code-of-conduct'),
         '{portal_link}' => $portal_link ? '<a href="' . esc_url($portal_link) . '">Click here to set up your account password</a>' : '',
-        '{qr_code}' => $qr_img_tag,
     );
     
     // Replace placeholders in subject, template, and footer
@@ -91,6 +108,8 @@ function mmgr_send_welcome_email($member_id) {
 // Convert to HTML email - allow links and inline images
 $html_body = wp_kses($full_body, mmgr_email_kses_tags());
 $html_body = nl2br($html_body);
+// Replace QR code placeholder after sanitisation so the base64 data URI is preserved
+$html_body = str_replace('{qr_code}', $qr_img_tag, $html_body);
 $html_body = '
 <html>
 <head>
@@ -273,7 +292,7 @@ function mmgr_send_test_email($recipient_email) {
     $template = get_option('mmgr_email_template', mmgr_get_default_email_template());
     $footer = get_option('mmgr_email_footer', mmgr_get_default_email_footer());
     
-    // Test placeholders
+    // Test placeholders (exclude {qr_code} — replaced after sanitisation to preserve the data URI)
     $placeholders = array(
         '{member_name}' => 'John Doe',
         '{first_name}' => 'John',
@@ -286,7 +305,6 @@ function mmgr_send_test_email($recipient_email) {
         '{site_url}' => home_url(),
         '{code_of_conduct}' => home_url('/code-of-conduct'),
         '{portal_link}' => '<a href="' . home_url('/member-setup/?token=TEST') . '">Click here to set up your account password (TEST LINK)</a>',
-        '{qr_code}' => mmgr_qr_img_tag('MB123456TEST'),
     );
     
     // Replace placeholders
@@ -299,6 +317,8 @@ function mmgr_send_test_email($recipient_email) {
     // Convert to HTML email - allow links and inline images
     $html_body = wp_kses($full_body, mmgr_email_kses_tags());
     $html_body = nl2br($html_body);
+    // Replace QR code placeholder after sanitisation so the base64 data URI is preserved
+    $html_body = str_replace('{qr_code}', mmgr_qr_img_tag('MB123456TEST'), $html_body);
     $html_body = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' . $html_body . '</div>';
     
     $headers = array(
