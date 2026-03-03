@@ -15,6 +15,7 @@ define('MMGR_PLUGIN_FILE', __FILE__);
 
 // Load core files immediately
 require_once MMGR_PLUGIN_DIR . 'includes/database.php';
+require_once MMGR_PLUGIN_DIR . 'includes/qr-generator.php';
 require_once MMGR_PLUGIN_DIR . 'includes/member-portal-functions.php';
 require_once MMGR_PLUGIN_DIR . 'includes/messaging-functions.php';
 require_once MMGR_PLUGIN_DIR . 'includes/email-functions.php';
