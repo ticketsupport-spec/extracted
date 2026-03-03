@@ -1401,6 +1401,248 @@ add_action('admin_head', function() {
         line-height: 1.6;
         color: #ccc;
     }
+
+    /* ============================================
+       CHECK-IN PAGE
+       ============================================ */
+    .mmgr-checkin-container {
+        max-width: 700px;
+        margin: 0 auto;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .mmgr-checkin-container > h2 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--portal-primary);
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .mmgr-mode-switch {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .mmgr-mode-switch button {
+        flex: 1;
+        padding: 10px 16px;
+        border: 2px solid var(--portal-blue);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--portal-blue);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .mmgr-mode-switch button.active {
+        background: var(--portal-blue);
+        color: #fff;
+    }
+
+    .mmgr-mode-switch button:hover:not(.active) {
+        background: #f0f4ff;
+    }
+
+    .mmgr-scan-input {
+        width: 100%;
+        padding: 15px;
+        font-size: 18px;
+        border: 2px solid var(--portal-blue);
+        border-radius: 6px;
+        box-sizing: border-box;
+    }
+
+    .mmgr-scan-hint {
+        color: #666;
+        margin-top: 10px;
+        font-size: 14px;
+    }
+
+    .mmgr-camera-view {
+        max-width: 500px;
+        margin: 0 auto 12px;
+    }
+
+    .mmgr-manual-actions {
+        margin-top: 10px;
+    }
+
+    .mmgr-checkin-result {
+        margin-top: 30px;
+    }
+
+    /* Member result card */
+    .mmgr-member-card {
+        background: #fff;
+        border: 3px solid #00a32a;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 20px 0;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .mmgr-member-card-header {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+        margin-bottom: 20px;
+    }
+
+    .mmgr-member-photo {
+        width: 100px;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 50%;
+        border: 3px solid #00a32a;
+        flex-shrink: 0;
+    }
+
+    .mmgr-member-avatar {
+        width: 100px;
+        height: 100px;
+        background: #f0f0f0;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 50px;
+        border: 3px solid #ccc;
+        flex-shrink: 0;
+    }
+
+    .mmgr-member-info {
+        flex: 1;
+    }
+
+    .mmgr-member-name {
+        margin: 0 0 5px 0;
+        color: #00a32a;
+        font-size: 1.25rem;
+    }
+
+    .mmgr-member-info p {
+        margin: 5px 0;
+        font-size: 14px;
+    }
+
+    .mmgr-expired-notice {
+        margin: 10px 0;
+        padding: 10px;
+        background: #fff3cd;
+        border-left: 4px solid #f0c33c;
+        border-radius: 4px;
+    }
+
+    /* Payment section */
+    .mmgr-payment-section {
+        background: #f0f8ff;
+        padding: 15px;
+        border-radius: 6px;
+        margin-top: 15px;
+    }
+
+    .mmgr-fee-label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    .mmgr-fee-group {
+        margin-bottom: 15px;
+    }
+
+    .mmgr-fee-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .mmgr-fee-amount {
+        font-size: 24px;
+        font-weight: bold;
+    }
+
+    .mmgr-fee-input {
+        width: 120px;
+        padding: 10px;
+        font-size: 18px;
+        border: 2px solid var(--portal-blue);
+        border-radius: 6px;
+        font-weight: bold;
+    }
+
+    .mmgr-discount-btn {
+        background: #f0c33c;
+        color: #1d2327;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .mmgr-discount-btn:hover {
+        background: #dbb02e;
+    }
+
+    .mmgr-fee-hint {
+        margin: 5px 0 0 0;
+        font-size: 12px;
+        color: #666;
+    }
+
+    .mmgr-payment-options {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .mmgr-payment-options label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+    }
+
+    .mmgr-notes-input {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        box-sizing: border-box;
+    }
+
+    .mmgr-confirm-btn {
+        background: #00a32a;
+        color: #fff;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        width: 100%;
+    }
+
+    .mmgr-confirm-btn:hover {
+        background: #008a22;
+    }
+
+    @media (max-width: 600px) {
+        .mmgr-member-card-header {
+            flex-direction: column;
+            align-items: center;
+        }
+    }
     </style>
     <?php
 });

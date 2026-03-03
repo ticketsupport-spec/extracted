@@ -297,21 +297,21 @@ add_shortcode('membership_checkin', function($atts){
         </div>
         
         <div id="mode-hw" class="mmgr-mode" style="display:<?php echo $default_mode === 'hw' ? 'block' : 'none'; ?>;">
-            <input type="text" id="hw-input" placeholder="Scan QR code here..." autofocus style="width:100%;padding:15px;font-size:18px;border:2px solid #0073aa;border-radius:6px;">
-            <p style="color:#666;margin-top:10px;">Focus this field and scan a QR code with your scanner</p>
+            <input type="text" id="hw-input" class="mmgr-scan-input" placeholder="Scan QR code here..." autofocus>
+            <p class="mmgr-scan-hint">Focus this field and scan a QR code with your scanner</p>
         </div>
         
         <div id="mode-camera" class="mmgr-mode" style="display:<?php echo $default_mode === 'camera' ? 'block' : 'none'; ?>;">
-            <div id="camera-view" style="max-width:500px;margin:0 auto;"></div>
+            <div id="camera-view" class="mmgr-camera-view"></div>
             <button onclick="startCamera()" id="start-camera-btn" class="mmgr-button">Start Camera</button>
         </div>
         
         <div id="mode-manual" class="mmgr-mode" style="display:<?php echo $default_mode === 'manual' ? 'block' : 'none'; ?>;">
-            <input type="text" id="manual-input" placeholder="Enter member code..." style="width:100%;padding:15px;font-size:18px;border:2px solid #0073aa;border-radius:6px;">
-            <button onclick="manualCheckin()" class="mmgr-button" style="margin-top:10px;">Check In</button>
+            <input type="text" id="manual-input" class="mmgr-scan-input" placeholder="Enter member code...">
+            <div class="mmgr-manual-actions"><button onclick="manualCheckin()" class="mmgr-button">Check In</button></div>
         </div>
         
-        <div id="checkin-result" style="margin-top:30px;"></div>
+        <div id="checkin-result" class="mmgr-checkin-result"></div>
     </div>
     
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -387,57 +387,57 @@ add_shortcode('membership_checkin', function($atts){
                 const dailyFee = data.data.daily_fee || 0;
                 
                 // Build member info card
-                let html = '<div class="mmgr-member-card" style="background:white;border:3px solid #00a32a;border-radius:12px;padding:20px;margin:20px 0;box-shadow:0 4px 6px rgba(0,0,0,0.1);">';
+                let html = '<div class="mmgr-member-card">';
                 
                 // Photo and basic info
-                html += '<div style="display:flex;gap:20px;align-items:start;margin-bottom:20px;">';
+                html += '<div class="mmgr-member-card-header">';
                 
                 // Photo
                 if (member.photo_url) {
-                    html += '<img src="' + member.photo_url + '" style="width:100px;height:100px;object-fit:cover;border-radius:50%;border:3px solid #00a32a;">';
+                    html += '<img src="' + member.photo_url + '" class="mmgr-member-photo" alt="Photo of ' + member.name + '">';
                 } else {
-                    html += '<div style="width:100px;height:100px;background:#f0f0f0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:50px;border:3px solid #ccc;">👤</div>';
+                    html += '<div class="mmgr-member-avatar">👤</div>';
                 }
                 
                 // Member details
-                html += '<div style="flex:1;">';
-                html += '<h2 style="margin:0 0 5px 0;color:#00a32a;">✅ ' + member.name + '</h2>';
+                html += '<div class="mmgr-member-info">';
+                html += '<h2 class="mmgr-member-name">✅ ' + member.name + '</h2>';
                 
                 if (member.partner_name) {
-                    html += '<p style="margin:5px 0;color:#666;">+ ' + member.partner_name + '</p>';
+                    html += '<p>+ ' + member.partner_name + '</p>';
                 }
                 
-                html += '<p style="margin:5px 0;"><strong>Level:</strong> ' + member.level + '</p>';
-                html += '<p style="margin:5px 0;"><strong>Code:</strong> <code>' + member.member_code + '</code></p>';
-                html += '<p style="margin:5px 0;"><strong>Phone:</strong> ' + member.phone + '</p>';
-                html += '<p style="margin:5px 0;"><strong>Email:</strong> ' + member.email + '</p>';
+                html += '<p><strong>Level:</strong> ' + member.level + '</p>';
+                html += '<p><strong>Code:</strong> <code>' + member.member_code + '</code></p>';
+                html += '<p><strong>Phone:</strong> ' + member.phone + '</p>';
+                html += '<p><strong>Email:</strong> ' + member.email + '</p>';
                 
                 if (member.is_expired) {
-                    html += '<p style="margin:10px 0;padding:10px;background:#fff3cd;border-left:4px solid #f0c33c;border-radius:4px;"><strong>⚠️ Membership Expired:</strong> ' + member.expire_date + '</p>';
+                    html += '<p class="mmgr-expired-notice"><strong>⚠️ Membership Expired:</strong> ' + member.expire_date + '</p>';
                 } else {
-                    html += '<p style="margin:5px 0;"><strong>Expires:</strong> ' + member.expire_date + '</p>';
+                    html += '<p><strong>Expires:</strong> ' + member.expire_date + '</p>';
                 }
                 
-                html += '<p style="margin:5px 0;"><strong>Last Visit:</strong> ' + member.last_visited + '</p>';
+                html += '<p><strong>Last Visit:</strong> ' + member.last_visited + '</p>';
                 html += '</div></div>';
                 
 				// Payment section
-				html += '<div style="background:#f0f8ff;padding:15px;border-radius:6px;margin-top:15px;">';
-				html += '<div style="margin-bottom:15px;">';
-				html += '<label for="daily_fee_' + member.id + '" style="display:block;margin-bottom:5px;font-weight:bold;">Daily Fee:</label>';
-				html += '<div style="display:flex;align-items:center;gap:10px;">';
-				html += '<span style="font-size:24px;font-weight:bold;">$</span>';
-				html += '<input type="number" id="daily_fee_' + member.id + '" value="' + dailyFee.toFixed(2) + '" step="0.01" min="0" style="width:120px;padding:10px;font-size:18px;border:2px solid #0073aa;border-radius:6px;font-weight:bold;">';
-				html += '<button onclick="applyDiscount(' + member.id + ')" style="background:#f0c33c;color:#1d2327;border:none;padding:8px 15px;border-radius:6px;font-size:14px;font-weight:bold;cursor:pointer;">🎟️ Apply Discount</button>';
+				html += '<div class="mmgr-payment-section">';
+				html += '<div class="mmgr-fee-group">';
+				html += '<label for="daily_fee_' + member.id + '" class="mmgr-fee-label">Daily Fee:</label>';
+				html += '<div class="mmgr-fee-row">';
+				html += '<span class="mmgr-fee-amount">$</span>';
+				html += '<input type="number" id="daily_fee_' + member.id + '" value="' + dailyFee.toFixed(2) + '" step="0.01" min="0" class="mmgr-fee-input">';
+				html += '<button onclick="applyDiscount(' + member.id + ')" class="mmgr-discount-btn">🎟️ Apply Discount</button>';
 				html += '</div>';
-				html += '<p style="margin:5px 0 0 0;font-size:12px;color:#666;">Edit amount for discounts, coupons, or special pricing</p>';
+				html += '<p class="mmgr-fee-hint">Edit amount for discounts, coupons, or special pricing</p>';
 				html += '</div>';
-				html += '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">';
-				html += '<label style="display:flex;align-items:center;gap:5px;"><input type="radio" name="payment_status_' + member.id + '" value="1" checked> 💵 Paid</label>';
-				html += '<label style="display:flex;align-items:center;gap:5px;"><input type="radio" name="payment_status_' + member.id + '" value="0"> ⚠️ Unpaid</label>';
+				html += '<div class="mmgr-payment-options">';
+				html += '<label><input type="radio" name="payment_status_' + member.id + '" value="1" checked> 💵 Paid</label>';
+				html += '<label><input type="radio" name="payment_status_' + member.id + '" value="0"> ⚠️ Unpaid</label>';
 				html += '</div>';
-				html += '<input type="text" id="visit_notes_' + member.id + '" placeholder="Notes (optional - e.g., 50% discount coupon)" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;margin-bottom:10px;">';
-				html += '<button onclick="confirmPayment(' + member.id + ')" style="background:#00a32a;color:white;border:none;padding:12px 24px;border-radius:6px;font-size:16px;font-weight:bold;cursor:pointer;width:100%;">✓ Confirm Check-In</button>';
+				html += '<input type="text" id="visit_notes_' + member.id + '" placeholder="Notes (optional - e.g., 50% discount coupon)" class="mmgr-notes-input">';
+				html += '<button onclick="confirmPayment(' + member.id + ')" class="mmgr-confirm-btn">✓ Confirm Check-In</button>';
 				html += '</div>'; // Close payment section
 
 				html += '</div>'; // Close member card
@@ -475,14 +475,14 @@ add_shortcode('membership_checkin', function($atts){
 				.then(data => {
 					const result = document.getElementById('checkin-result');
 					if (data.success) {
-						result.innerHTML = '<div class="mmgr-success" style="background:#d4edda;color:#155724;padding:20px;border-radius:6px;border-left:4px solid #00a32a;font-size:18px;">' + data.data.message + '</div>';
+						result.innerHTML = '<div class="mmgr-success">' + data.data.message + '</div>';
 						setTimeout(() => {
 							result.innerHTML = '';
 							const hwInput = document.getElementById('hw-input');
 							if (hwInput) hwInput.focus();
 						}, 3000);
 					} else {
-						result.innerHTML = '<div class="mmgr-error" style="background:#f8d7da;color:#721c24;padding:15px;border-radius:6px;border-left:4px solid #d63638;">' + (data.data ? data.data.message : 'Error confirming payment') + '</div>';
+						result.innerHTML = '<div class="mmgr-error">' + (data.data ? data.data.message : 'Error confirming payment') + '</div>';
 					}
 				});
 			}
