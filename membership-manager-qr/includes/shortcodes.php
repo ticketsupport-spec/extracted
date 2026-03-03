@@ -286,44 +286,53 @@ add_shortcode('membership_checkin', function($atts){
     $checkin_title = get_option('mmgr_checkin_title', 'QR Code Scanner');
     $default_mode = get_option('mmgr_checkin_default_mode', 'hw');
     
+    $btn_base_style   = 'flex:1 !important;padding:10px 16px !important;border:2px solid #0073aa !important;border-radius:6px !important;background:#fff !important;color:#0073aa !important;font-size:14px !important;font-weight:600 !important;cursor:pointer !important;';
+    $btn_active_style = 'flex:1 !important;padding:10px 16px !important;border:2px solid #0073aa !important;border-radius:6px !important;background:#0073aa !important;color:#fff !important;font-size:14px !important;font-weight:600 !important;cursor:pointer !important;';
     ?>
-    <div class="mmgr-checkin-container">
-        <h2><?php echo esc_html($checkin_title); ?></h2>
+    <div class="mmgr-checkin-container" style="max-width:700px !important;margin:0 auto !important;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif !important;">
+        <h2 style="font-size:1.5rem !important;font-weight:700 !important;color:#9b51e0 !important;margin-bottom:20px !important;text-align:center !important;"><?php echo esc_html($checkin_title); ?></h2>
         
-        <div class="mmgr-mode-switch">
-            <button onclick="switchMode('hw')" id="btn-hw" class="<?php echo $default_mode === 'hw' ? 'active' : ''; ?>">📱 Hardware Scanner</button>
-            <button onclick="switchMode('camera')" id="btn-camera" class="<?php echo $default_mode === 'camera' ? 'active' : ''; ?>">📷 Camera Scanner</button>
-            <button onclick="switchMode('manual')" id="btn-manual" class="<?php echo $default_mode === 'manual' ? 'active' : ''; ?>">⌨️ Manual Entry</button>
+        <div class="mmgr-mode-switch" style="display:flex !important;gap:10px !important;margin-bottom:20px !important;flex-wrap:wrap !important;">
+            <button onclick="switchMode('hw')" id="btn-hw" class="<?php echo $default_mode === 'hw' ? 'active' : ''; ?>" style="<?php echo $default_mode === 'hw' ? esc_attr($btn_active_style) : esc_attr($btn_base_style); ?>">📱 Hardware Scanner</button>
+            <button onclick="switchMode('camera')" id="btn-camera" class="<?php echo $default_mode === 'camera' ? 'active' : ''; ?>" style="<?php echo $default_mode === 'camera' ? esc_attr($btn_active_style) : esc_attr($btn_base_style); ?>">📷 Camera Scanner</button>
+            <button onclick="switchMode('manual')" id="btn-manual" class="<?php echo $default_mode === 'manual' ? 'active' : ''; ?>" style="<?php echo $default_mode === 'manual' ? esc_attr($btn_active_style) : esc_attr($btn_base_style); ?>">⌨️ Manual Entry</button>
         </div>
         
-        <div id="mode-hw" class="mmgr-mode" style="display:<?php echo $default_mode === 'hw' ? 'block' : 'none'; ?>;">
-            <input type="text" id="hw-input" class="mmgr-scan-input" placeholder="Scan QR code here..." autofocus>
-            <p class="mmgr-scan-hint">Focus this field and scan a QR code with your scanner</p>
+        <div id="mode-hw" class="mmgr-mode" style="<?php echo $default_mode === 'hw' ? 'display:block !important;' : 'display:none !important;'; ?>">
+            <input type="text" id="hw-input" class="mmgr-scan-input" placeholder="Scan QR code here..." autofocus style="width:100% !important;padding:15px !important;font-size:18px !important;border:2px solid #0073aa !important;border-radius:6px !important;box-sizing:border-box !important;">
+            <p class="mmgr-scan-hint" style="color:#666 !important;margin-top:10px !important;font-size:14px !important;">Focus this field and scan a QR code with your scanner</p>
         </div>
         
-        <div id="mode-camera" class="mmgr-mode" style="display:<?php echo $default_mode === 'camera' ? 'block' : 'none'; ?>;">
-            <div id="camera-view" class="mmgr-camera-view"></div>
-            <button onclick="startCamera()" id="start-camera-btn" class="mmgr-button">Start Camera</button>
+        <div id="mode-camera" class="mmgr-mode" style="<?php echo $default_mode === 'camera' ? 'display:block !important;' : 'display:none !important;'; ?>">
+            <div id="camera-view" class="mmgr-camera-view" style="max-width:500px !important;margin:0 auto 12px !important;"></div>
+            <button onclick="startCamera()" id="start-camera-btn" class="mmgr-button" style="background:linear-gradient(135deg,#0073aa 0%,#005a87 100%) !important;color:#fff !important;padding:10px 20px !important;border:none !important;border-radius:20px !important;font-size:14px !important;font-weight:600 !important;cursor:pointer !important;display:inline-block !important;text-decoration:none !important;text-align:center !important;">Start Camera</button>
         </div>
         
-        <div id="mode-manual" class="mmgr-mode" style="display:<?php echo $default_mode === 'manual' ? 'block' : 'none'; ?>;">
-            <input type="text" id="manual-input" class="mmgr-scan-input" placeholder="Enter member code...">
-            <div class="mmgr-manual-actions"><button onclick="manualCheckin()" class="mmgr-button">Check In</button></div>
+        <div id="mode-manual" class="mmgr-mode" style="<?php echo $default_mode === 'manual' ? 'display:block !important;' : 'display:none !important;'; ?>">
+            <input type="text" id="manual-input" class="mmgr-scan-input" placeholder="Enter member code..." style="width:100% !important;padding:15px !important;font-size:18px !important;border:2px solid #0073aa !important;border-radius:6px !important;box-sizing:border-box !important;">
+            <div class="mmgr-manual-actions" style="margin-top:10px !important;"><button onclick="manualCheckin()" class="mmgr-button" style="background:linear-gradient(135deg,#0073aa 0%,#005a87 100%) !important;color:#fff !important;padding:10px 20px !important;border:none !important;border-radius:20px !important;font-size:14px !important;font-weight:600 !important;cursor:pointer !important;display:inline-block !important;text-decoration:none !important;text-align:center !important;">Check In</button></div>
         </div>
         
-        <div id="checkin-result" class="mmgr-checkin-result"></div>
+        <div id="checkin-result" class="mmgr-checkin-result" style="margin-top:30px !important;"></div>
     </div>
     
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
     let html5QrCode;
-    
+    const mmgrBtnBase   = '<?php echo esc_js($btn_base_style); ?>';
+    const mmgrBtnActive = '<?php echo esc_js($btn_active_style); ?>';
+
     function switchMode(mode) {
-        document.querySelectorAll('.mmgr-mode').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('.mmgr-mode-switch button').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.mmgr-mode').forEach(el => el.style.setProperty('display', 'none', 'important'));
+        document.querySelectorAll('.mmgr-mode-switch button').forEach(btn => {
+            btn.classList.remove('active');
+            btn.setAttribute('style', mmgrBtnBase);
+        });
         
-        document.getElementById('mode-' + mode).style.display = 'block';
-        document.getElementById('btn-' + mode).classList.add('active');
+        document.getElementById('mode-' + mode).style.setProperty('display', 'block', 'important');
+        const activeBtn = document.getElementById('btn-' + mode);
+        activeBtn.classList.add('active');
+        activeBtn.setAttribute('style', mmgrBtnActive);
         
         if (mode === 'hw') {
             document.getElementById('hw-input').focus();
@@ -387,57 +396,57 @@ add_shortcode('membership_checkin', function($atts){
                 const dailyFee = data.data.daily_fee || 0;
                 
                 // Build member info card
-                let html = '<div class="mmgr-member-card">';
+                let html = '<div class="mmgr-member-card" style="background:#fff !important;border:3px solid #00a32a !important;border-radius:12px !important;padding:20px !important;margin:20px 0 !important;box-shadow:0 4px 6px rgba(0,0,0,0.1) !important;">';
                 
                 // Photo and basic info
-                html += '<div class="mmgr-member-card-header">';
+                html += '<div class="mmgr-member-card-header" style="display:flex !important;gap:20px !important;align-items:flex-start !important;margin-bottom:20px !important;">';
                 
                 // Photo
                 if (member.photo_url) {
-                    html += '<img src="' + member.photo_url + '" class="mmgr-member-photo" alt="Photo of ' + member.name + '">';
+                    html += '<img src="' + member.photo_url + '" class="mmgr-member-photo" alt="Photo of ' + member.name + '" style="width:100px !important;height:100px !important;object-fit:cover !important;border-radius:50% !important;border:3px solid #00a32a !important;flex-shrink:0 !important;">';
                 } else {
-                    html += '<div class="mmgr-member-avatar">👤</div>';
+                    html += '<div class="mmgr-member-avatar" style="width:100px !important;height:100px !important;background:#f0f0f0 !important;border-radius:50% !important;display:flex !important;align-items:center !important;justify-content:center !important;font-size:50px !important;border:3px solid #ccc !important;flex-shrink:0 !important;">👤</div>';
                 }
                 
                 // Member details
-                html += '<div class="mmgr-member-info">';
-                html += '<h2 class="mmgr-member-name">✅ ' + member.name + '</h2>';
+                html += '<div class="mmgr-member-info" style="flex:1 !important;">';
+                html += '<h2 class="mmgr-member-name" style="margin:0 0 5px 0 !important;color:#00a32a !important;font-size:1.25rem !important;">✅ ' + member.name + '</h2>';
                 
                 if (member.partner_name) {
-                    html += '<p>+ ' + member.partner_name + '</p>';
+                    html += '<p style="margin:5px 0 !important;font-size:14px !important;">+ ' + member.partner_name + '</p>';
                 }
                 
-                html += '<p><strong>Level:</strong> ' + member.level + '</p>';
-                html += '<p><strong>Code:</strong> <code>' + member.member_code + '</code></p>';
-                html += '<p><strong>Phone:</strong> ' + member.phone + '</p>';
-                html += '<p><strong>Email:</strong> ' + member.email + '</p>';
+                html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Level:</strong> ' + member.level + '</p>';
+                html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Code:</strong> <code>' + member.member_code + '</code></p>';
+                html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Phone:</strong> ' + member.phone + '</p>';
+                html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Email:</strong> ' + member.email + '</p>';
                 
                 if (member.is_expired) {
-                    html += '<p class="mmgr-expired-notice"><strong>⚠️ Membership Expired:</strong> ' + member.expire_date + '</p>';
+                    html += '<p class="mmgr-expired-notice" style="margin:10px 0 !important;padding:10px !important;background:#fff3cd !important;border-left:4px solid #f0c33c !important;border-radius:4px !important;"><strong>⚠️ Membership Expired:</strong> ' + member.expire_date + '</p>';
                 } else {
-                    html += '<p><strong>Expires:</strong> ' + member.expire_date + '</p>';
+                    html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Expires:</strong> ' + member.expire_date + '</p>';
                 }
                 
-                html += '<p><strong>Last Visit:</strong> ' + member.last_visited + '</p>';
+                html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Last Visit:</strong> ' + member.last_visited + '</p>';
                 html += '</div></div>';
                 
 				// Payment section
-				html += '<div class="mmgr-payment-section">';
-				html += '<div class="mmgr-fee-group">';
-				html += '<label for="daily_fee_' + member.id + '" class="mmgr-fee-label">Daily Fee:</label>';
-				html += '<div class="mmgr-fee-row">';
-				html += '<span class="mmgr-fee-amount">$</span>';
-				html += '<input type="number" id="daily_fee_' + member.id + '" value="' + dailyFee.toFixed(2) + '" step="0.01" min="0" class="mmgr-fee-input">';
-				html += '<button onclick="applyDiscount(' + member.id + ')" class="mmgr-discount-btn">🎟️ Apply Discount</button>';
+				html += '<div class="mmgr-payment-section" style="background:#f0f8ff !important;padding:15px !important;border-radius:6px !important;margin-top:15px !important;">';
+				html += '<div class="mmgr-fee-group" style="margin-bottom:15px !important;">';
+				html += '<label for="daily_fee_' + member.id + '" class="mmgr-fee-label" style="display:block !important;margin-bottom:5px !important;font-weight:bold !important;">Daily Fee:</label>';
+				html += '<div class="mmgr-fee-row" style="display:flex !important;align-items:center !important;gap:10px !important;margin-bottom:8px !important;">';
+				html += '<span class="mmgr-fee-amount" style="font-size:24px !important;font-weight:bold !important;">$</span>';
+				html += '<input type="number" id="daily_fee_' + member.id + '" value="' + dailyFee.toFixed(2) + '" step="0.01" min="0" class="mmgr-fee-input" style="width:120px !important;padding:10px !important;font-size:18px !important;border:2px solid #0073aa !important;border-radius:6px !important;font-weight:bold !important;">';
+				html += '<button onclick="applyDiscount(' + member.id + ')" class="mmgr-discount-btn" style="background:#f0c33c !important;color:#1d2327 !important;border:none !important;padding:8px 15px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:pointer !important;">🎟️ Apply Discount</button>';
 				html += '</div>';
-				html += '<p class="mmgr-fee-hint">Edit amount for discounts, coupons, or special pricing</p>';
+				html += '<p class="mmgr-fee-hint" style="margin:5px 0 0 0 !important;font-size:12px !important;color:#666 !important;">Edit amount for discounts, coupons, or special pricing</p>';
 				html += '</div>';
-				html += '<div class="mmgr-payment-options">';
-				html += '<label><input type="radio" name="payment_status_' + member.id + '" value="1" checked> 💵 Paid</label>';
-				html += '<label><input type="radio" name="payment_status_' + member.id + '" value="0"> ⚠️ Unpaid</label>';
+				html += '<div class="mmgr-payment-options" style="display:flex !important;gap:10px !important;align-items:center !important;margin-bottom:10px !important;">';
+				html += '<label style="display:flex !important;align-items:center !important;gap:5px !important;cursor:pointer !important;"><input type="radio" name="payment_status_' + member.id + '" value="1" checked> 💵 Paid</label>';
+				html += '<label style="display:flex !important;align-items:center !important;gap:5px !important;cursor:pointer !important;"><input type="radio" name="payment_status_' + member.id + '" value="0"> ⚠️ Unpaid</label>';
 				html += '</div>';
-				html += '<input type="text" id="visit_notes_' + member.id + '" placeholder="Notes (optional - e.g., 50% discount coupon)" class="mmgr-notes-input">';
-				html += '<button onclick="confirmPayment(' + member.id + ')" class="mmgr-confirm-btn">✓ Confirm Check-In</button>';
+				html += '<input type="text" id="visit_notes_' + member.id + '" placeholder="Notes (optional - e.g., 50% discount coupon)" class="mmgr-notes-input" style="width:100% !important;padding:10px !important;border:1px solid #ccc !important;border-radius:4px !important;margin-bottom:10px !important;box-sizing:border-box !important;">';
+				html += '<button onclick="confirmPayment(' + member.id + ')" class="mmgr-confirm-btn" style="background:#00a32a !important;color:#fff !important;border:none !important;padding:12px 24px !important;border-radius:6px !important;font-size:16px !important;font-weight:bold !important;cursor:pointer !important;width:100% !important;">✓ Confirm Check-In</button>';
 				html += '</div>'; // Close payment section
 
 				html += '</div>'; // Close member card
@@ -445,12 +454,12 @@ add_shortcode('membership_checkin', function($atts){
 				result.innerHTML = html;
                 
             } else {
-                result.innerHTML = '<div class="mmgr-error">' + (data.data ? data.data.message : 'An error occurred') + '</div>';
+                result.innerHTML = '<div class="mmgr-error" style="background:#f8d7da !important;border-left:4px solid #dc3232 !important;color:#721c24 !important;padding:12px 15px !important;border-radius:6px !important;margin:15px 0 !important;font-weight:600 !important;font-size:14px !important;">' + (data.data ? data.data.message : 'An error occurred') + '</div>';
             }
         })
         .catch(err => {
             const result = document.getElementById('checkin-result');
-            result.innerHTML = '<div class="mmgr-error">❌ Error: ' + err.message + '</div>';
+            result.innerHTML = '<div class="mmgr-error" style="background:#f8d7da !important;border-left:4px solid #dc3232 !important;color:#721c24 !important;padding:12px 15px !important;border-radius:6px !important;margin:15px 0 !important;font-weight:600 !important;font-size:14px !important;">❌ Error: ' + err.message + '</div>';
             console.error('Check-in error:', err);
         });
     }
@@ -475,14 +484,14 @@ add_shortcode('membership_checkin', function($atts){
 				.then(data => {
 					const result = document.getElementById('checkin-result');
 					if (data.success) {
-						result.innerHTML = '<div class="mmgr-success">' + data.data.message + '</div>';
+						result.innerHTML = '<div class="mmgr-success" style="background:#d4edda !important;border-left:4px solid #00a32a !important;color:#155724 !important;padding:12px 15px !important;border-radius:6px !important;margin:15px 0 !important;font-weight:600 !important;font-size:14px !important;">' + data.data.message + '</div>';
 						setTimeout(() => {
 							result.innerHTML = '';
 							const hwInput = document.getElementById('hw-input');
 							if (hwInput) hwInput.focus();
 						}, 3000);
 					} else {
-						result.innerHTML = '<div class="mmgr-error">' + (data.data ? data.data.message : 'Error confirming payment') + '</div>';
+						result.innerHTML = '<div class="mmgr-error" style="background:#f8d7da !important;border-left:4px solid #dc3232 !important;color:#721c24 !important;padding:12px 15px !important;border-radius:6px !important;margin:15px 0 !important;font-weight:600 !important;font-size:14px !important;">' + (data.data ? data.data.message : 'Error confirming payment') + '</div>';
 					}
 				});
 			}
