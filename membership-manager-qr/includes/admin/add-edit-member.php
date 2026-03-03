@@ -33,14 +33,16 @@ if (isset($_POST['mmgr_save_member'])) {
             'sex' => sanitize_text_field($_POST['sex']),
             'partner_sex' => sanitize_text_field($_POST['partner_sex']),
             'age' => sanitize_text_field($_POST['age']),
-            'partner_age' => sanitize_text_field($_POST['partner_age']),
+            'partner_age' => sanitize_text_field($_POST['partner_age']) ?: null,
             'level' => sanitize_text_field($_POST['level']),
+            'newsletter' => isset($_POST['newsletter']) ? 1 : 0,
             'start_date' => sanitize_text_field($_POST['start_date']),
-            'expire_date' => sanitize_text_field($_POST['expire_date']),
+            'expire_date' => sanitize_text_field($_POST['expire_date']) ?: null,
             'paid' => isset($_POST['paid']) ? 1 : 0,
-            'amount_paid' => floatval($_POST['amount_paid']),
-            'notes' => sanitize_textarea_field($_POST['notes'])
+            'payment_amount' => floatval($_POST['amount_paid'] ?? 0),
         );
+        // Remove null values so MySQL uses column defaults
+        $data = array_filter($data, function($v) { return $v !== null; });
         
         if ($editing) {
             $wpdb->update($tbl, $data, array('id' => intval($_GET['id'])));
@@ -201,12 +203,17 @@ $levels = $wpdb->get_results("SELECT level_name, price FROM {$wpdb->prefix}membe
             </tr>
             <tr>
                 <th><label for="amount_paid">Amount Paid</label></th>
-                <td><input type="number" name="amount_paid" id="amount_paid" step="0.01" value="<?php echo esc_attr($member['amount_paid'] ?? '0.00'); ?>"></td>
+                <td><input type="number" name="amount_paid" id="amount_paid" step="0.01" value="<?php echo esc_attr($member['payment_amount'] ?? '0.00'); ?>"></td>
             </tr>
             
             <tr>
-                <th><label for="notes">Notes</label></th>
-                <td><textarea name="notes" id="notes" class="large-text" rows="4"><?php echo esc_textarea($member['notes'] ?? ''); ?></textarea></td>
+                <th><label for="newsletter">Newsletter</label></th>
+                <td>
+                    <label>
+                        <input type="checkbox" name="newsletter" id="newsletter" value="1" <?php checked($member['newsletter'] ?? 0, 1); ?>>
+                        Subscribe to newsletter
+                    </label>
+                </td>
             </tr>
             
             <!-- PASSWORD MANAGEMENT SECTION -->
