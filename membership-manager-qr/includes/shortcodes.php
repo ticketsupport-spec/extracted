@@ -68,7 +68,10 @@ add_shortcode('membership_registration', function($atts){
                     'payment_method' => null,
                     'payment_amount' => null
                 );
-                
+
+                // Remove null values so the database uses column defaults
+                // (prevents MySQL strict mode errors with DATE/DATETIME columns)
+                $data = array_filter($data, function($v) { return $v !== null; });
                 $wpdb->insert($tbl, $data);
 				
                 

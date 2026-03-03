@@ -119,7 +119,7 @@ function mmgr_admin_page() {
         $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM `$tbl` WHERE id=%d", intval($_GET['edit'])), ARRAY_A);
         if (!$row) { $editing = false; $error="Member not found."; }
     } else if (!$editing) {
-        $row = array('id'=>0,'first_name'=>'','last_name'=>'','partner_first_name'=>'','partner_last_name'=>'','name'=>'','email'=>'','phone'=>'','sex'=>'','partner_sex'=>'','level'=>'Single','partner_name'=>'','notes'=>'','paid'=>0,'amount_paid'=>0.00,'age'=>'','partner_age'=>'','newsletter'=>0,'agreed_terms'=>1,'photo_url'=>'','last_visited'=>null,'banned'=>0,'banned_reason'=>'','banned_on'=>null,'member_code'=>'');
+        $row = array('id'=>0,'first_name'=>'','last_name'=>'','partner_first_name'=>'','partner_last_name'=>'','name'=>'','email'=>'','phone'=>'','sex'=>'','partner_sex'=>'','level'=>'Single','partner_name'=>'','paid'=>0,'payment_amount'=>0.00,'age'=>'','partner_age'=>'','newsletter'=>0,'agreed_terms'=>1,'photo_url'=>'','last_visited'=>null,'banned'=>0,'banned_reason'=>'','banned_on'=>null,'member_code'=>'');
     }
 
     if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['unban']) && isset($row['id'])) {
@@ -157,9 +157,8 @@ function mmgr_admin_page() {
             'partner_age' => isset($_POST['partner_age']) ? sanitize_text_field($_POST['partner_age']) : '',
             'newsletter' => isset($_POST['newsletter']) ? 1 : 0,
             'agreed_terms' => isset($_POST['agreed_terms']) ? 1 : 0,
-            'notes' => sanitize_textarea_field($_POST['notes']),
             'paid' => isset($_POST['paid']) ? 1 : 0,
-            'amount_paid' => floatval($_POST['amount_paid']),
+            'payment_amount' => floatval($_POST['amount_paid']),
             'photo_url' => isset($_POST['photo_url']) ? esc_url_raw($_POST['photo_url']) : ''
         );
         $data['partner_name'] = trim($data['partner_first_name'] . ' ' . $data['partner_last_name']);
@@ -274,7 +273,7 @@ function mmgr_admin_page() {
     <tr><th scope="row"><label for="agreed">Agreed to Terms</label></th><td><input type="checkbox" name="agreed_terms" id="agreed" value="1" <?php echo !empty($row['agreed_terms'])?'checked':''; ?>></td></tr>
     <tr><th scope="row"><label for="notes">Notes</label></th><td><textarea name="notes" id="notes" class="large-text" rows="4"><?php echo esc_textarea($row['notes'] ?? ''); ?></textarea></td></tr>
     <tr><th scope="row"><label for="paid">Paid</label></th><td><input type="checkbox" name="paid" id="paid" value="1" <?php echo !empty($row['paid'])?'checked':''; ?>></td></tr>
-    <tr><th scope="row"><label for="amount">Amount Paid ($)</label></th><td><input name="amount_paid" id="amount" type="number" step="0.01" min="0" value="<?php echo esc_attr($row['amount_paid'] ?? 0); ?>"></td></tr>
+    <tr><th scope="row"><label for="amount">Amount Paid ($)</label></th><td><input name="amount_paid" id="amount" type="number" step="0.01" min="0" value="<?php echo esc_attr($row['payment_amount'] ?? 0); ?>"></td></tr>
     </tbody></table>
     </div>
     <?php wp_nonce_field('mmgr_save', 'member_nonce'); ?>
