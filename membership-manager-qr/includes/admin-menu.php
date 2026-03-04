@@ -262,11 +262,8 @@ function mmgr_members_page() {
                         $is_banned = !empty($member['banned']) && $member['banned'] == 1;
                         $is_paid = !empty($member['paid']) && $member['paid'] == 1;
                         
-                        // Generate QR code URL
-                        $upload_dir = wp_upload_dir();
-                        $qr_url = $upload_dir['baseurl'] . '/membership-qr-codes/qr-' . $member['member_code'] . '.png';
-                        $qr_path = $upload_dir['basedir'] . '/membership-qr-codes/qr-' . $member['member_code'] . '.png';
-                        $qr_exists = file_exists($qr_path);
+                        // Generate QR code URL via AJAX (generates on-the-fly if file missing)
+                        $qr_url = admin_url('admin-ajax.php?action=mmgr_qrcode&code=' . urlencode($member['member_code']));
                         
                         // Highlight unpaid members
                         $row_style = '';
@@ -295,15 +292,11 @@ function mmgr_members_page() {
                         
                         <!-- QR Code -->
                         <td>
-                            <?php if ($qr_exists): ?>
-                                <a href="<?php echo esc_url($qr_url); ?>" target="_blank">
-                                    <img src="<?php echo esc_url($qr_url); ?>" 
-                                         style="width:60px;height:60px;border:1px solid #ccc;" 
-                                         alt="QR Code">
-                                </a>
-                            <?php else: ?>
-                                <span style="color:#999;font-size:11px;">Missing</span>
-                            <?php endif; ?>
+                            <a href="<?php echo esc_url($qr_url); ?>" target="_blank">
+                                <img src="<?php echo esc_url($qr_url); ?>" 
+                                     style="width:60px;height:60px;border:1px solid #ccc;" 
+                                     alt="QR Code">
+                            </a>
                         </td>
                                     
                         <!-- Member Info -->
@@ -399,6 +392,12 @@ function mmgr_members_page() {
                                class="button button-small button-link-delete" 
                                style="color:#d63638;"
                                onclick="return confirm('Are you sure you want to delete this member? This cannot be undone!');">Delete</a>
+                            
+                            <button type="button" 
+                                    class="button button-small"
+                                    onclick="regenQR(<?php echo $member['id']; ?>, '<?php echo esc_js($member['member_code']); ?>')">
+                                🔄 Regen QR
+                            </button>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -449,6 +448,32 @@ function mmgr_members_page() {
                 location.reload();
             } else {
                 alert('✕ Error: ' + (data.data ? data.data.message : 'Unknown error'));
+            }
+        })
+        .catch(err => {
+            alert('✕ Error: ' + err.message);
+        });
+    }
+    
+    function regenQR(memberId, memberCode) {
+        if (!confirm('Regenerate QR code for member ' + memberCode + '?')) return;
+        
+        const formData = new FormData();
+        formData.append('action', 'mmgr_regenerate_qr');
+        formData.append('member_id', memberId);
+        formData.append('nonce', '<?php echo wp_create_nonce('mmgr_regenerate_qr'); ?>');
+        
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            body: formData
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('✓ ' + data.data.message);
+                location.reload();
+            } else {
+                alert('✕ ' + (data.data ? data.data.message : 'Failed to regenerate QR'));
             }
         })
         .catch(err => {

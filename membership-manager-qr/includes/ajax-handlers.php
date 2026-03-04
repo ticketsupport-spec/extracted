@@ -188,6 +188,39 @@ function mmgr_ajax_generate_qrcode() {
     exit;
 }
 
+/**
+ * AJAX handler to regenerate QR code file for a member (admin only)
+ */
+add_action('wp_ajax_mmgr_regenerate_qr', 'mmgr_ajax_regenerate_qr');
+
+function mmgr_ajax_regenerate_qr() {
+    check_ajax_referer('mmgr_regenerate_qr', 'nonce');
+    
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(array('message' => 'Permission denied'));
+    }
+    
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'memberships';
+    
+    $member_id = isset($_POST['member_id']) ? intval($_POST['member_id']) : 0;
+    if (!$member_id) {
+        wp_send_json_error(array('message' => 'Invalid member ID'));
+    }
+    
+    $member = $wpdb->get_row($wpdb->prepare("SELECT member_code FROM $tbl WHERE id = %d", $member_id), ARRAY_A);
+    if (!$member || empty($member['member_code'])) {
+        wp_send_json_error(array('message' => 'Member not found'));
+    }
+    
+    $result = mmgr_regenerate_qr_code($member['member_code']);
+    if ($result) {
+        wp_send_json_success(array('message' => 'QR code regenerated successfully'));
+    } else {
+        wp_send_json_error(array('message' => 'Failed to regenerate QR code. Check server logs.'));
+    }
+}
+
 // AJAX: Load more messages for member portal
 add_action('wp_ajax_mmgr_load_more_messages', function() {
     check_ajax_referer('mmgr_load_more_messages', 'nonce');
