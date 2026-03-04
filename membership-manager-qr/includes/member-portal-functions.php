@@ -12,51 +12,51 @@ function mmgr_create_portal_tables() {
     $memberships_tbl = $wpdb->prefix . 'memberships';
     
     // Check if password_hash column exists
-    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = 'password_hash'");
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($memberships_tbl) . "' AND column_name = 'password_hash'");
     if(empty($row)) {
         $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN password_hash VARCHAR(255) DEFAULT NULL");
     }
     
     // Check if profile_photo_url column exists
-    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = 'profile_photo_url'");
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($memberships_tbl) . "' AND column_name = 'profile_photo_url'");
     if(empty($row)) {
         $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN profile_photo_url VARCHAR(500) DEFAULT NULL");
     }
 
     // Check if community_alias column exists
-    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = 'community_alias'");
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($memberships_tbl) . "' AND column_name = 'community_alias'");
     if(empty($row)) {
         $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN community_alias VARCHAR(100) DEFAULT NULL");
     }
 
     // Check if community_photo_url column exists
-    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = 'community_photo_url'");
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($memberships_tbl) . "' AND column_name = 'community_photo_url'");
     if(empty($row)) {
         $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN community_photo_url VARCHAR(500) DEFAULT NULL");
     }
 
     // Check if community_bio column exists
-    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = 'community_bio'");
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($memberships_tbl) . "' AND column_name = 'community_bio'");
     if(empty($row)) {
         $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN community_bio TEXT DEFAULT NULL");
     }
 
     // Check if active column exists
-    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = 'active'");
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($memberships_tbl) . "' AND column_name = 'active'");
     if(empty($row)) {
         $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN active TINYINT(1) DEFAULT 1");
     }
 
     // Add moderator_id to forum topics table
     $forum_topics_tbl = $wpdb->prefix . 'membership_forum_topics';
-    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$forum_topics_tbl' AND column_name = 'moderator_id'");
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($forum_topics_tbl) . "' AND column_name = 'moderator_id'");
     if (empty($row)) {
         $wpdb->query("ALTER TABLE `$forum_topics_tbl` ADD COLUMN `moderator_id` INT NULL DEFAULT NULL");
     }
 
     // Add edited_at to forum posts table
     $forum_posts_tbl = $wpdb->prefix . 'membership_forum_posts';
-    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$forum_posts_tbl' AND column_name = 'edited_at'");
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($forum_posts_tbl) . "' AND column_name = 'edited_at'");
     if (empty($row)) {
         $wpdb->query("ALTER TABLE `$forum_posts_tbl` ADD COLUMN `edited_at` DATETIME NULL DEFAULT NULL");
     }
@@ -71,7 +71,7 @@ function mmgr_create_portal_tables() {
         'forum_banned_reason'    => "ADD COLUMN `forum_banned_reason` TEXT NULL DEFAULT NULL",
     );
     foreach ($forum_cols as $col => $alter) {
-        $exists = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = '$col'");
+        $exists = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($memberships_tbl) . "' AND column_name = '" . esc_sql($col) . "'");
         if (empty($exists)) {
             $wpdb->query("ALTER TABLE `$memberships_tbl` $alter");
         }
@@ -101,7 +101,7 @@ function mmgr_create_portal_tables() {
 
     // Migration: add 'hidden' column to forum posts table if missing
     $forum_posts_tbl = $wpdb->prefix . 'membership_forum_posts';
-    $hidden_col = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '" . esc_sql($forum_posts_tbl) . "' AND column_name = 'hidden'");
+    $hidden_col = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($forum_posts_tbl) . "' AND column_name = 'hidden'");
     if (empty($hidden_col)) {
         $wpdb->query("ALTER TABLE `$forum_posts_tbl` ADD COLUMN `hidden` TINYINT(1) NOT NULL DEFAULT 0");
     }

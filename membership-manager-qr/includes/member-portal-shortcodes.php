@@ -3387,6 +3387,7 @@ add_action('wp_ajax_mmgr_toggle_post_like', function() {
 /**
  * Edit Forum Post via AJAX (author only)
  */
+add_action('wp_ajax_nopriv_mmgr_edit_forum_post', function() { do_action('wp_ajax_mmgr_edit_forum_post'); });
 add_action('wp_ajax_mmgr_edit_forum_post', function() {
     check_ajax_referer('mmgr_edit_forum_post', 'nonce');
 
@@ -3443,6 +3444,7 @@ add_action('wp_ajax_mmgr_edit_forum_post', function() {
 /**
  * AJAX: Moderator – suspend a member from posting in the forum for 30 days
  */
+add_action('wp_ajax_nopriv_mmgr_forum_suspend_member', function() { do_action('wp_ajax_mmgr_forum_suspend_member'); });
 add_action('wp_ajax_mmgr_forum_suspend_member', function() {
     check_ajax_referer('mmgr_forum_mod_action', 'nonce');
 
@@ -3474,6 +3476,7 @@ add_action('wp_ajax_mmgr_forum_suspend_member', function() {
 /**
  * AJAX: Moderator – lift a forum suspension
  */
+add_action('wp_ajax_nopriv_mmgr_forum_unsuspend_member', function() { do_action('wp_ajax_mmgr_forum_unsuspend_member'); });
 add_action('wp_ajax_mmgr_forum_unsuspend_member', function() {
     check_ajax_referer('mmgr_forum_mod_action', 'nonce');
 
@@ -3502,6 +3505,7 @@ add_action('wp_ajax_mmgr_forum_unsuspend_member', function() {
 /**
  * AJAX: Moderator – ban a member from posting in the forum
  */
+add_action('wp_ajax_nopriv_mmgr_forum_ban_member', function() { do_action('wp_ajax_mmgr_forum_ban_member'); });
 add_action('wp_ajax_mmgr_forum_ban_member', function() {
     check_ajax_referer('mmgr_forum_mod_action', 'nonce');
 
@@ -3531,6 +3535,7 @@ add_action('wp_ajax_mmgr_forum_ban_member', function() {
 /**
  * AJAX: Moderator – lift a forum ban
  */
+add_action('wp_ajax_nopriv_mmgr_forum_unban_member', function() { do_action('wp_ajax_mmgr_forum_unban_member'); });
 add_action('wp_ajax_mmgr_forum_unban_member', function() {
     check_ajax_referer('mmgr_forum_mod_action', 'nonce');
 
