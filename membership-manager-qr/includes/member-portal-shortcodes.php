@@ -1107,15 +1107,24 @@ add_shortcode('mmgr_member_community', function() {
     // Get selected topic (default to first topic)
     $selected_topic_id = isset($_GET['topic']) ? intval($_GET['topic']) : 0;
     
-    // Get all topics
-    $topics = $wpdb->get_results("SELECT * FROM $topics_tbl WHERE active = 1 ORDER BY sort_order, id", ARRAY_A);
+    // Get all topics with moderator info
+    $topics = $wpdb->get_results("SELECT t.*, m.name as moderator_name, m.community_alias as moderator_alias FROM $topics_tbl t LEFT JOIN {$wpdb->prefix}memberships m ON t.moderator_id = m.id WHERE t.active = 1 ORDER BY t.sort_order, t.id", ARRAY_A);
     
     if (empty($topics)) {
-        $topics = array(array('id' => 0, 'topic_name' => 'General Discussion', 'description' => 'General community discussion'));
+        $topics = array(array('id' => 0, 'topic_name' => 'General Discussion', 'description' => 'General community discussion', 'moderator_name' => null, 'moderator_alias' => null));
     }
     
     if ($selected_topic_id === 0 && !empty($topics)) {
         $selected_topic_id = $topics[0]['id'];
+    }
+
+    // Get selected topic info (for moderator display)
+    $selected_topic = null;
+    foreach ($topics as $t) {
+        if ($t['id'] == $selected_topic_id) {
+            $selected_topic = $t;
+            break;
+        }
     }
     
     // Get posts for selected topic with like counts
@@ -1168,6 +1177,12 @@ add_shortcode('mmgr_member_community', function() {
                     </a>
                 <?php endforeach; ?>
             </div>
+            <?php if (!empty($selected_topic) && !empty($selected_topic['moderator_name'])): ?>
+                <?php $mod_display = !empty($selected_topic['moderator_alias']) ? $selected_topic['moderator_alias'] : $selected_topic['moderator_name']; ?>
+                <div style="margin-top:12px;font-size:13px;color:#666;">
+                    🛡️ <strong>Moderator:</strong> <?php echo esc_html($mod_display); ?>
+                </div>
+            <?php endif; ?>
         </div>
         
         <!-- New Post Form -->
@@ -1251,9 +1266,23 @@ add_shortcode('mmgr_member_community', function() {
                                 </div>
                                 
                                 <!-- Post Message -->
-                                <div style="margin-bottom:15px;font-size:15px;line-height:1.6;color:#333;">
+                                <div id="post-message-<?php echo $post['id']; ?>" style="margin-bottom:15px;font-size:15px;line-height:1.6;color:#333;">
                                     <?php echo nl2br(esc_html($post['message'])); ?>
+                                    <?php if (!empty($post['edited_at'])): ?>
+                                        <span style="font-size:12px;color:#999;display:block;margin-top:4px;">✏️ Edited <?php echo date_i18n('F j, Y @ g:i A', strtotime($post['edited_at'])); ?></span>
+                                    <?php endif; ?>
                                 </div>
+
+                                <!-- Inline Edit Form (hidden by default, shown for post author) -->
+                                <?php if ($post['member_id'] == $member['id']): ?>
+                                <div id="post-edit-form-<?php echo $post['id']; ?>" style="display:none;margin-bottom:15px;">
+                                    <textarea id="post-edit-text-<?php echo $post['id']; ?>" rows="4" style="width:100%;padding:10px;border:2px solid #FF2197;border-radius:6px;font-size:15px;font-family:inherit;"><?php echo esc_textarea($post['message']); ?></textarea>
+                                    <div style="margin-top:8px;display:flex;gap:8px;">
+                                        <button onclick="savePostEdit(<?php echo $post['id']; ?>)" style="background:#FF2197;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:bold;">💾 Save</button>
+                                        <button onclick="cancelPostEdit(<?php echo $post['id']; ?>)" style="background:#e0e0e0;color:#333;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">✕ Cancel</button>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
                                 
                                 <!-- Post Photo -->
                                 <?php if (!empty($post['photo_url'])): ?>
@@ -1264,13 +1293,18 @@ add_shortcode('mmgr_member_community', function() {
                                     </div>
                                 <?php endif; ?>
                                 
-                                <!-- Like Button -->
+                                <!-- Like Button (+ Edit button for own posts) -->
                                 <div style="margin-top:15px;padding-top:15px;border-top:1px solid #e0e0e0;display:flex;gap:15px;align-items:center;">
                                     <button onclick="togglePostLike(<?php echo $post['id']; ?>, this)" 
                                             class="mmgr-post-like-btn <?php echo $post['user_liked'] ? 'liked' : ''; ?>"
                                             style="background:<?php echo $post['user_liked'] ? '#FF2197' : 'white'; ?>;color:<?php echo $post['user_liked'] ? 'white' : '#FF2197'; ?>;border:2px solid #FF2197;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:14px;transition:all 0.3s;">
                                         ❤️ Like (<?php echo intval($post['like_count']); ?>)
                                     </button>
+                                    <?php if ($post['member_id'] == $member['id']): ?>
+                                    <button onclick="togglePostEditForm(<?php echo $post['id']; ?>)" style="background:white;color:#666;border:2px solid #ccc;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">
+                                        ✏️ Edit
+                                    </button>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -1362,6 +1396,56 @@ add_shortcode('mmgr_member_community', function() {
                 button.textContent = '❤️ Like (' + data.data.like_count + ')';
             } else {
                 alert('❌ ' + data.data.message);
+            }
+        });
+    }
+
+    // Edit Post
+    function togglePostEditForm(postId) {
+        const msgDiv  = document.getElementById('post-message-' + postId);
+        const editDiv = document.getElementById('post-edit-form-' + postId);
+        if (!editDiv) return;
+        const isHidden = editDiv.style.display === 'none';
+        editDiv.style.display = isHidden ? 'block' : 'none';
+        msgDiv.style.display  = isHidden ? 'none'  : 'block';
+    }
+
+    function cancelPostEdit(postId) {
+        togglePostEditForm(postId);
+    }
+
+    function savePostEdit(postId) {
+        const textarea = document.getElementById('post-edit-text-' + postId);
+        const message  = textarea ? textarea.value.trim() : '';
+        if (!message) { alert('❌ Message cannot be empty.'); return; }
+
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=mmgr_edit_forum_post&post_id=' + postId
+                + '&message=' + encodeURIComponent(message)
+                + '&nonce=<?php echo wp_create_nonce('mmgr_edit_forum_post'); ?>'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const msgDiv = document.getElementById('post-message-' + postId);
+                // Safely escape each line then join with <br> (mirrors PHP nl2br + esc_html)
+                const lines = data.data.message.split('\n');
+                let html = lines.map(l => {
+                    const d = document.createElement('div');
+                    d.textContent = l;
+                    return d.innerHTML;
+                }).join('<br>');
+                // Append the edited timestamp returned from the server
+                html += '<span style="font-size:12px;color:#999;display:block;margin-top:4px;">'
+                     + data.data.edited_label + '</span>';
+                msgDiv.innerHTML = html;
+                // Also update the textarea so Cancel shows the saved text
+                if (textarea) textarea.value = data.data.message;
+                togglePostEditForm(postId);
+            } else {
+                alert('❌ ' + (data.data && data.data.message ? data.data.message : 'Error saving post.'));
             }
         });
     }
@@ -2929,6 +3013,54 @@ add_action('wp_ajax_mmgr_toggle_post_like', function() {
         'liked' => !$is_liked,
         'like_count' => $like_count
     ));
+});
+
+/**
+ * Edit Forum Post via AJAX (author only)
+ */
+add_action('wp_ajax_mmgr_edit_forum_post', function() {
+    check_ajax_referer('mmgr_edit_forum_post', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Not logged in'));
+    }
+
+    $post_id = intval($_POST['post_id']);
+    $message = sanitize_textarea_field($_POST['message'] ?? '');
+
+    if (empty($message)) {
+        wp_send_json_error(array('message' => 'Message cannot be empty.'));
+    }
+
+    global $wpdb;
+    $posts_tbl = $wpdb->prefix . 'membership_forum_posts';
+
+    // Verify the post belongs to this member
+    $post = $wpdb->get_row(
+        $wpdb->prepare("SELECT member_id FROM $posts_tbl WHERE id = %d", $post_id),
+        ARRAY_A
+    );
+
+    if (!$post) {
+        wp_send_json_error(array('message' => 'Post not found.'));
+    }
+
+    if (intval($post['member_id']) !== intval($member['id'])) {
+        wp_send_json_error(array('message' => 'You can only edit your own posts.'));
+    }
+
+    $wpdb->update(
+        $posts_tbl,
+        array('message' => $message, 'edited_at' => current_time('mysql')),
+        array('id' => $post_id),
+        array('%s', '%s'),
+        array('%d')
+    );
+
+    $edited_label = '✏️ Edited ' . date_i18n('F j, Y @ g:i A', current_time('timestamp'));
+
+    wp_send_json_success(array('message' => $message, 'edited_label' => $edited_label));
 });
 
 /**

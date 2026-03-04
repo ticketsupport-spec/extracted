@@ -270,3 +270,21 @@ h3 {
   color: #9ca3af;
   margin-top: 4px;
 }
+
+/* Push notification permission button */
+#btn-enable-notifications {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: linear-gradient(135deg, #9b51e0, #ce00ff);
+  color: #fff;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 30px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(155, 81, 224, 0.4);
+  z-index: 99998;
+  cursor: pointer;
+  white-space: nowrap;
+}
