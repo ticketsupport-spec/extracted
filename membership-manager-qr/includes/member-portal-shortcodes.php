@@ -1293,7 +1293,7 @@ add_shortcode('mmgr_member_community', function() {
                             $target_is_suspended = !empty($post['forum_suspended']) && !empty($post['forum_suspended_until']) && strtotime($post['forum_suspended_until']) > time();
                             $target_is_banned    = !empty($post['forum_banned']);
                             ?>
-                            <div style="border:2px solid <?php echo ($is_moderator && $is_hidden) ? '#ff9800' : '#f0f0f0'; ?>;border-radius:8px;padding:20px;background:<?php echo ($is_moderator && $is_hidden) ? '#fff8e7' : '#fafafa'; ?>;flex-shrink:0;">
+                            <div style="border:2px solid <?php echo ($is_moderator && $is_hidden) ? '#dc3232' : '#f0f0f0'; ?>;border-radius:8px;padding:20px;background:<?php echo ($is_moderator && $is_hidden) ? '#ffeaea' : '#fafafa'; ?>;flex-shrink:0;">
                                 <!-- Post Header -->
                                 <div style="display:flex;align-items:center;gap:15px;margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid #e0e0e0;">
                                     <?php if (!empty($post['member_photo'])): ?>
@@ -1335,7 +1335,7 @@ add_shortcode('mmgr_member_community', function() {
                                                 <span style="background:#ff9800;color:white;padding:2px 8px;border-radius:10px;font-size:11px;" title="Suspended until <?php echo esc_attr($sus_until); ?>">⏸️ Suspended</span>
                                             <?php endif; ?>
                                             <?php if ($is_moderator && $is_hidden): ?>
-                                                <span style="background:#888;color:white;padding:2px 8px;border-radius:10px;font-size:11px;">🙈 Hidden</span>
+                                                <span style="background:#dc3232;color:white;padding:2px 8px;border-radius:10px;font-size:11px;">🙈 Hidden</span>
                                             <?php endif; ?>
                                         </div>                                 
                                         <br>
@@ -2470,6 +2470,7 @@ add_action('wp_ajax_mmgr_remove_contact', function() {
 /**
  * Send Private Message via AJAX
  */
+add_action('wp_ajax_nopriv_mmgr_send_pm', function() { do_action('wp_ajax_mmgr_send_pm'); });
 add_action('wp_ajax_mmgr_send_pm', function() {
     check_ajax_referer('mmgr_send_pm', 'nonce');
     
@@ -2601,28 +2602,37 @@ add_shortcode('mmgr_members_directory', function() {
     }
     
     global $wpdb;
-    
-    // Get all members with aliases (excluding the current user and banned members)
-    $members = $wpdb->get_results($wpdb->prepare(
+
+    // Record that this member visited the website today (throttled: update at most once every 5 minutes)
+    $last_visited = $member['last_visited'];
+    if (empty($last_visited) || (strtotime(current_time('mysql')) - strtotime($last_visited)) > 300) {
+        $wpdb->update(
+            $wpdb->prefix . 'memberships',
+            array('last_visited' => current_time('mysql')),
+            array('id' => $member['id'])
+        );
+    }
+
+    // Get all members with aliases (including the current user, excluding banned members)
+    $members = $wpdb->get_results(
         "SELECT id, name, community_alias, community_photo_url 
          FROM {$wpdb->prefix}memberships 
-         WHERE community_alias IS NOT NULL AND community_alias != '' AND id != %d AND banned = 0
+         WHERE community_alias IS NOT NULL AND community_alias != '' AND banned = 0
          ORDER BY community_alias ASC",
-        $member['id']
-    ), ARRAY_A);
+        ARRAY_A
+    );
 
-    // Get members who checked in today and have a community alias (excluding current user)
+    // Get members who visited the website today and have a community alias
     $today_start = date('Y-m-d 00:00:00');
     $today_end   = date('Y-m-d 23:59:59');
     $online_members = $wpdb->get_results($wpdb->prepare(
-        "SELECT DISTINCT m.id, m.community_alias, m.community_photo_url
-         FROM {$wpdb->prefix}memberships m
-         INNER JOIN {$wpdb->prefix}membership_visits v ON v.member_id = m.id
-         WHERE v.visit_time BETWEEN %s AND %s
-           AND m.community_alias IS NOT NULL AND m.community_alias != ''
-           AND m.id != %d AND m.banned = 0
-         ORDER BY m.community_alias ASC",
-        $today_start, $today_end, $member['id']
+        "SELECT DISTINCT id, community_alias, community_photo_url
+         FROM {$wpdb->prefix}memberships
+         WHERE last_visited BETWEEN %s AND %s
+           AND community_alias IS NOT NULL AND community_alias != ''
+           AND banned = 0
+         ORDER BY community_alias ASC",
+        $today_start, $today_end
     ), ARRAY_A);
     
     ob_start();
@@ -2763,6 +2773,22 @@ add_shortcode('mmgr_members_directory', function() {
                 }
             });
         }
+
+        function sendPrivateMessage(memberId, message) {
+            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'action=mmgr_send_pm&recipient_id=' + memberId + '&message=' + encodeURIComponent(message) + '&nonce=<?php echo wp_create_nonce('mmgr_send_pm'); ?>'
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    alert('✅ ' + d.data.message);
+                } else {
+                    alert('❌ ' + d.data);
+                }
+            });
+        }
         
         function toggleLike(memberId, button) {
             fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
@@ -2853,6 +2879,7 @@ add_shortcode('mmgr_members_directory', function() {
 /**
  * Toggle Like via AJAX
  */
+add_action('wp_ajax_nopriv_mmgr_toggle_like', function() { do_action('wp_ajax_mmgr_toggle_like'); });
 add_action('wp_ajax_mmgr_toggle_like', function() {
     check_ajax_referer('mmgr_toggle_like', 'nonce');
     
@@ -2900,6 +2927,7 @@ add_action('wp_ajax_mmgr_toggle_like', function() {
 /**
  * AJAX: Who is Online Today
  */
+add_action('wp_ajax_nopriv_mmgr_who_is_online', function() { do_action('wp_ajax_mmgr_who_is_online'); });
 add_action('wp_ajax_mmgr_who_is_online', function() {
     check_ajax_referer('mmgr_who_is_online', 'nonce');
 
@@ -2914,14 +2942,13 @@ add_action('wp_ajax_mmgr_who_is_online', function() {
     $today_end   = date('Y-m-d 23:59:59');
 
     $online = $wpdb->get_results($wpdb->prepare(
-        "SELECT DISTINCT m.id, m.community_alias, m.community_photo_url
-         FROM {$wpdb->prefix}memberships m
-         INNER JOIN {$wpdb->prefix}membership_visits v ON v.member_id = m.id
-         WHERE v.visit_time BETWEEN %s AND %s
-           AND m.community_alias IS NOT NULL AND m.community_alias != ''
-           AND m.id != %d AND m.banned = 0
-         ORDER BY m.community_alias ASC",
-        $today_start, $today_end, intval($member['id'])
+        "SELECT DISTINCT id, community_alias, community_photo_url
+         FROM {$wpdb->prefix}memberships
+         WHERE last_visited BETWEEN %s AND %s
+           AND community_alias IS NOT NULL AND community_alias != ''
+           AND banned = 0
+         ORDER BY community_alias ASC",
+        $today_start, $today_end
     ), ARRAY_A);
 
     $result = array_map(function($m) {
@@ -3283,6 +3310,7 @@ add_action('wp_ajax_mmgr_save_member_note', function() {
     wp_send_json_success();
 });
 
+add_action('wp_ajax_nopriv_mmgr_get_member_alias', function() { do_action('wp_ajax_mmgr_get_member_alias'); });
 add_action('wp_ajax_mmgr_get_member_alias', function() {
     check_ajax_referer('mmgr_get_member_alias', 'nonce');
     
