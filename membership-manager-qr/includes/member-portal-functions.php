@@ -99,6 +99,26 @@ function mmgr_create_portal_tables() {
         INDEX idx_post_id (post_id)
     ) $charset_collate");
 
+    // Migration: add 'hidden' column to forum posts table if missing
+    $forum_posts_tbl = $wpdb->prefix . 'membership_forum_posts';
+    $hidden_col = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$forum_posts_tbl' AND column_name = 'hidden'");
+    if (empty($hidden_col)) {
+        $wpdb->query("ALTER TABLE `$forum_posts_tbl` ADD COLUMN `hidden` TINYINT(1) NOT NULL DEFAULT 0");
+    }
+
+    // Forum post comments table
+    $post_comments_tbl = $wpdb->prefix . 'membership_forum_post_comments';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$post_comments_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        post_id INT NOT NULL,
+        member_id INT NOT NULL,
+        comment TEXT NOT NULL,
+        posted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_post_id (post_id),
+        INDEX idx_member_id (member_id),
+        INDEX idx_posted_at (posted_at)
+    ) $charset_collate");
+
     // Member likes table
     $likes_tbl = $wpdb->prefix . 'membership_likes';
     $wpdb->query("CREATE TABLE IF NOT EXISTS `$likes_tbl` (

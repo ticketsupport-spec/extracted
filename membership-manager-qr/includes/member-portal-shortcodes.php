@@ -1067,6 +1067,7 @@ add_shortcode('mmgr_member_community', function() {
     $post_likes_tbl  = $wpdb->prefix . 'membership_forum_post_likes';
     $topic_mods_tbl  = $wpdb->prefix . 'membership_forum_topic_mods';
     $post_hist_tbl   = $wpdb->prefix . 'membership_forum_post_history';
+    $comments_tbl    = $wpdb->prefix . 'membership_forum_post_comments';
     
     $success = $error = '';
     
@@ -1162,22 +1163,41 @@ add_shortcode('mmgr_member_community', function() {
     }
 
     // Get posts for selected topic with like counts
+    $hidden_filter = $is_moderator ? '' : 'AND (p.hidden IS NULL OR p.hidden = 0)';
     $posts = $wpdb->get_results($wpdb->prepare(
         "SELECT p.*, m.name as member_name, m.community_alias, m.community_photo_url as member_photo,
                 m.forum_suspended, m.forum_suspended_until, m.forum_banned,
-                COUNT(pl.id) as like_count,
-                (SELECT COUNT(*) FROM $post_likes_tbl WHERE post_id = p.id AND member_id = %d) as user_liked
+                COUNT(DISTINCT pl.id) as like_count,
+                (SELECT COUNT(*) FROM $post_likes_tbl WHERE post_id = p.id AND member_id = %d) as user_liked,
+                (SELECT COUNT(*) FROM $comments_tbl WHERE post_id = p.id) as comment_count
          FROM $posts_tbl p 
          LEFT JOIN {$wpdb->prefix}memberships m ON p.member_id = m.id 
          LEFT JOIN $post_likes_tbl pl ON p.id = pl.post_id
-         WHERE p.topic_id = %d 
+         WHERE p.topic_id = %d $hidden_filter
          GROUP BY p.id
          ORDER BY p.posted_at ASC 
          LIMIT 50",
         $member['id'],
         $selected_topic_id
     ), ARRAY_A);
-    
+
+    // Fetch all comments for currently visible posts (one query for all posts)
+    $comments_by_post = array();
+    if (!empty($posts)) {
+        $post_id_list = implode(',', array_map('intval', array_column($posts, 'id')));
+        $all_comments = $wpdb->get_results(
+            "SELECT c.*, m.name as member_name, m.community_alias
+             FROM $comments_tbl c
+             JOIN {$wpdb->prefix}memberships m ON c.member_id = m.id
+             WHERE c.post_id IN ($post_id_list)
+             ORDER BY c.posted_at ASC",
+            ARRAY_A
+        );
+        foreach ($all_comments as $c) {
+            $comments_by_post[$c['post_id']][] = $c;
+        }
+    }
+
     ob_start();
     ?>
     <div class="mmgr-portal-container">
@@ -1264,11 +1284,12 @@ add_shortcode('mmgr_member_community', function() {
                             $display_name = !empty($post['community_alias']) ? $post['community_alias'] : $post['member_name'];
                             $is_own_post  = ($post['member_id'] == $member['id']);
                             $is_mod_target = $is_moderator && !$is_own_post; // can act on other members' posts
+                            $is_hidden    = !empty($post['hidden']);
                             // Determine suspend/ban status for moderator display
                             $target_is_suspended = !empty($post['forum_suspended']) && !empty($post['forum_suspended_until']) && strtotime($post['forum_suspended_until']) > time();
                             $target_is_banned    = !empty($post['forum_banned']);
                             ?>
-                            <div style="border:2px solid #f0f0f0;border-radius:8px;padding:20px;background:#fafafa;flex-shrink:0;">
+                            <div style="border:2px solid <?php echo ($is_moderator && $is_hidden) ? '#ff9800' : '#f0f0f0'; ?>;border-radius:8px;padding:20px;background:<?php echo ($is_moderator && $is_hidden) ? '#fff8e7' : '#fafafa'; ?>;flex-shrink:0;">
                                 <!-- Post Header -->
                                 <div style="display:flex;align-items:center;gap:15px;margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid #e0e0e0;">
                                     <?php if (!empty($post['member_photo'])): ?>
@@ -1308,6 +1329,9 @@ add_shortcode('mmgr_member_community', function() {
                                             <?php elseif ($is_mod_target && $target_is_suspended): ?>
                                                 <?php $sus_until = date_i18n('M j, Y', strtotime($post['forum_suspended_until'])); ?>
                                                 <span style="background:#ff9800;color:white;padding:2px 8px;border-radius:10px;font-size:11px;" title="Suspended until <?php echo esc_attr($sus_until); ?>">⏸️ Suspended</span>
+                                            <?php endif; ?>
+                                            <?php if ($is_moderator && $is_hidden): ?>
+                                                <span style="background:#888;color:white;padding:2px 8px;border-radius:10px;font-size:11px;">🙈 Hidden</span>
                                             <?php endif; ?>
                                         </div>                                 
                                         <br>
@@ -1361,6 +1385,12 @@ add_shortcode('mmgr_member_community', function() {
                                         📋 Edit History
                                     </button>
                                     <?php endif; ?>
+                                    <?php if ($is_moderator): ?>
+                                    <button onclick="toggleHidePost(<?php echo $post['id']; ?>, <?php echo $is_hidden ? 'true' : 'false'; ?>)"
+                                            style="background:white;color:<?php echo $is_hidden ? '#00a32a' : '#555'; ?>;border:2px solid <?php echo $is_hidden ? '#00a32a' : '#ccc'; ?>;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;">
+                                        <?php echo $is_hidden ? '👁 Unhide Post' : '🙈 Hide Post'; ?>
+                                    </button>
+                                    <?php endif; ?>
                                     <?php if ($is_mod_target): ?>
                                     <button onclick="forumSuspendMember(<?php echo $post['member_id']; ?>, '<?php echo esc_attr($display_name); ?>', <?php echo $target_is_suspended ? 'true' : 'false'; ?>)" 
                                             style="background:white;color:#ff9800;border:2px solid #ff9800;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;">
@@ -1371,6 +1401,42 @@ add_shortcode('mmgr_member_community', function() {
                                         <?php echo $target_is_banned ? '✓ Unban' : '⛔ Forum Ban'; ?>
                                     </button>
                                     <?php endif; ?>
+                                </div>
+
+                                <!-- Comments Section -->
+                                <?php
+                                $post_comments = isset($comments_by_post[$post['id']]) ? $comments_by_post[$post['id']] : array();
+                                $comment_count_val = intval($post['comment_count']);
+                                ?>
+                                <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e0e0e0;">
+                                    <button onclick="toggleComments(<?php echo $post['id']; ?>)" style="background:white;color:#0073aa;border:2px solid #0073aa;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">
+                                        💬 Comments (<span id="comment-count-<?php echo $post['id']; ?>"><?php echo $comment_count_val; ?></span>)
+                                    </button>
+
+                                    <div id="comments-section-<?php echo $post['id']; ?>" style="display:none;margin-top:12px;">
+                                        <div id="comments-list-<?php echo $post['id']; ?>" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+                                            <?php if (empty($post_comments)): ?>
+                                                <p id="no-comments-<?php echo $post['id']; ?>" style="color:#999;font-size:13px;margin:0;">No comments yet. Be the first!</p>
+                                            <?php else: ?>
+                                                <?php foreach ($post_comments as $cmt): ?>
+                                                    <?php $cmt_author = !empty($cmt['community_alias']) ? $cmt['community_alias'] : $cmt['member_name']; ?>
+                                                    <div style="background:#f0f0f0;border-left:3px solid #FF2197;padding:10px 12px;border-radius:0 6px 6px 0;font-size:14px;">
+                                                        <strong><?php echo esc_html($cmt_author); ?></strong>
+                                                        <span style="color:#999;font-size:12px;margin-left:8px;"><?php echo date_i18n('M j, Y @ g:i A', strtotime($cmt['posted_at'])); ?></span>
+                                                        <div style="margin-top:4px;color:#333;"><?php echo nl2br(esc_html($cmt['comment'])); ?></div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div style="display:flex;gap:8px;align-items:flex-start;">
+                                            <textarea id="comment-input-<?php echo $post['id']; ?>" placeholder="Write a comment..." rows="2"
+                                                      style="flex:1;padding:8px;border:2px solid #ddd;border-radius:6px;font-size:14px;font-family:inherit;resize:vertical;min-width:0;"></textarea>
+                                            <button onclick="submitComment(<?php echo $post['id']; ?>)"
+                                                    style="background:#FF2197;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:14px;white-space:nowrap;flex-shrink:0;">
+                                                Post
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -1584,6 +1650,77 @@ add_shortcode('mmgr_member_community', function() {
                 alert('❌ ' + (data.data ? data.data.message : 'Failed to load history.'));
             }
         });
+    }
+
+    // Moderator: Toggle hide/unhide a post
+    function toggleHidePost(postId, isHidden) {
+        if (!confirm((isHidden ? 'Unhide' : 'Hide') + ' this post?')) return;
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=mmgr_forum_hide_post&post_id=' + postId
+                + '&hidden=' + (isHidden ? 0 : 1)
+                + '&topic_id=<?php echo $selected_topic_id; ?>'
+                + '&nonce=<?php echo wp_create_nonce('mmgr_forum_mod_action'); ?>'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('✅ ' + data.data.message);
+                location.reload();
+            } else {
+                alert('❌ ' + (data.data ? data.data.message : 'Action failed.'));
+            }
+        });
+    }
+
+    // Toggle comments section visibility
+    function toggleComments(postId) {
+        const section = document.getElementById('comments-section-' + postId);
+        if (section) {
+            section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        }
+    }
+
+    // Submit a comment on a post via AJAX
+    function submitComment(postId) {
+        const textarea = document.getElementById('comment-input-' + postId);
+        const comment = textarea ? textarea.value.trim() : '';
+        if (!comment) { alert('❌ Please enter a comment.'); return; }
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=mmgr_add_post_comment&post_id=' + postId
+                + '&comment=' + encodeURIComponent(comment)
+                + '&nonce=<?php echo wp_create_nonce('mmgr_add_post_comment'); ?>'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const list = document.getElementById('comments-list-' + postId);
+                const noMsg = document.getElementById('no-comments-' + postId);
+                if (noMsg) noMsg.remove();
+                const div = document.createElement('div');
+                div.style.cssText = 'background:#f0f0f0;border-left:3px solid #FF2197;padding:10px 12px;border-radius:0 6px 6px 0;font-size:14px;';
+                const safeAuthor  = mmgrEscHtml(data.data.author);
+                const safeComment = mmgrEscHtml(data.data.comment).replace(/\n/g, '<br>');
+                div.innerHTML = '<strong>' + safeAuthor + '</strong>'
+                    + '<span style="color:#999;font-size:12px;margin-left:8px;">' + data.data.posted_at + '</span>'
+                    + '<div style="margin-top:4px;color:#333;">' + safeComment + '</div>';
+                list.appendChild(div);
+                const countSpan = document.getElementById('comment-count-' + postId);
+                if (countSpan) countSpan.textContent = parseInt(countSpan.textContent || '0') + 1;
+                if (textarea) textarea.value = '';
+            } else {
+                alert('❌ ' + (data.data && data.data.message ? data.data.message : 'Error posting comment.'));
+            }
+        });
+    }
+
+    function mmgrEscHtml(text) {
+        const d = document.createElement('div');
+        d.textContent = text;
+        return d.innerHTML;
     }
 
     // Photo lightbox
@@ -3388,6 +3525,105 @@ add_action('wp_ajax_mmgr_forum_post_history', function() {
     }, $history);
 
     wp_send_json_success(array('history' => $formatted));
+});
+
+/**
+ * AJAX: Moderator – hide or unhide a forum post
+ */
+add_action('wp_ajax_mmgr_forum_hide_post', function() {
+    check_ajax_referer('mmgr_forum_mod_action', 'nonce');
+
+    $current = mmgr_get_current_member();
+    if (!$current) wp_send_json_error(array('message' => 'Not logged in'));
+
+    global $wpdb;
+    $post_id  = intval($_POST['post_id']);
+    $hide     = intval($_POST['hidden']); // 1 = hide, 0 = unhide
+    $topic_id = intval($_POST['topic_id']);
+    $posts_tbl = $wpdb->prefix . 'membership_forum_posts';
+    $mods_tbl  = $wpdb->prefix . 'membership_forum_topic_mods';
+
+    // Verify moderator
+    $is_mod = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $mods_tbl WHERE topic_id = %d AND member_id = %d",
+        $topic_id, $current['id']
+    ));
+    if (!$is_mod) wp_send_json_error(array('message' => 'Permission denied.'));
+
+    // Verify post belongs to the topic
+    $post_exists = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $posts_tbl WHERE id = %d AND topic_id = %d",
+        $post_id, $topic_id
+    ));
+    if (!$post_exists) wp_send_json_error(array('message' => 'Post not found.'));
+
+    $wpdb->update($posts_tbl, array('hidden' => $hide ? 1 : 0), array('id' => $post_id));
+    $msg = $hide ? 'Post hidden from public view.' : 'Post is now visible to all members.';
+    wp_send_json_success(array('message' => $msg));
+});
+
+/**
+ * AJAX: Any member – add a comment to a forum post
+ */
+add_action('wp_ajax_mmgr_add_post_comment', function() {
+    check_ajax_referer('mmgr_add_post_comment', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) wp_send_json_error(array('message' => 'Not logged in'));
+
+    global $wpdb;
+    $post_id = intval($_POST['post_id']);
+    $comment = sanitize_textarea_field($_POST['comment'] ?? '');
+
+    if (empty($comment)) {
+        wp_send_json_error(array('message' => 'Comment cannot be empty.'));
+    }
+
+    // Check forum ban/suspension
+    $status = $wpdb->get_row($wpdb->prepare(
+        "SELECT forum_banned, forum_suspended, forum_suspended_until FROM {$wpdb->prefix}memberships WHERE id = %d",
+        $member['id']
+    ), ARRAY_A);
+    if (!empty($status['forum_banned'])) {
+        wp_send_json_error(array('message' => '⛔ You have been banned from the forum.'));
+    }
+    if (!empty($status['forum_suspended']) && !empty($status['forum_suspended_until']) && strtotime($status['forum_suspended_until']) > time()) {
+        wp_send_json_error(array('message' => '⏸️ Your forum access is currently suspended.'));
+    }
+
+    $posts_tbl    = $wpdb->prefix . 'membership_forum_posts';
+    $mods_tbl     = $wpdb->prefix . 'membership_forum_topic_mods';
+    $comments_tbl = $wpdb->prefix . 'membership_forum_post_comments';
+
+    // Verify post exists; hidden posts cannot be commented on by non-moderators
+    $post = $wpdb->get_row($wpdb->prepare(
+        "SELECT id, topic_id, hidden FROM $posts_tbl WHERE id = %d",
+        $post_id
+    ), ARRAY_A);
+    if (!$post) wp_send_json_error(array('message' => 'Post not found.'));
+
+    if (!empty($post['hidden'])) {
+        $is_mod = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM $mods_tbl WHERE topic_id = %d AND member_id = %d",
+            $post['topic_id'], $member['id']
+        ));
+        if (!$is_mod) wp_send_json_error(array('message' => 'This post is not available.'));
+    }
+
+    $wpdb->insert($comments_tbl, array(
+        'post_id'   => $post_id,
+        'member_id' => $member['id'],
+        'comment'   => $comment,
+        'posted_at' => current_time('mysql'),
+    ));
+
+    $display_name = !empty($member['community_alias']) ? $member['community_alias'] : $member['name'];
+
+    wp_send_json_success(array(
+        'author'    => $display_name,
+        'comment'   => $comment,
+        'posted_at' => date_i18n('M j, Y @ g:i A', current_time('timestamp')),
+    ));
 });
 
 /**
