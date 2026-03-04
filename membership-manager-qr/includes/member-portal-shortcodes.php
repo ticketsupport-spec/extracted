@@ -845,6 +845,11 @@ add_shortcode('mmgr_member_profile', function() {
             $community_bio = sanitize_textarea_field($_POST['community_bio'] ?? '');
             $community_photo_url = $member['community_photo_url']; // Keep existing unless replaced
             
+            // Handle community photo removal
+            if (isset($_POST['remove_community_photo']) && $_POST['remove_community_photo'] === '1') {
+                $community_photo_url = '';
+            }
+            
             // Handle community photo upload
             if (!empty($_FILES['community_photo']['name'])) {
                 $upload = wp_handle_upload($_FILES['community_photo'], array('test_form' => false));
@@ -975,6 +980,7 @@ add_shortcode('mmgr_member_profile', function() {
                 
                 <div class="mmgr-field" style="margin-bottom:20px;">
                     <label style="display:block;font-weight:bold;margin-bottom:5px;">Community Photo</label>
+                    <input type="hidden" name="remove_community_photo" id="remove-community-photo" value="0">
                     <div id="community-photo-preview" style="margin-bottom:10px;">
                         <?php if (!empty($member['community_photo_url'])): ?>
                             <img src="<?php echo esc_url($member['community_photo_url']); ?>" style="max-width:150px;border-radius:8px;border:2px solid #ddd;">
@@ -985,7 +991,7 @@ add_shortcode('mmgr_member_profile', function() {
                     </div>
                     <input type="file" name="community_photo" accept="image/*" id="community-photo-input" style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;" onchange="previewCommunityPhoto(this)">
                     <p style="margin:5px 0 0 0;font-size:13px;color:#999;">Profile picture for community posts (optional)</p>
-                </div>                
+                </div>
                 <div class="mmgr-field" style="margin-bottom:20px;">
                     <label style="display:block;font-weight:bold;margin-bottom:5px;">Membership Type</label>
                     <input type="text" value="<?php echo esc_attr($member['level']); ?>" disabled style="width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:6px;background:#f5f5f5;color:#666;">
@@ -2130,6 +2136,7 @@ add_shortcode('mmgr_member_messages', function() {
     function removeCommunityPhoto() {
         document.getElementById('community-photo-input').value = '';
         document.getElementById('community-photo-preview').innerHTML = '';
+        document.getElementById('remove-community-photo').value = '1';
     }	
     function showTab(tab) {
         document.querySelectorAll('.mmgr-tab').forEach(t => t.classList.remove('active'));
