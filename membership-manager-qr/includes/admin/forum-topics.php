@@ -2,29 +2,48 @@
 if (!defined('ABSPATH')) exit;
 
 global $wpdb;
-$topics_tbl = $wpdb->prefix . 'membership_forum_topics';
+$topics_tbl  = $wpdb->prefix . 'membership_forum_topics';
 $members_tbl = $wpdb->prefix . 'memberships';
+$mods_tbl    = $wpdb->prefix . 'membership_forum_topic_mods';
 
-// Handle add/edit
+// Handle add moderator
+if (isset($_POST['add_moderator']) && isset($_POST['mod_nonce']) && wp_verify_nonce($_POST['mod_nonce'], 'mmgr_manage_mods')) {
+    $topic_id  = intval($_POST['mod_topic_id']);
+    $member_id = intval($_POST['new_moderator_id']);
+    if ($topic_id > 0 && $member_id > 0) {
+        $wpdb->replace($mods_tbl, array(
+            'topic_id'  => $topic_id,
+            'member_id' => $member_id,
+            'added_at'  => current_time('mysql'),
+        ));
+        echo '<div class="notice notice-success"><p>Moderator added successfully!</p></div>';
+    }
+}
+
+// Handle remove moderator
+if (isset($_GET['remove_mod']) && isset($_GET['topic']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'remove_mod_' . intval($_GET['remove_mod']) . '_' . intval($_GET['topic']))) {
+    $wpdb->delete($mods_tbl, array('member_id' => intval($_GET['remove_mod']), 'topic_id' => intval($_GET['topic'])));
+    echo '<div class="notice notice-success"><p>Moderator removed.</p></div>';
+}
+
+// Handle add/edit topic
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_topic'])) {
     if (!isset($_POST['topic_nonce']) || !wp_verify_nonce($_POST['topic_nonce'], 'mmgr_save_topic')) {
         echo '<div class="notice notice-error"><p>Security check failed.</p></div>';
     } else {
-        $topic_id = isset($_POST['topic_id']) ? intval($_POST['topic_id']) : 0;
+        $topic_id   = isset($_POST['topic_id']) ? intval($_POST['topic_id']) : 0;
         $topic_name = sanitize_text_field($_POST['topic_name']);
         $description = sanitize_textarea_field($_POST['description']);
-        $icon = sanitize_text_field($_POST['icon']);
-        $active = isset($_POST['active']) ? 1 : 0;
+        $icon       = sanitize_text_field($_POST['icon']);
+        $active     = isset($_POST['active']) ? 1 : 0;
         $sort_order = intval($_POST['sort_order']);
-        $moderator_id = !empty($_POST['moderator_id']) ? intval($_POST['moderator_id']) : null;
         
         $data = array(
-            'topic_name' => $topic_name,
+            'topic_name'  => $topic_name,
             'description' => $description,
-            'icon' => $icon,
-            'active' => $active,
-            'sort_order' => $sort_order,
-            'moderator_id' => $moderator_id,
+            'icon'        => $icon,
+            'active'      => $active,
+            'sort_order'  => $sort_order,
         );
         
         if ($topic_id > 0) {
@@ -44,7 +63,20 @@ if (isset($_GET['delete']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET[
 }
 
 // Get all topics
-$topics = $wpdb->get_results("SELECT t.*, m.name as moderator_name FROM $topics_tbl t LEFT JOIN $members_tbl m ON t.moderator_id = m.id ORDER BY t.sort_order, t.id", ARRAY_A);
+$topics = $wpdb->get_results("SELECT * FROM $topics_tbl ORDER BY sort_order, id", ARRAY_A);
+
+// Get moderators for all topics keyed by topic_id
+$all_mods_rows = $wpdb->get_results(
+    "SELECT tm.topic_id, tm.member_id, m.name as member_name
+     FROM $mods_tbl tm
+     JOIN $members_tbl m ON tm.member_id = m.id
+     ORDER BY tm.topic_id, m.name",
+    ARRAY_A
+);
+$mods_by_topic = array();
+foreach ($all_mods_rows as $row) {
+    $mods_by_topic[$row['topic_id']][] = $row;
+}
 
 // Get all active members for moderator dropdown
 $all_members = $wpdb->get_results("SELECT id, name FROM $members_tbl WHERE banned = 0 AND (active IS NULL OR active = 1) ORDER BY name", ARRAY_A);
@@ -108,21 +140,6 @@ if (isset($_GET['edit'])) {
                                 </label>
                             </td>
                         </tr>
-                        <tr>
-                            <th><label for="moderator_id">Moderator</label></th>
-                            <td>
-                                <select name="moderator_id" id="moderator_id" class="regular-text">
-                                    <option value="">— No moderator —</option>
-                                    <?php foreach ($all_members as $m): ?>
-                                        <option value="<?php echo intval($m['id']); ?>"
-                                            <?php selected(($edit_topic['moderator_id'] ?? ''), $m['id']); ?>>
-                                            <?php echo esc_html($m['name']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <p class="description">Member responsible for moderating this topic's discussions</p>
-                            </td>
-                        </tr>
                     </table>
                     
                     <p class="submit">
@@ -146,10 +163,10 @@ if (isset($_GET['edit'])) {
                         <th style="width:50px;">Icon</th>
                         <th>Topic Name</th>
                         <th>Description</th>
-                        <th>Moderator</th>
-                        <th style="width:80px;">Sort Order</th>
+                        <th>Moderators</th>
+                        <th style="width:80px;">Sort</th>
                         <th style="width:80px;">Status</th>
-                        <th style="width:150px;">Actions</th>
+                        <th style="width:130px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -158,17 +175,48 @@ if (isset($_GET['edit'])) {
                             <td colspan="7" style="text-align:center;padding:40px;">No topics found. Create your first topic!</td>
                         </tr>
                     <?php else: ?>
-                        <?php foreach ($topics as $topic): ?>
+                        <?php foreach ($topics as $topic): 
+                            $topic_mods = $mods_by_topic[$topic['id']] ?? array();
+                        ?>
                             <tr>
                                 <td style="font-size:24px;text-align:center;"><?php echo esc_html($topic['icon']); ?></td>
                                 <td><strong><?php echo esc_html($topic['topic_name']); ?></strong></td>
                                 <td><?php echo esc_html($topic['description']); ?></td>
                                 <td>
-                                    <?php if (!empty($topic['moderator_name'])): ?>
-                                        <span title="Moderator">👤 <?php echo esc_html($topic['moderator_name']); ?></span>
+                                    <?php if (!empty($topic_mods)): ?>
+                                        <?php foreach ($topic_mods as $mod): ?>
+                                            <span style="display:inline-flex;align-items:center;gap:4px;background:#e8f0fe;border-radius:12px;padding:2px 8px;margin:2px;font-size:12px;">
+                                                🛡️ <?php echo esc_html($mod['member_name']); ?>
+                                                <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=membership_forum_topics&remove_mod=' . $mod['member_id'] . '&topic=' . $topic['id']), 'remove_mod_' . $mod['member_id'] . '_' . $topic['id']); ?>"
+                                                   style="color:#d00;text-decoration:none;font-weight:bold;" 
+                                                   onclick="return confirm('Remove this moderator?');" title="Remove">✕</a>
+                                            </span>
+                                        <?php endforeach; ?>
                                     <?php else: ?>
-                                        <span style="color:#999;">—</span>
+                                        <span style="color:#999;font-size:12px;">No moderators</span>
                                     <?php endif; ?>
+                                    <div style="margin-top:6px;">
+                                        <button type="button" class="button button-small" onclick="showAddMod(<?php echo $topic['id']; ?>)">+ Add Moderator</button>
+                                    </div>
+                                    <!-- Inline Add Moderator Form -->
+                                    <div id="add-mod-<?php echo $topic['id']; ?>" style="display:none;margin-top:8px;padding:8px;background:#fff3cd;border-radius:4px;">
+                                        <form method="POST" style="display:flex;gap:6px;align-items:center;">
+                                            <?php wp_nonce_field('mmgr_manage_mods', 'mod_nonce'); ?>
+                                            <input type="hidden" name="mod_topic_id" value="<?php echo $topic['id']; ?>">
+                                            <select name="new_moderator_id" style="flex:1;">
+                                                <option value="">— Choose member —</option>
+                                                <?php
+                                                $mod_ids = array_column($topic_mods, 'member_id');
+                                                foreach ($all_members as $m):
+                                                    if (in_array($m['id'], $mod_ids)) continue;
+                                                ?>
+                                                    <option value="<?php echo intval($m['id']); ?>"><?php echo esc_html($m['name']); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <button type="submit" name="add_moderator" class="button button-primary button-small">Add</button>
+                                            <button type="button" class="button button-small" onclick="hideAddMod(<?php echo $topic['id']; ?>)">Cancel</button>
+                                        </form>
+                                    </div>
                                 </td>
                                 <td style="text-align:center;"><?php echo $topic['sort_order']; ?></td>
                                 <td>
@@ -193,3 +241,11 @@ if (isset($_GET['edit'])) {
         </div>
     </div>
 </div>
+<script>
+function showAddMod(topicId) {
+    document.getElementById('add-mod-' + topicId).style.display = 'block';
+}
+function hideAddMod(topicId) {
+    document.getElementById('add-mod-' + topicId).style.display = 'none';
+}
+</script>

@@ -1062,63 +1062,84 @@ add_shortcode('mmgr_member_community', function() {
     }
     
     global $wpdb;
-    $posts_tbl = $wpdb->prefix . 'membership_forum_posts';
-    $topics_tbl = $wpdb->prefix . 'membership_forum_topics';
-    $post_likes_tbl = $wpdb->prefix . 'membership_forum_post_likes';
+    $posts_tbl       = $wpdb->prefix . 'membership_forum_posts';
+    $topics_tbl      = $wpdb->prefix . 'membership_forum_topics';
+    $post_likes_tbl  = $wpdb->prefix . 'membership_forum_post_likes';
+    $topic_mods_tbl  = $wpdb->prefix . 'membership_forum_topic_mods';
+    $post_hist_tbl   = $wpdb->prefix . 'membership_forum_post_history';
     
     $success = $error = '';
     
+    // Get selected topic (default to first topic) - needed before post submission
+    $selected_topic_id = isset($_GET['topic']) ? intval($_GET['topic']) : 0;
+
+    // Check if current member is a moderator of the selected topic
+    $is_moderator = false;
+    if ($selected_topic_id > 0) {
+        $is_moderator = (bool) $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM $topic_mods_tbl WHERE topic_id = %d AND member_id = %d",
+            $selected_topic_id, $member['id']
+        ));
+    }
+
     // Handle new post submission
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_post'])) {
         if (!isset($_POST['post_nonce']) || !wp_verify_nonce($_POST['post_nonce'], 'mmgr_submit_post')) {
             $error = 'Security check failed.';
         } else {
-            $topic_id = intval($_POST['topic_id']);
-            $message = sanitize_textarea_field($_POST['message']);
-            $photo_url = '';
-            
-            // Handle photo upload
-            if (!empty($_FILES['photo']['name'])) {
-                $upload = wp_handle_upload($_FILES['photo'], array('test_form' => false));
+            // Check forum ban/suspension
+            $member_status = $wpdb->get_row($wpdb->prepare(
+                "SELECT forum_banned, forum_suspended, forum_suspended_until FROM {$wpdb->prefix}memberships WHERE id = %d",
+                $member['id']
+            ), ARRAY_A);
+            if (!empty($member_status['forum_banned'])) {
+                $error = '⛔ You have been banned from posting in the forum. Please contact a moderator if you believe this is in error.';
+            } elseif (!empty($member_status['forum_suspended']) && !empty($member_status['forum_suspended_until']) && strtotime($member_status['forum_suspended_until']) > time()) {
+                $until = date_i18n('F j, Y', strtotime($member_status['forum_suspended_until']));
+                $error = '⏸️ Your forum posting is suspended until ' . $until . '. Please contact a moderator if you have questions.';
+            } else {
+                $topic_id  = intval($_POST['topic_id']);
+                $message   = sanitize_textarea_field($_POST['message']);
+                $photo_url = '';
                 
-                if (!isset($upload['error'])) {
-                    $photo_url = $upload['url'];
-                } else {
-                    $error = 'Photo upload failed: ' . $upload['error'];
+                // Handle photo upload
+                if (!empty($_FILES['photo']['name'])) {
+                    $upload = wp_handle_upload($_FILES['photo'], array('test_form' => false));
+                    if (!isset($upload['error'])) {
+                        $photo_url = $upload['url'];
+                    } else {
+                        $error = 'Photo upload failed: ' . $upload['error'];
+                    }
                 }
-            }
-            
-            if (empty($error) && !empty($message)) {
-                $wpdb->insert($posts_tbl, array(
-                    'member_id' => $member['id'],
-                    'topic_id' => $topic_id,
-                    'message' => $message,
-                    'photo_url' => $photo_url,
-                    'posted_at' => current_time('mysql')
-                ));
                 
-                $success = 'Post submitted successfully!';
-            } elseif (empty($message)) {
-                $error = 'Please enter a message.';
+                if (empty($error) && !empty($message)) {
+                    $wpdb->insert($posts_tbl, array(
+                        'member_id' => $member['id'],
+                        'topic_id'  => $topic_id,
+                        'message'   => $message,
+                        'photo_url' => $photo_url,
+                        'posted_at' => current_time('mysql')
+                    ));
+                    $success = 'Post submitted successfully!';
+                } elseif (empty($message)) {
+                    $error = 'Please enter a message.';
+                }
             }
         }
     }
     
-    // Get selected topic (default to first topic)
-    $selected_topic_id = isset($_GET['topic']) ? intval($_GET['topic']) : 0;
-    
-    // Get all topics with moderator info
-    $topics = $wpdb->get_results("SELECT t.*, m.name as moderator_name, m.community_alias as moderator_alias FROM $topics_tbl t LEFT JOIN {$wpdb->prefix}memberships m ON t.moderator_id = m.id WHERE t.active = 1 ORDER BY t.sort_order, t.id", ARRAY_A);
+    // Get all topics with moderator names
+    $topics = $wpdb->get_results("SELECT t.* FROM $topics_tbl t WHERE t.active = 1 ORDER BY t.sort_order, t.id", ARRAY_A);
     
     if (empty($topics)) {
-        $topics = array(array('id' => 0, 'topic_name' => 'General Discussion', 'description' => 'General community discussion', 'moderator_name' => null, 'moderator_alias' => null));
+        $topics = array(array('id' => 0, 'topic_name' => 'General Discussion', 'description' => 'General community discussion'));
     }
     
     if ($selected_topic_id === 0 && !empty($topics)) {
         $selected_topic_id = $topics[0]['id'];
     }
 
-    // Get selected topic info (for moderator display)
+    // Get selected topic info
     $selected_topic = null;
     foreach ($topics as $t) {
         if ($t['id'] == $selected_topic_id) {
@@ -1126,10 +1147,24 @@ add_shortcode('mmgr_member_community', function() {
             break;
         }
     }
-    
+
+    // Get moderators for selected topic
+    $topic_moderators = array();
+    if ($selected_topic_id > 0) {
+        $topic_moderators = $wpdb->get_results($wpdb->prepare(
+            "SELECT tm.member_id, m.name, m.community_alias FROM $topic_mods_tbl tm JOIN {$wpdb->prefix}memberships m ON tm.member_id = m.id WHERE tm.topic_id = %d",
+            $selected_topic_id
+        ), ARRAY_A);
+        // Re-check is_moderator (for first topic auto-select case)
+        foreach ($topic_moderators as $tm) {
+            if ($tm['member_id'] == $member['id']) { $is_moderator = true; break; }
+        }
+    }
+
     // Get posts for selected topic with like counts
     $posts = $wpdb->get_results($wpdb->prepare(
         "SELECT p.*, m.name as member_name, m.community_alias, m.community_photo_url as member_photo,
+                m.forum_suspended, m.forum_suspended_until, m.forum_banned,
                 COUNT(pl.id) as like_count,
                 (SELECT COUNT(*) FROM $post_likes_tbl WHERE post_id = p.id AND member_id = %d) as user_liked
          FROM $posts_tbl p 
@@ -1177,10 +1212,13 @@ add_shortcode('mmgr_member_community', function() {
                     </a>
                 <?php endforeach; ?>
             </div>
-            <?php if (!empty($selected_topic) && !empty($selected_topic['moderator_name'])): ?>
-                <?php $mod_display = !empty($selected_topic['moderator_alias']) ? $selected_topic['moderator_alias'] : $selected_topic['moderator_name']; ?>
+            <?php if (!empty($topic_moderators)): ?>
                 <div style="margin-top:12px;font-size:13px;color:#666;">
-                    🛡️ <strong>Moderator:</strong> <?php echo esc_html($mod_display); ?>
+                    🛡️ <strong>Moderator<?php echo count($topic_moderators) > 1 ? 's' : ''; ?>:</strong>
+                    <?php foreach ($topic_moderators as $i => $tm): ?>
+                        <?php $mod_display = !empty($tm['community_alias']) ? $tm['community_alias'] : $tm['name']; ?>
+                        <?php echo esc_html($mod_display); ?><?php echo $i < count($topic_moderators) - 1 ? ', ' : ''; ?>
+                    <?php endforeach; ?>
                 </div>
             <?php endif; ?>
         </div>
@@ -1222,6 +1260,14 @@ add_shortcode('mmgr_member_community', function() {
                 <div style="height:600px;overflow-y:auto;border:2px solid #f0f0f0;border-radius:8px;padding:20px;background:#fff;">
                     <div style="display:flex;flex-direction:column;gap:20px;">
                         <?php foreach ($posts as $post): ?>
+                            <?php
+                            $display_name = !empty($post['community_alias']) ? $post['community_alias'] : $post['member_name'];
+                            $is_own_post  = ($post['member_id'] == $member['id']);
+                            $is_mod_target = $is_moderator && !$is_own_post; // can act on other members' posts
+                            // Determine suspend/ban status for moderator display
+                            $target_is_suspended = !empty($post['forum_suspended']) && !empty($post['forum_suspended_until']) && strtotime($post['forum_suspended_until']) > time();
+                            $target_is_banned    = !empty($post['forum_banned']);
+                            ?>
                             <div style="border:2px solid #f0f0f0;border-radius:8px;padding:20px;background:#fafafa;flex-shrink:0;">
                                 <!-- Post Header -->
                                 <div style="display:flex;align-items:center;gap:15px;margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid #e0e0e0;">
@@ -1232,14 +1278,11 @@ add_shortcode('mmgr_member_community', function() {
                                     <?php endif; ?>
                                     
                                     <div style="flex:1;min-width:0;">
-                                        <div style="display:flex;align-items:center;gap:10px;">
+                                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                                             <strong style="font-size:16px;color:#000;">
-                                                <?php 
-                                                $display_name = !empty($post['community_alias']) ? $post['community_alias'] : $post['member_name'];
-                                                echo esc_html($display_name); 
-                                                ?>
+                                                <?php echo esc_html($display_name); ?>
                                             </strong>
-                                            <?php if ($post['member_id'] == $member['id']): ?>
+                                            <?php if ($is_own_post): ?>
                                                 <span style="background:#FF2197;color:white;padding:2px 8px;border-radius:10px;font-size:11px;">You</span>
                                             <?php else: ?>
                                                 <!-- PM Button -->
@@ -1259,6 +1302,13 @@ add_shortcode('mmgr_member_community', function() {
                                                     <?php echo $is_blocked ? '🚫' : '⊘'; ?>
                                                 </button>
                                             <?php endif; ?>
+
+                                            <?php if ($is_mod_target && $target_is_banned): ?>
+                                                <span style="background:#d00;color:white;padding:2px 8px;border-radius:10px;font-size:11px;" title="Forum banned">⛔ Forum Banned</span>
+                                            <?php elseif ($is_mod_target && $target_is_suspended): ?>
+                                                <?php $sus_until = date_i18n('M j, Y', strtotime($post['forum_suspended_until'])); ?>
+                                                <span style="background:#ff9800;color:white;padding:2px 8px;border-radius:10px;font-size:11px;" title="Suspended until <?php echo esc_attr($sus_until); ?>">⏸️ Suspended</span>
+                                            <?php endif; ?>
                                         </div>                                 
                                         <br>
                                         <span style="font-size:13px;color:#666;"><?php echo date('F j, Y @ g:i A', strtotime($post['posted_at'])); ?></span>
@@ -1274,7 +1324,7 @@ add_shortcode('mmgr_member_community', function() {
                                 </div>
 
                                 <!-- Inline Edit Form (hidden by default, shown for post author) -->
-                                <?php if ($post['member_id'] == $member['id']): ?>
+                                <?php if ($is_own_post): ?>
                                 <div id="post-edit-form-<?php echo $post['id']; ?>" style="display:none;margin-bottom:15px;">
                                     <textarea id="post-edit-text-<?php echo $post['id']; ?>" rows="4" style="width:100%;padding:10px;border:2px solid #FF2197;border-radius:6px;font-size:15px;font-family:inherit;"><?php echo esc_textarea($post['message']); ?></textarea>
                                     <div style="margin-top:8px;display:flex;gap:8px;">
@@ -1293,16 +1343,31 @@ add_shortcode('mmgr_member_community', function() {
                                     </div>
                                 <?php endif; ?>
                                 
-                                <!-- Like Button (+ Edit button for own posts) -->
-                                <div style="margin-top:15px;padding-top:15px;border-top:1px solid #e0e0e0;display:flex;gap:15px;align-items:center;">
+                                <!-- Like Button (+ Edit button for own posts + Moderator actions) -->
+                                <div style="margin-top:15px;padding-top:15px;border-top:1px solid #e0e0e0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
                                     <button onclick="togglePostLike(<?php echo $post['id']; ?>, this)" 
                                             class="mmgr-post-like-btn <?php echo $post['user_liked'] ? 'liked' : ''; ?>"
                                             style="background:<?php echo $post['user_liked'] ? '#FF2197' : 'white'; ?>;color:<?php echo $post['user_liked'] ? 'white' : '#FF2197'; ?>;border:2px solid #FF2197;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:14px;transition:all 0.3s;">
                                         ❤️ Like (<?php echo intval($post['like_count']); ?>)
                                     </button>
-                                    <?php if ($post['member_id'] == $member['id']): ?>
+                                    <?php if ($is_own_post): ?>
                                     <button onclick="togglePostEditForm(<?php echo $post['id']; ?>)" style="background:white;color:#666;border:2px solid #ccc;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">
                                         ✏️ Edit
+                                    </button>
+                                    <?php endif; ?>
+                                    <?php if ($is_moderator && !empty($post['edited_at'])): ?>
+                                    <button onclick="viewPostHistory(<?php echo $post['id']; ?>)" style="background:white;color:#0073aa;border:2px solid #0073aa;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:14px;">
+                                        📋 Edit History
+                                    </button>
+                                    <?php endif; ?>
+                                    <?php if ($is_mod_target): ?>
+                                    <button onclick="forumSuspendMember(<?php echo $post['member_id']; ?>, '<?php echo esc_attr($display_name); ?>', <?php echo $target_is_suspended ? 'true' : 'false'; ?>)" 
+                                            style="background:white;color:#ff9800;border:2px solid #ff9800;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;">
+                                        <?php echo $target_is_suspended ? '▶ Unsuspend' : '⏸️ Suspend (30d)'; ?>
+                                    </button>
+                                    <button onclick="forumBanMember(<?php echo $post['member_id']; ?>, '<?php echo esc_attr($display_name); ?>', <?php echo $target_is_banned ? 'true' : 'false'; ?>)" 
+                                            style="background:white;color:#d00;border:2px solid #d00;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;">
+                                        <?php echo $target_is_banned ? '✓ Unban' : '⛔ Forum Ban'; ?>
                                     </button>
                                     <?php endif; ?>
                                 </div>
@@ -1446,6 +1511,76 @@ add_shortcode('mmgr_member_community', function() {
                 togglePostEditForm(postId);
             } else {
                 alert('❌ ' + (data.data && data.data.message ? data.data.message : 'Error saving post.'));
+            }
+        });
+    }
+
+    // Moderator: Suspend member from forum (30 days) or unsuspend
+    function forumSuspendMember(memberId, memberName, isSuspended) {
+        if (isSuspended) {
+            if (!confirm('Lift suspension for ' + memberName + '?')) return;
+            doForumModAction('mmgr_forum_unsuspend_member', memberId, '');
+        } else {
+            const reason = prompt('Suspend ' + memberName + ' from the forum for 30 days.\nEnter reason (visible to moderators only):', '');
+            if (reason === null) return;
+            doForumModAction('mmgr_forum_suspend_member', memberId, reason);
+        }
+    }
+
+    // Moderator: Ban member from forum or unban
+    function forumBanMember(memberId, memberName, isBanned) {
+        if (isBanned) {
+            if (!confirm('Lift forum ban for ' + memberName + '?')) return;
+            doForumModAction('mmgr_forum_unban_member', memberId, '');
+        } else {
+            const reason = prompt('Permanently ban ' + memberName + ' from posting in the forum.\nEnter reason (visible to moderators only):', '');
+            if (reason === null) return;
+            doForumModAction('mmgr_forum_ban_member', memberId, reason);
+        }
+    }
+
+    function doForumModAction(action, memberId, reason) {
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=' + action + '&member_id=' + memberId
+                + '&reason=' + encodeURIComponent(reason)
+                + '&topic_id=<?php echo $selected_topic_id; ?>'
+                + '&nonce=<?php echo wp_create_nonce('mmgr_forum_mod_action'); ?>'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('✅ ' + data.data.message);
+                location.reload();
+            } else {
+                alert('❌ ' + (data.data ? data.data.message : 'Action failed.'));
+            }
+        });
+    }
+
+    // Moderator: View edit history of a post
+    function viewPostHistory(postId) {
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=mmgr_forum_post_history&post_id=' + postId
+                + '&nonce=<?php echo wp_create_nonce('mmgr_forum_mod_action'); ?>'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                let historyText = '📋 Edit History for Post #' + postId + ':\n\n';
+                if (data.data.history.length === 0) {
+                    historyText += '(No previous versions found)';
+                } else {
+                    data.data.history.forEach((h, i) => {
+                        historyText += 'Version ' + (i + 1) + ' (saved ' + h.saved_at + '):\n' + h.old_message + '\n\n';
+                    });
+                }
+                alert(historyText);
+            } else {
+                alert('❌ ' + (data.data ? data.data.message : 'Failed to load history.'));
             }
         });
     }
@@ -3034,11 +3169,12 @@ add_action('wp_ajax_mmgr_edit_forum_post', function() {
     }
 
     global $wpdb;
-    $posts_tbl = $wpdb->prefix . 'membership_forum_posts';
+    $posts_tbl    = $wpdb->prefix . 'membership_forum_posts';
+    $history_tbl  = $wpdb->prefix . 'membership_forum_post_history';
 
     // Verify the post belongs to this member
     $post = $wpdb->get_row(
-        $wpdb->prepare("SELECT member_id FROM $posts_tbl WHERE id = %d", $post_id),
+        $wpdb->prepare("SELECT id, member_id, message FROM $posts_tbl WHERE id = %d", $post_id),
         ARRAY_A
     );
 
@@ -3049,6 +3185,13 @@ add_action('wp_ajax_mmgr_edit_forum_post', function() {
     if (intval($post['member_id']) !== intval($member['id'])) {
         wp_send_json_error(array('message' => 'You can only edit your own posts.'));
     }
+
+    // Save previous version to history before updating
+    $wpdb->insert($history_tbl, array(
+        'post_id'     => $post_id,
+        'old_message' => $post['message'],
+        'saved_at'    => current_time('mysql'),
+    ));
 
     $wpdb->update(
         $posts_tbl,
@@ -3061,6 +3204,162 @@ add_action('wp_ajax_mmgr_edit_forum_post', function() {
     $edited_label = '✏️ Edited ' . date_i18n('F j, Y @ g:i A', current_time('timestamp'));
 
     wp_send_json_success(array('message' => $message, 'edited_label' => $edited_label));
+});
+
+/**
+ * AJAX: Moderator – suspend a member from posting in the forum for 30 days
+ */
+add_action('wp_ajax_mmgr_forum_suspend_member', function() {
+    check_ajax_referer('mmgr_forum_mod_action', 'nonce');
+
+    $current = mmgr_get_current_member();
+    if (!$current) wp_send_json_error(array('message' => 'Not logged in'));
+
+    global $wpdb;
+    $topic_id  = intval($_POST['topic_id']);
+    $target_id = intval($_POST['member_id']);
+    $reason    = sanitize_textarea_field($_POST['reason'] ?? '');
+
+    // Verify current member is a moderator of this topic
+    $is_mod = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}membership_forum_topic_mods WHERE topic_id = %d AND member_id = %d",
+        $topic_id, $current['id']
+    ));
+    if (!$is_mod) wp_send_json_error(array('message' => 'Permission denied.'));
+
+    $until = date('Y-m-d H:i:s', strtotime('+30 days', current_time('timestamp')));
+    $wpdb->update(
+        $wpdb->prefix . 'memberships',
+        array('forum_suspended' => 1, 'forum_suspended_until' => $until, 'forum_suspended_reason' => $reason),
+        array('id' => $target_id)
+    );
+
+    wp_send_json_success(array('message' => 'Member suspended from the forum for 30 days.'));
+});
+
+/**
+ * AJAX: Moderator – lift a forum suspension
+ */
+add_action('wp_ajax_mmgr_forum_unsuspend_member', function() {
+    check_ajax_referer('mmgr_forum_mod_action', 'nonce');
+
+    $current = mmgr_get_current_member();
+    if (!$current) wp_send_json_error(array('message' => 'Not logged in'));
+
+    global $wpdb;
+    $topic_id  = intval($_POST['topic_id']);
+    $target_id = intval($_POST['member_id']);
+
+    $is_mod = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}membership_forum_topic_mods WHERE topic_id = %d AND member_id = %d",
+        $topic_id, $current['id']
+    ));
+    if (!$is_mod) wp_send_json_error(array('message' => 'Permission denied.'));
+
+    $wpdb->update(
+        $wpdb->prefix . 'memberships',
+        array('forum_suspended' => 0, 'forum_suspended_until' => null, 'forum_suspended_reason' => null),
+        array('id' => $target_id)
+    );
+
+    wp_send_json_success(array('message' => 'Forum suspension lifted.'));
+});
+
+/**
+ * AJAX: Moderator – ban a member from posting in the forum
+ */
+add_action('wp_ajax_mmgr_forum_ban_member', function() {
+    check_ajax_referer('mmgr_forum_mod_action', 'nonce');
+
+    $current = mmgr_get_current_member();
+    if (!$current) wp_send_json_error(array('message' => 'Not logged in'));
+
+    global $wpdb;
+    $topic_id  = intval($_POST['topic_id']);
+    $target_id = intval($_POST['member_id']);
+    $reason    = sanitize_textarea_field($_POST['reason'] ?? '');
+
+    $is_mod = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}membership_forum_topic_mods WHERE topic_id = %d AND member_id = %d",
+        $topic_id, $current['id']
+    ));
+    if (!$is_mod) wp_send_json_error(array('message' => 'Permission denied.'));
+
+    $wpdb->update(
+        $wpdb->prefix . 'memberships',
+        array('forum_banned' => 1, 'forum_banned_reason' => $reason),
+        array('id' => $target_id)
+    );
+
+    wp_send_json_success(array('message' => 'Member banned from posting in the forum.'));
+});
+
+/**
+ * AJAX: Moderator – lift a forum ban
+ */
+add_action('wp_ajax_mmgr_forum_unban_member', function() {
+    check_ajax_referer('mmgr_forum_mod_action', 'nonce');
+
+    $current = mmgr_get_current_member();
+    if (!$current) wp_send_json_error(array('message' => 'Not logged in'));
+
+    global $wpdb;
+    $topic_id  = intval($_POST['topic_id']);
+    $target_id = intval($_POST['member_id']);
+
+    $is_mod = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}membership_forum_topic_mods WHERE topic_id = %d AND member_id = %d",
+        $topic_id, $current['id']
+    ));
+    if (!$is_mod) wp_send_json_error(array('message' => 'Permission denied.'));
+
+    $wpdb->update(
+        $wpdb->prefix . 'memberships',
+        array('forum_banned' => 0, 'forum_banned_reason' => null),
+        array('id' => $target_id)
+    );
+
+    wp_send_json_success(array('message' => 'Forum ban lifted.'));
+});
+
+/**
+ * AJAX: Moderator – view edit history of a post
+ */
+add_action('wp_ajax_mmgr_forum_post_history', function() {
+    check_ajax_referer('mmgr_forum_mod_action', 'nonce');
+
+    $current = mmgr_get_current_member();
+    if (!$current) wp_send_json_error(array('message' => 'Not logged in'));
+
+    global $wpdb;
+    $post_id     = intval($_POST['post_id']);
+    $posts_tbl   = $wpdb->prefix . 'membership_forum_posts';
+    $history_tbl = $wpdb->prefix . 'membership_forum_post_history';
+    $mods_tbl    = $wpdb->prefix . 'membership_forum_topic_mods';
+
+    // Get post topic to verify moderator
+    $topic_id = $wpdb->get_var($wpdb->prepare("SELECT topic_id FROM $posts_tbl WHERE id = %d", $post_id));
+    if (!$topic_id) wp_send_json_error(array('message' => 'Post not found.'));
+
+    $is_mod = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $mods_tbl WHERE topic_id = %d AND member_id = %d",
+        $topic_id, $current['id']
+    ));
+    if (!$is_mod) wp_send_json_error(array('message' => 'Permission denied.'));
+
+    $history = $wpdb->get_results($wpdb->prepare(
+        "SELECT old_message, saved_at FROM $history_tbl WHERE post_id = %d ORDER BY saved_at ASC",
+        $post_id
+    ), ARRAY_A);
+
+    $formatted = array_map(function($h) {
+        return array(
+            'old_message' => $h['old_message'],
+            'saved_at'    => date_i18n('F j, Y @ g:i A', strtotime($h['saved_at'])),
+        );
+    }, $history);
+
+    wp_send_json_success(array('history' => $formatted));
 });
 
 /**
