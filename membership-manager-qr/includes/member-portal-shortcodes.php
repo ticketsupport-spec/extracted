@@ -665,7 +665,7 @@ add_shortcode('mmgr_member_activity', function() {
         <div class="mmgr-activity-grid">
             <!-- Total Visits Card -->
             <div class="mmgr-portal-card">
-                <h3>📈 Total Visits</h3>
+                <h3>📈 Total live events attended with club!</h3>
                 <p style="font-size:64px;font-weight:bold;color:#0073aa;margin:40px 0;text-align:center;">
                     <?php echo $total_visits; ?>
                 </p>
@@ -1050,7 +1050,126 @@ add_shortcode('mmgr_member_profile', function() {
                 </tr>
             </table>
         </div>
+
+        <!-- Bio Photos Gallery (up to 50) -->
+        <?php
+        global $wpdb;
+        $bio_photos_tbl = $wpdb->prefix . 'membership_bio_photos';
+        $bio_photos = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, photo_url FROM $bio_photos_tbl WHERE member_id = %d ORDER BY sort_order ASC, id ASC",
+            $member['id']
+        ), ARRAY_A);
+        $photo_count = count($bio_photos);
+        ?>
+        <div class="mmgr-portal-card" style="margin-top:30px;">
+            <h3>📸 My Bio Photos <span style="font-size:13px;font-weight:normal;color:#888;">(<?php echo $photo_count; ?>/50)</span></h3>
+            <p style="color:#666;font-size:14px;margin-top:0;">These photos are shown on your community profile page. You can add up to 50 photos.</p>
+
+            <?php if (!empty($bio_photos)): ?>
+            <div id="bio-photos-grid" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+                <?php foreach ($bio_photos as $bp): ?>
+                <div id="bio-photo-<?php echo intval($bp['id']); ?>" style="position:relative;display:inline-block;">
+                    <img src="<?php echo esc_url($bp['photo_url']); ?>"
+                         style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #ddd;display:block;">
+                    <button type="button"
+                            onclick="deleteBioPhoto(<?php echo intval($bp['id']); ?>)"
+                            style="position:absolute;top:4px;right:4px;background:rgba(200,0,0,0.85);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;"
+                            title="Delete photo">✕</button>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <div id="bio-photos-grid" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;"></div>
+            <?php endif; ?>
+
+            <?php if ($photo_count < 50): ?>
+            <div id="bio-photo-upload-area">
+                <label style="display:block;font-weight:bold;margin-bottom:8px;">Add Photo</label>
+                <input type="file" id="bio-photo-input" accept="image/*" style="margin-bottom:8px;">
+                <br>
+                <button type="button" onclick="uploadBioPhoto()" style="background:#0073aa;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;font-size:15px;font-weight:bold;">
+                    📷 Upload Photo
+                </button>
+                <span id="bio-photo-status" style="margin-left:12px;font-size:14px;"></span>
+            </div>
+            <?php else: ?>
+            <div id="bio-photo-upload-area">
+                <p style="color:#d63638;font-weight:bold;">Maximum of 50 photos reached. Delete a photo to add a new one.</p>
+            </div>
+            <?php endif; ?>
+        </div>
     </div>
+    <script>
+    function uploadBioPhoto() {
+        const input = document.getElementById('bio-photo-input');
+        const status = document.getElementById('bio-photo-status');
+        if (!input.files || !input.files[0]) {
+            status.style.color = '#d63638';
+            status.textContent = '⚠️ Please select a photo first.';
+            return;
+        }
+        const formData = new FormData();
+        formData.append('action', 'mmgr_upload_bio_photo');
+        formData.append('nonce', '<?php echo wp_create_nonce('mmgr_bio_photo'); ?>');
+        formData.append('photo', input.files[0]);
+        status.style.color = '#0073aa';
+        status.textContent = '⏳ Uploading…';
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    status.style.color = '#00a32a';
+                    status.textContent = '✅ Photo added!';
+                    input.value = '';
+                    // Insert new photo tile using DOM methods (avoids XSS via string concatenation)
+                    const grid = document.getElementById('bio-photos-grid');
+                    const wrap = document.createElement('div');
+                    wrap.id = 'bio-photo-' + parseInt(data.data.id, 10);
+                    wrap.style.cssText = 'position:relative;display:inline-block;';
+                    const img = document.createElement('img');
+                    img.src = data.data.url;
+                    img.style.cssText = 'width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #ddd;display:block;';
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.title = 'Delete photo';
+                    btn.textContent = '✕';
+                    btn.style.cssText = 'position:absolute;top:4px;right:4px;background:rgba(200,0,0,0.85);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;';
+                    const photoId = parseInt(data.data.id, 10);
+                    btn.addEventListener('click', function() { deleteBioPhoto(photoId); });
+                    wrap.appendChild(img);
+                    wrap.appendChild(btn);
+                    grid.appendChild(wrap);
+                    // If limit reached, hide the upload area without a full reload
+                    if (data.data.count >= 50) {
+                        const uploadArea = document.getElementById('bio-photo-upload-area');
+                        if (uploadArea) {
+                            uploadArea.innerHTML = '<p style="color:#d63638;font-weight:bold;">Maximum of 50 photos reached. Delete a photo to add a new one.</p>';
+                        }
+                    }
+                } else {
+                    status.style.color = '#d63638';
+                    status.textContent = '❌ ' + (data.data && data.data.message ? data.data.message : 'Upload failed.');
+                }
+            });
+    }
+    function deleteBioPhoto(photoId) {
+        if (!confirm('Delete this photo?')) return;
+        const formData = new FormData();
+        formData.append('action', 'mmgr_delete_bio_photo');
+        formData.append('nonce', '<?php echo wp_create_nonce('mmgr_bio_photo'); ?>');
+        formData.append('photo_id', photoId);
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const el = document.getElementById('bio-photo-' + photoId);
+                    if (el) el.remove();
+                } else {
+                    alert('❌ ' + (data.data && data.data.message ? data.data.message : 'Delete failed.'));
+                }
+            });
+    }
+    </script>
     <?php
     return ob_get_clean();
 });
@@ -1058,6 +1177,95 @@ add_shortcode('mmgr_member_profile', function() {
 /**
  * Member Community Page - Forum/Discussion Board
  */
+
+/**
+ * AJAX: Upload a bio photo (up to 50 per member)
+ */
+add_action('wp_ajax_nopriv_mmgr_upload_bio_photo', function() { do_action('wp_ajax_mmgr_upload_bio_photo'); });
+add_action('wp_ajax_mmgr_upload_bio_photo', function() {
+    check_ajax_referer('mmgr_bio_photo', 'nonce');
+    $member = mmgr_get_current_member();
+    if (!$member) wp_send_json_error(array('message' => 'Not logged in.'));
+
+    global $wpdb;
+    $bio_photos_tbl = $wpdb->prefix . 'membership_bio_photos';
+
+    $count = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $bio_photos_tbl WHERE member_id = %d",
+        $member['id']
+    ));
+    if ($count >= 50) {
+        wp_send_json_error(array('message' => 'Maximum of 50 photos reached.'));
+    }
+
+    if (empty($_FILES['photo']['name'])) {
+        wp_send_json_error(array('message' => 'No file provided.'));
+    }
+
+    // Validate MIME type is an image
+    $allowed_mime_types = array('image/jpeg', 'image/png', 'image/gif', 'image/webp');
+    $file_type = wp_check_filetype($_FILES['photo']['name']);
+    $detected_type = mime_content_type($_FILES['photo']['tmp_name']);
+    if (!in_array($detected_type, $allowed_mime_types, true) || !in_array($file_type['type'], $allowed_mime_types, true)) {
+        wp_send_json_error(array('message' => 'Only image files (JPEG, PNG, GIF, WebP) are allowed.'));
+    }
+
+    $upload = wp_handle_upload($_FILES['photo'], array('test_form' => false, 'mimes' => array_fill_keys(array('jpg|jpeg|jpe', 'png', 'gif', 'webp'), true)));
+    if (isset($upload['error'])) {
+        wp_send_json_error(array('message' => 'Upload failed: ' . $upload['error']));
+    }
+
+    $wpdb->insert($bio_photos_tbl, array(
+        'member_id'  => $member['id'],
+        'photo_url'  => $upload['url'],
+        'sort_order' => $count,
+        'created_at' => current_time('mysql'),
+    ));
+    $new_id = (int) $wpdb->insert_id;
+
+    wp_send_json_success(array(
+        'id'    => $new_id,
+        'url'   => esc_url_raw($upload['url']),
+        'count' => $count + 1,
+    ));
+});
+
+/**
+ * AJAX: Delete a bio photo (owner only)
+ */
+add_action('wp_ajax_nopriv_mmgr_delete_bio_photo', function() { do_action('wp_ajax_mmgr_delete_bio_photo'); });
+add_action('wp_ajax_mmgr_delete_bio_photo', function() {
+    check_ajax_referer('mmgr_bio_photo', 'nonce');
+    $member = mmgr_get_current_member();
+    if (!$member) wp_send_json_error(array('message' => 'Not logged in.'));
+
+    global $wpdb;
+    $bio_photos_tbl = $wpdb->prefix . 'membership_bio_photos';
+    $photo_id = intval($_POST['photo_id']);
+
+    // Verify the photo belongs to this member
+    $photo = $wpdb->get_row($wpdb->prepare(
+        "SELECT id, photo_url FROM $bio_photos_tbl WHERE id = %d AND member_id = %d",
+        $photo_id, $member['id']
+    ), ARRAY_A);
+
+    if (!$photo) {
+        wp_send_json_error(array('message' => 'Photo not found.'));
+    }
+
+    // Delete the file from disk
+    $upload_dir = wp_upload_dir();
+    $local_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $photo['photo_url']);
+    if (file_exists($local_path)) {
+        if (!unlink($local_path)) {
+            error_log('MMGR: Failed to delete bio photo file: ' . $local_path);
+        }
+    }
+
+    $wpdb->delete($bio_photos_tbl, array('id' => $photo_id));
+    wp_send_json_success();
+});
+
 add_shortcode('mmgr_member_community', function() {
     // Check if member is logged in
     $member = mmgr_get_current_member();
@@ -2114,7 +2322,7 @@ add_shortcode('mmgr_member_messages', function() {
                     <div class="mmgr-empty-state">
                         <div style="font-size:64px;margin-bottom:20px;">💬</div>
                         <h3>Select a conversation</h3>
-                        <p>Choose a contact from the sidebar to start messaging</p>
+                        <p>Choose a contact to start messaging - you can add contacts from the Community and Directory pages</p>
                     </div>
                 <?php endif; ?>
             </div>
@@ -3140,6 +3348,29 @@ add_shortcode('mmgr_member_community_profile', function() {
             <span id="note-save-status" style="margin-left:12px;color:#00a32a;font-size:14px;display:none;"></span>
         </div>
         <?php endif; ?>
+
+        <!-- Bio Photos Gallery -->
+        <?php
+        $bio_photos_tbl2  = $wpdb->prefix . 'membership_bio_photos';
+        $profile_bio_photos = $wpdb->get_results($wpdb->prepare(
+            "SELECT photo_url FROM $bio_photos_tbl2 WHERE member_id = %d ORDER BY sort_order ASC, id ASC",
+            $profile_member_id
+        ), ARRAY_A);
+        if (!empty($profile_bio_photos)):
+        ?>
+        <div class="mmgr-portal-card" style="margin-top:20px;">
+            <h2>📸 Photos</h2>
+            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;">
+                <?php foreach ($profile_bio_photos as $bp): ?>
+                <img src="<?php echo esc_url($bp['photo_url']); ?>"
+                     onclick="openPhotoLightbox('<?php echo esc_js($bp['photo_url']); ?>')"
+                     style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #e0e0e0;cursor:pointer;transition:transform 0.2s;"
+                     onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"
+                     alt="Bio photo">
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
     
     <script>
@@ -3248,6 +3479,21 @@ add_shortcode('mmgr_member_community_profile', function() {
             .catch(error => {
                 alert('❌ Error saving note: ' + error);
             });
+        }
+
+        function openPhotoLightbox(url) {
+            let lb = document.getElementById('mmgr-profile-lightbox');
+            if (!lb) {
+                lb = document.createElement('div');
+                lb.id = 'mmgr-profile-lightbox';
+                lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:99999;cursor:zoom-out;';
+                lb.onclick = function(e) { if (e.target === lb) lb.style.display = 'none'; };
+                lb.innerHTML = '<img id="mmgr-profile-lb-img" src="" style="max-width:90vw;max-height:90vh;border-radius:8px;border:3px solid white;" alt="Photo">'
+                    + '<button onclick="document.getElementById(\'mmgr-profile-lightbox\').style.display=\'none\'" style="position:absolute;top:16px;right:20px;background:rgba(0,0,0,0.6);color:white;border:none;border-radius:50%;width:36px;height:36px;font-size:20px;cursor:pointer;line-height:1;">✕</button>';
+                document.body.appendChild(lb);
+            }
+            document.getElementById('mmgr-profile-lb-img').src = url;
+            lb.style.display = 'flex';
         }
     </script>
     <?php
