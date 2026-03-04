@@ -825,13 +825,13 @@ add_shortcode('mmgr_member_profile', function() {
     }
     
     $success = $error = '';
-    
+
+    // Show success message after PRG redirect
+    if (isset($_GET['profile_updated']) && sanitize_key($_GET['profile_updated']) === '1') {
+        $success = 'Profile updated successfully!';
+    }
+
     // Handle profile update
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
-        error_log('Profile update POST received');
-        error_log('FILES array: ' . print_r($_FILES, true));
-        error_log('Community photo file: ' . (!empty($_FILES['community_photo']) ? $_FILES['community_photo']['name'] : 'NOT FOUND'));
-	}
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
         if (!isset($_POST['profile_nonce']) || !wp_verify_nonce($_POST['profile_nonce'], 'mmgr_update_profile')) {
             $error = 'Security check failed.';
@@ -862,29 +862,31 @@ add_shortcode('mmgr_member_profile', function() {
             }
             
             // Validate email
-            if (!is_email($email)) {
+            if (empty($error) && !is_email($email)) {
                 $error = 'Invalid email address.';
-            } else {
-			// Update member
-			$updated = $wpdb->update(
-				$tbl,
-				array(
-					'phone' => $phone,
-					'email' => $email,
-					'community_alias' => $community_alias,
-					'community_bio' => $community_bio,
-					'community_photo_url' => $community_photo_url
-				),
-				array('id' => $member['id'])
-			);
+            }
 
-			if ($updated !== false) {
-				$success = 'Profile updated successfully!';
-				// Refresh member data
-				$member = mmgr_get_current_member(true); // Force refresh
-			} else {
-				$error = 'Failed to update profile.';
-			}
+            if (empty($error)) {
+                // Update member
+                $updated = $wpdb->update(
+                    $tbl,
+                    array(
+                        'phone' => $phone,
+                        'email' => $email,
+                        'community_alias' => $community_alias,
+                        'community_bio' => $community_bio,
+                        'community_photo_url' => $community_photo_url
+                    ),
+                    array('id' => $member['id'])
+                );
+
+                if ($updated !== false) {
+                    // PRG: redirect to avoid re-submission on refresh and to load fresh data
+                    wp_redirect(esc_url_raw(add_query_arg('profile_updated', '1')));
+                    exit;
+                } else {
+                    $error = 'Failed to update profile.';
+                }
             }
         }
     }
@@ -983,7 +985,16 @@ add_shortcode('mmgr_member_profile', function() {
                     <input type="hidden" name="remove_community_photo" id="remove-community-photo" value="0">
                     <div id="community-photo-preview" style="margin-bottom:10px;">
                         <?php if (!empty($member['community_photo_url'])): ?>
-                            <img src="<?php echo esc_url($member['community_photo_url']); ?>" style="max-width:150px;border-radius:8px;border:2px solid #ddd;">
+                            <img src="<?php
+                                $photo_url = $member['community_photo_url'];
+                                $photo_path = str_replace(
+                                    array(site_url('/'), home_url('/')),
+                                    array(ABSPATH, ABSPATH),
+                                    $photo_url
+                                );
+                                $v = file_exists($photo_path) ? filemtime($photo_path) : substr(md5($photo_url), 0, 8);
+                                echo esc_url(add_query_arg('v', $v, $photo_url));
+                            ?>" style="max-width:150px;border-radius:8px;border:2px solid #ddd;">
                             <button type="button" onclick="removeCommunityPhoto()" style="margin-left:10px;background:#d00;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;">
                                 🗑️ Remove Photo
                             </button>
