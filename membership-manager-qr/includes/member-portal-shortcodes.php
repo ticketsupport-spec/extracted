@@ -1180,6 +1180,33 @@ add_shortcode('mmgr_member_profile', function() {
                 }
             });
     }
+    
+    function previewCommunityPhoto(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById('community-photo-preview');
+                preview.innerHTML = '';
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.style.cssText = 'max-width:150px;border-radius:8px;border:2px solid #ddd;';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = '🗑️ Remove Photo';
+                btn.style.cssText = 'margin-left:10px;background:#d00;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;';
+                btn.addEventListener('click', removeCommunityPhoto);
+                preview.appendChild(img);
+                preview.appendChild(btn);
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+    
+    function removeCommunityPhoto() {
+        document.getElementById('community-photo-input').value = '';
+        document.getElementById('community-photo-preview').innerHTML = '';
+        document.getElementById('remove-community-photo').value = '1';
+    }
     </script>
     <?php
     return ob_get_clean();
@@ -2341,22 +2368,6 @@ add_shortcode('mmgr_member_messages', function() {
     </div>
     
     <script>
-    function previewCommunityPhoto(input) {
-        if (input.files && input.files[0]) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const preview = document.getElementById('community-photo-preview');
-                preview.innerHTML = '<img src="' + e.target.result + '" style="max-width:150px;border-radius:8px;border:2px solid #ddd;"><button type="button" onclick="removeCommunityPhoto()" style="margin-left:10px;background:#d00;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;">🗑️ Remove Photo</button>';
-            }
-            reader.readAsDataURL(input.files[0]);
-        }
-    }
-    
-    function removeCommunityPhoto() {
-        document.getElementById('community-photo-input').value = '';
-        document.getElementById('community-photo-preview').innerHTML = '';
-        document.getElementById('remove-community-photo').value = '1';
-    }	
     function showTab(tab) {
         document.querySelectorAll('.mmgr-tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.mmgr-tab-content').forEach(c => c.style.display = 'none');
