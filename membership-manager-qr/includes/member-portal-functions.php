@@ -47,6 +47,20 @@ function mmgr_create_portal_tables() {
         $wpdb->query("ALTER TABLE $memberships_tbl ADD COLUMN active TINYINT(1) DEFAULT 1");
     }
 
+    // Add moderator_id to forum topics table
+    $forum_topics_tbl = $wpdb->prefix . 'membership_forum_topics';
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$forum_topics_tbl' AND column_name = 'moderator_id'");
+    if (empty($row)) {
+        $wpdb->query("ALTER TABLE `$forum_topics_tbl` ADD COLUMN `moderator_id` INT NULL DEFAULT NULL");
+    }
+
+    // Add edited_at to forum posts table
+    $forum_posts_tbl = $wpdb->prefix . 'membership_forum_posts';
+    $row = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$forum_posts_tbl' AND column_name = 'edited_at'");
+    if (empty($row)) {
+        $wpdb->query("ALTER TABLE `$forum_posts_tbl` ADD COLUMN `edited_at` DATETIME NULL DEFAULT NULL");
+    }
+
     // Member likes table
     $likes_tbl = $wpdb->prefix . 'membership_likes';
     $wpdb->query("CREATE TABLE IF NOT EXISTS `$likes_tbl` (

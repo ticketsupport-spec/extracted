@@ -204,6 +204,7 @@ function mmgr_create_tables() {
         icon VARCHAR(50) DEFAULT '💬',
         active TINYINT(1) DEFAULT 1,
         sort_order INT DEFAULT 0,
+        moderator_id INT NULL DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_active (active),
         INDEX idx_sort (sort_order)
@@ -263,6 +264,7 @@ function mmgr_create_tables() {
         message TEXT NOT NULL,
         photo_url VARCHAR(500),
         posted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        edited_at DATETIME NULL DEFAULT NULL,
         INDEX idx_member (member_id),
         INDEX idx_topic (topic_id),
         INDEX idx_posted (posted_at)

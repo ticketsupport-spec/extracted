@@ -3,6 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 global $wpdb;
 $topics_tbl = $wpdb->prefix . 'membership_forum_topics';
+$members_tbl = $wpdb->prefix . 'memberships';
 
 // Handle add/edit
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_topic'])) {
@@ -15,13 +16,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_topic'])) {
         $icon = sanitize_text_field($_POST['icon']);
         $active = isset($_POST['active']) ? 1 : 0;
         $sort_order = intval($_POST['sort_order']);
+        $moderator_id = !empty($_POST['moderator_id']) ? intval($_POST['moderator_id']) : null;
         
         $data = array(
             'topic_name' => $topic_name,
             'description' => $description,
             'icon' => $icon,
             'active' => $active,
-            'sort_order' => $sort_order
+            'sort_order' => $sort_order,
+            'moderator_id' => $moderator_id,
         );
         
         if ($topic_id > 0) {
@@ -41,7 +44,10 @@ if (isset($_GET['delete']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET[
 }
 
 // Get all topics
-$topics = $wpdb->get_results("SELECT * FROM $topics_tbl ORDER BY sort_order, id", ARRAY_A);
+$topics = $wpdb->get_results("SELECT t.*, m.name as moderator_name FROM $topics_tbl t LEFT JOIN $members_tbl m ON t.moderator_id = m.id ORDER BY t.sort_order, t.id", ARRAY_A);
+
+// Get all active members for moderator dropdown
+$all_members = $wpdb->get_results("SELECT id, name FROM $members_tbl WHERE banned = 0 AND (active IS NULL OR active = 1) ORDER BY name", ARRAY_A);
 
 // Edit mode
 $edit_topic = null;
@@ -102,6 +108,21 @@ if (isset($_GET['edit'])) {
                                 </label>
                             </td>
                         </tr>
+                        <tr>
+                            <th><label for="moderator_id">Moderator</label></th>
+                            <td>
+                                <select name="moderator_id" id="moderator_id" class="regular-text">
+                                    <option value="">— No moderator —</option>
+                                    <?php foreach ($all_members as $m): ?>
+                                        <option value="<?php echo intval($m['id']); ?>"
+                                            <?php selected(($edit_topic['moderator_id'] ?? ''), $m['id']); ?>>
+                                            <?php echo esc_html($m['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="description">Member responsible for moderating this topic's discussions</p>
+                            </td>
+                        </tr>
                     </table>
                     
                     <p class="submit">
@@ -125,6 +146,7 @@ if (isset($_GET['edit'])) {
                         <th style="width:50px;">Icon</th>
                         <th>Topic Name</th>
                         <th>Description</th>
+                        <th>Moderator</th>
                         <th style="width:80px;">Sort Order</th>
                         <th style="width:80px;">Status</th>
                         <th style="width:150px;">Actions</th>
@@ -133,7 +155,7 @@ if (isset($_GET['edit'])) {
                 <tbody>
                     <?php if (empty($topics)): ?>
                         <tr>
-                            <td colspan="6" style="text-align:center;padding:40px;">No topics found. Create your first topic!</td>
+                            <td colspan="7" style="text-align:center;padding:40px;">No topics found. Create your first topic!</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($topics as $topic): ?>
@@ -141,6 +163,13 @@ if (isset($_GET['edit'])) {
                                 <td style="font-size:24px;text-align:center;"><?php echo esc_html($topic['icon']); ?></td>
                                 <td><strong><?php echo esc_html($topic['topic_name']); ?></strong></td>
                                 <td><?php echo esc_html($topic['description']); ?></td>
+                                <td>
+                                    <?php if (!empty($topic['moderator_name'])): ?>
+                                        <span title="Moderator">👤 <?php echo esc_html($topic['moderator_name']); ?></span>
+                                    <?php else: ?>
+                                        <span style="color:#999;">—</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td style="text-align:center;"><?php echo $topic['sort_order']; ?></td>
                                 <td>
                                     <?php if ($topic['active']): ?>
