@@ -1,6 +1,24 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+/**
+ * Build the "Card Requests(#)" submenu label with a pending count badge.
+ */
+function mmgr_card_requests_menu_label() {
+    global $wpdb;
+    $card_tbl = $wpdb->prefix . 'mmgr_card_requests';
+    // Guard: table may not exist yet on first plugin load
+    $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$card_tbl'") === $card_tbl;
+    if (!$table_exists) {
+        return 'Card Requests';
+    }
+    $count = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$card_tbl` WHERE status = 'pending'");
+    if ($count > 0) {
+        return 'Card Requests <span class="awaiting-mod">' . $count . '</span>';
+    }
+    return 'Card Requests';
+}
+
 // Add admin menu
 add_action('admin_menu', function() {
     add_menu_page(
@@ -76,6 +94,18 @@ add_action('admin_menu', function() {
 		'membership_forum_topics',
 		function() {
 			require_once MMGR_PLUGIN_DIR . 'includes/admin/forum-topics.php';
+		}
+	);
+
+	// Card Requests with pending count badge
+	add_submenu_page(
+		'membership_manager',
+		'Card Requests',
+		mmgr_card_requests_menu_label(),
+		'manage_options',
+		'membership_card_requests',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/card-requests.php';
 		}
 	);
     

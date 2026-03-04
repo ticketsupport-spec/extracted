@@ -1363,14 +1363,15 @@ add_action('admin_head', function() {
     }
 
     .mmgr-coc h3 {
-        color: #FF2197;
+        color: #6b21a8;
         font-size: 1.1rem;
         font-weight: 700;
-        margin: 24px 0 10px;
+        margin: 32px 0 10px;
         padding: 8px 14px;
-        background: linear-gradient(44deg, rgba(85,0,251,0.10), rgba(229,39,179,0.10));
-        border-left: 4px solid #FF2197;
+        background: linear-gradient(44deg, rgba(107,33,168,0.12), rgba(85,0,251,0.10));
+        border-left: 4px solid #6b21a8;
         border-radius: 4px;
+        display: block;
     }
 
     .mmgr-coc ul {

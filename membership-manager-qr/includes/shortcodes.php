@@ -583,13 +583,13 @@ add_shortcode('membership_code_of_conduct', function($atts){
             continue;
         }
 
-        // ## Heading ## → <h3>
+        // ## Heading ## → <h3> (with a hard break above for spacing)
         if (preg_match('/^##\s+(.+?)\s+##$/', $line, $matches)) {
             if ($in_list) {
                 $html .= '</ul>';
                 $in_list = false;
             }
-            $html .= '<h3>' . esc_html($matches[1]) . '</h3>';
+            $html .= '<br><h3>' . esc_html($matches[1]) . '</h3>';
         }
         // * bullet → <li>
         elseif (preg_match('/^\*\s+(.+)$/', $line, $matches)) {
