@@ -3301,6 +3301,7 @@ add_action('wp_ajax_mmgr_get_member_alias', function() {
 /**
  * Toggle Post Like via AJAX
  */
+add_action('wp_ajax_nopriv_mmgr_toggle_post_like', function() { do_action('wp_ajax_mmgr_toggle_post_like'); });
 add_action('wp_ajax_mmgr_toggle_post_like', function() {
     check_ajax_referer('mmgr_toggle_post_like', 'nonce');
     
@@ -3563,6 +3564,7 @@ add_action('wp_ajax_mmgr_forum_post_history', function() {
 /**
  * AJAX: Moderator – hide or unhide a forum post
  */
+add_action('wp_ajax_nopriv_mmgr_forum_hide_post', function() { do_action('wp_ajax_mmgr_forum_hide_post'); });
 add_action('wp_ajax_mmgr_forum_hide_post', function() {
     check_ajax_referer('mmgr_forum_mod_action', 'nonce');
 
@@ -3598,6 +3600,7 @@ add_action('wp_ajax_mmgr_forum_hide_post', function() {
 /**
  * AJAX: Moderator – remove photo from a forum post
  */
+add_action('wp_ajax_nopriv_mmgr_forum_remove_photo', function() { do_action('wp_ajax_mmgr_forum_remove_photo'); });
 add_action('wp_ajax_mmgr_forum_remove_photo', function() {
     check_ajax_referer('mmgr_forum_mod_action', 'nonce');
 
@@ -3631,6 +3634,7 @@ add_action('wp_ajax_mmgr_forum_remove_photo', function() {
 /**
  * AJAX: Any member – add a comment to a forum post
  */
+add_action('wp_ajax_nopriv_mmgr_add_post_comment', function() { do_action('wp_ajax_mmgr_add_post_comment'); });
 add_action('wp_ajax_mmgr_add_post_comment', function() {
     check_ajax_referer('mmgr_add_post_comment', 'nonce');
 
