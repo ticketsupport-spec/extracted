@@ -61,6 +61,44 @@ function mmgr_create_portal_tables() {
         $wpdb->query("ALTER TABLE `$forum_posts_tbl` ADD COLUMN `edited_at` DATETIME NULL DEFAULT NULL");
     }
 
+    // Add forum suspension/ban columns to memberships
+    $memberships_tbl = $wpdb->prefix . 'memberships';
+    $forum_cols = array(
+        'forum_suspended'        => "ADD COLUMN `forum_suspended` TINYINT(1) DEFAULT 0",
+        'forum_suspended_until'  => "ADD COLUMN `forum_suspended_until` DATETIME NULL DEFAULT NULL",
+        'forum_suspended_reason' => "ADD COLUMN `forum_suspended_reason` TEXT NULL DEFAULT NULL",
+        'forum_banned'           => "ADD COLUMN `forum_banned` TINYINT(1) DEFAULT 0",
+        'forum_banned_reason'    => "ADD COLUMN `forum_banned_reason` TEXT NULL DEFAULT NULL",
+    );
+    foreach ($forum_cols as $col => $alter) {
+        $exists = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$memberships_tbl' AND column_name = '$col'");
+        if (empty($exists)) {
+            $wpdb->query("ALTER TABLE `$memberships_tbl` $alter");
+        }
+    }
+
+    // Forum topic moderators table (multiple moderators per topic)
+    $topic_mods_tbl = $wpdb->prefix . 'membership_forum_topic_mods';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$topic_mods_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        topic_id INT NOT NULL,
+        member_id INT NOT NULL,
+        added_at DATETIME NOT NULL,
+        UNIQUE KEY unique_mod (topic_id, member_id),
+        INDEX idx_topic_id (topic_id),
+        INDEX idx_member_id (member_id)
+    ) $charset_collate");
+
+    // Forum post edit history table (previous versions, visible to moderators only)
+    $post_history_tbl = $wpdb->prefix . 'membership_forum_post_history';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$post_history_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        post_id INT NOT NULL,
+        old_message TEXT NOT NULL,
+        saved_at DATETIME NOT NULL,
+        INDEX idx_post_id (post_id)
+    ) $charset_collate");
+
     // Member likes table
     $likes_tbl = $wpdb->prefix . 'membership_likes';
     $wpdb->query("CREATE TABLE IF NOT EXISTS `$likes_tbl` (

@@ -16,6 +16,37 @@ if ($editing) {
     }
 }
 
+// Handle QR code regeneration
+if ($editing && isset($_POST['mmgr_regenerate_qr']) && isset($_POST['member_nonce_qr']) && wp_verify_nonce($_POST['member_nonce_qr'], 'mmgr_qr_actions')) {
+    if ($member && !empty($member['member_code'])) {
+        $result = mmgr_regenerate_qr_code($member['member_code']);
+        if ($result) {
+            echo '<div class="notice notice-success"><p>✓ QR code regenerated successfully.</p></div>';
+        } else {
+            echo '<div class="notice notice-error"><p>✕ Failed to regenerate QR code.</p></div>';
+        }
+    }
+}
+
+// Handle assigning a custom member code
+if ($editing && isset($_POST['mmgr_assign_code']) && isset($_POST['member_nonce_qr']) && wp_verify_nonce($_POST['member_nonce_qr'], 'mmgr_qr_actions')) {
+    $new_code = strtoupper(sanitize_text_field($_POST['custom_member_code'] ?? ''));
+    if ($new_code && preg_match('/^[A-Z0-9]{4,20}$/', $new_code)) {
+        // Check code is not already in use by another member
+        $existing = $wpdb->get_var($wpdb->prepare("SELECT id FROM $tbl WHERE member_code = %s AND id != %d", $new_code, intval($_GET['id'])));
+        if ($existing) {
+            echo '<div class="notice notice-error"><p>✕ That member code is already in use by another member.</p></div>';
+        } else {
+            $wpdb->update($tbl, array('member_code' => $new_code), array('id' => intval($_GET['id'])));
+            mmgr_generate_qr_file($new_code);
+            $member['member_code'] = $new_code;
+            echo '<div class="notice notice-success"><p>✓ Member code assigned and QR code generated.</p></div>';
+        }
+    } else {
+        echo '<div class="notice notice-error"><p>✕ Invalid code. Use 4-20 uppercase letters and numbers only.</p></div>';
+    }
+}
+
 // Handle form submission
 if (isset($_POST['mmgr_save_member'])) {
     if (!isset($_POST['member_nonce']) || !wp_verify_nonce($_POST['member_nonce'], 'mmgr_save_member')) {
@@ -65,6 +96,9 @@ if (isset($_POST['mmgr_save_member'])) {
             $data['member_code'] = mmgr_generate_member_code($data['name']);
             $wpdb->insert($tbl, $data);
             $new_id = $wpdb->insert_id;
+            
+            // Generate QR code file
+            mmgr_generate_qr_file($data['member_code']);
             
             // Set password if provided
             if (isset($_POST['member_password']) && !empty($_POST['member_password'])) {
@@ -296,16 +330,30 @@ $levels = $wpdb->get_results("SELECT level_name, price FROM {$wpdb->prefix}membe
         <h2>Member Code & QR Code</h2>
         <p><strong>Member Code:</strong> <code style="font-size:18px;color:#d00;"><?php echo esc_html($member['member_code']); ?></code></p>
         <?php
-        $upload_dir = wp_upload_dir();
-        $qr_url = $upload_dir['baseurl'] . '/membership-qr-codes/qr-' . $member['member_code'] . '.png';
-        $qr_path = $upload_dir['basedir'] . '/membership-qr-codes/qr-' . $member['member_code'] . '.png';
-        if (file_exists($qr_path)):
+        $qr_ajax_url = admin_url('admin-ajax.php?action=mmgr_qrcode&code=' . urlencode($member['member_code']));
         ?>
-            <p><img src="<?php echo esc_url($qr_url); ?>" style="width:200px;height:200px;border:2px solid #0073aa;"></p>
-            <p><a href="<?php echo esc_url($qr_url); ?>" class="button" download>Download QR Code</a></p>
-        <?php else: ?>
-            <p style="color:#d63638;">QR Code not found. It will be generated automatically.</p>
-        <?php endif; ?>
+        <p><img src="<?php echo esc_url($qr_ajax_url); ?>" style="width:200px;height:200px;border:2px solid #0073aa;" alt="QR Code"></p>
+        <p>
+            <a href="<?php echo esc_url($qr_ajax_url); ?>" class="button" download="qr-<?php echo esc_attr($member['member_code']); ?>.png">💾 Download QR Code</a>
+        </p>
+        
+        <h3>QR Code Actions</h3>
+        <form method="post" style="display:inline-block;margin-right:10px;">
+            <?php wp_nonce_field('mmgr_qr_actions', 'member_nonce_qr'); ?>
+            <button type="submit" name="mmgr_regenerate_qr" class="button" onclick="return confirm('Regenerate QR code for this member?')">🔄 Regenerate QR Code</button>
+        </form>
+        
+        <details style="margin-top:15px;border:1px solid #ccc;padding:15px;border-radius:4px;max-width:500px;">
+            <summary style="cursor:pointer;font-weight:bold;">📋 Assign QR Code (use a pre-printed card)</summary>
+            <div style="margin-top:10px;">
+                <p class="description">Enter the code from a pre-printed QR card to assign it to this member.</p>
+                <form method="post">
+                    <?php wp_nonce_field('mmgr_qr_actions', 'member_nonce_qr'); ?>
+                    <input type="text" name="custom_member_code" placeholder="e.g. ABC123XYZ" style="text-transform:uppercase;width:200px;" maxlength="20">
+                    <button type="submit" name="mmgr_assign_code" class="button button-primary" onclick="return confirm('Assign this code to the member? The current QR code will be replaced.')">✓ Assign Code</button>
+                </form>
+            </div>
+        </details>
     <?php endif; ?>
 </div>
 

@@ -135,6 +135,7 @@ function mmgr_admin_page() {
         if ($row) {
             $new_code = mmgr_generate_member_code($row['first_name'].$row['last_name']);
             $wpdb->update($tbl, array('member_code' => $new_code), array('id' => $row['id']));
+            mmgr_generate_qr_file($new_code);
             $row['member_code'] = $new_code;
             $success = "New QR code generated.";
             $editing = true;
@@ -175,6 +176,7 @@ function mmgr_admin_page() {
             $data['start_date'] = date('Y-m-d');
             $data['expire_date'] = date('Y-m-d',strtotime('+1 year'));
             $wpdb->insert($tbl, $data);
+            mmgr_generate_qr_file($code);
             $success = "Member added. Code: ".esc_html($code);
             $editing = true;
             $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM `$tbl` WHERE member_code=%s", $code), ARRAY_A);
