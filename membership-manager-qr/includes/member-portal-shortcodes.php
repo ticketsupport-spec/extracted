@@ -1163,7 +1163,7 @@ add_shortcode('mmgr_member_community', function() {
     }
 
     // Get posts for selected topic with like counts
-    $hidden_filter = $is_moderator ? '' : 'AND (p.hidden IS NULL OR p.hidden = 0)';
+    $hidden_filter = $is_moderator ? '' : 'AND p.hidden = 0';
     $posts = $wpdb->get_results($wpdb->prepare(
         "SELECT p.*, m.name as member_name, m.community_alias, m.community_photo_url as member_photo,
                 m.forum_suspended, m.forum_suspended_until, m.forum_banned,
@@ -1184,13 +1184,17 @@ add_shortcode('mmgr_member_community', function() {
     // Fetch all comments for currently visible posts (one query for all posts)
     $comments_by_post = array();
     if (!empty($posts)) {
-        $post_id_list = implode(',', array_map('intval', array_column($posts, 'id')));
+        $post_ids     = array_map('intval', array_column($posts, 'id'));
+        $placeholders = implode(',', array_fill(0, count($post_ids), '%d'));
         $all_comments = $wpdb->get_results(
-            "SELECT c.*, m.name as member_name, m.community_alias
-             FROM $comments_tbl c
-             JOIN {$wpdb->prefix}memberships m ON c.member_id = m.id
-             WHERE c.post_id IN ($post_id_list)
-             ORDER BY c.posted_at ASC",
+            $wpdb->prepare(
+                "SELECT c.*, m.name as member_name, m.community_alias
+                 FROM $comments_tbl c
+                 JOIN {$wpdb->prefix}memberships m ON c.member_id = m.id
+                 WHERE c.post_id IN ($placeholders)
+                 ORDER BY c.posted_at ASC",
+                ...$post_ids
+            ),
             ARRAY_A
         );
         foreach ($all_comments as $c) {
@@ -1360,11 +1364,19 @@ add_shortcode('mmgr_member_community', function() {
                                 
                                 <!-- Post Photo (thumbnail → lightbox) -->
                                 <?php if (!empty($post['photo_url'])): ?>
-                                    <div style="margin-top:15px;">
+                                    <div id="post-photo-<?php echo $post['id']; ?>" style="margin-top:15px;">
                                         <img src="<?php echo esc_url($post['photo_url']); ?>"
                                              alt="Post photo"
                                              onclick="openPhotoLightbox('<?php echo esc_js($post['photo_url']); ?>')"
                                              style="max-width:150px;max-height:150px;object-fit:cover;border-radius:8px;border:2px solid #e0e0e0;cursor:pointer;">
+                                        <?php if ($is_moderator): ?>
+                                        <div style="margin-top:6px;">
+                                            <button onclick="removePostPhoto(<?php echo $post['id']; ?>)"
+                                                    style="background:white;color:#d00;border:2px solid #d00;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;">
+                                                🗑 Remove Photo
+                                            </button>
+                                        </div>
+                                        <?php endif; ?>
                                     </div>
                                 <?php endif; ?>
                                 
@@ -1423,7 +1435,7 @@ add_shortcode('mmgr_member_community', function() {
                                                     <div style="background:#f0f0f0;border-left:3px solid #FF2197;padding:10px 12px;border-radius:0 6px 6px 0;font-size:14px;">
                                                         <strong><?php echo esc_html($cmt_author); ?></strong>
                                                         <span style="color:#999;font-size:12px;margin-left:8px;"><?php echo date_i18n('M j, Y @ g:i A', strtotime($cmt['posted_at'])); ?></span>
-                                                        <div style="margin-top:4px;color:#333;"><?php echo nl2br(esc_html($cmt['comment'])); ?></div>
+                                                        <div style="margin-top:4px;color:#333;white-space:pre-wrap;"><?php echo esc_html($cmt['comment']); ?></div>
                                                     </div>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
@@ -1702,11 +1714,17 @@ add_shortcode('mmgr_member_community', function() {
                 if (noMsg) noMsg.remove();
                 const div = document.createElement('div');
                 div.style.cssText = 'background:#f0f0f0;border-left:3px solid #FF2197;padding:10px 12px;border-radius:0 6px 6px 0;font-size:14px;';
-                const safeAuthor  = mmgrEscHtml(data.data.author);
-                const safeComment = mmgrEscHtml(data.data.comment).replace(/\n/g, '<br>');
-                div.innerHTML = '<strong>' + safeAuthor + '</strong>'
-                    + '<span style="color:#999;font-size:12px;margin-left:8px;">' + data.data.posted_at + '</span>'
-                    + '<div style="margin-top:4px;color:#333;">' + safeComment + '</div>';
+                const strong = document.createElement('strong');
+                strong.textContent = data.data.author;
+                const timeSpan = document.createElement('span');
+                timeSpan.style.cssText = 'color:#999;font-size:12px;margin-left:8px;';
+                timeSpan.textContent = data.data.posted_at;
+                const bodyDiv = document.createElement('div');
+                bodyDiv.style.cssText = 'margin-top:4px;color:#333;white-space:pre-wrap;';
+                bodyDiv.textContent = data.data.comment;
+                div.appendChild(strong);
+                div.appendChild(timeSpan);
+                div.appendChild(bodyDiv);
                 list.appendChild(div);
                 const countSpan = document.getElementById('comment-count-' + postId);
                 if (countSpan) countSpan.textContent = parseInt(countSpan.textContent || '0') + 1;
@@ -1717,10 +1735,25 @@ add_shortcode('mmgr_member_community', function() {
         });
     }
 
-    function mmgrEscHtml(text) {
-        const d = document.createElement('div');
-        d.textContent = text;
-        return d.innerHTML;
+    // Moderator: Remove photo from a post
+    function removePostPhoto(postId) {
+        if (!confirm('Remove this photo from the post?')) return;
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=mmgr_forum_remove_photo&post_id=' + postId
+                + '&topic_id=<?php echo $selected_topic_id; ?>'
+                + '&nonce=<?php echo wp_create_nonce('mmgr_forum_mod_action'); ?>'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const photoDiv = document.getElementById('post-photo-' + postId);
+                if (photoDiv) photoDiv.remove();
+            } else {
+                alert('❌ ' + (data.data ? data.data.message : 'Failed to remove photo.'));
+            }
+        });
     }
 
     // Photo lightbox
@@ -3560,6 +3593,39 @@ add_action('wp_ajax_mmgr_forum_hide_post', function() {
     $wpdb->update($posts_tbl, array('hidden' => $hide ? 1 : 0), array('id' => $post_id));
     $msg = $hide ? 'Post hidden from public view.' : 'Post is now visible to all members.';
     wp_send_json_success(array('message' => $msg));
+});
+
+/**
+ * AJAX: Moderator – remove photo from a forum post
+ */
+add_action('wp_ajax_mmgr_forum_remove_photo', function() {
+    check_ajax_referer('mmgr_forum_mod_action', 'nonce');
+
+    $current = mmgr_get_current_member();
+    if (!$current) wp_send_json_error(array('message' => 'Not logged in'));
+
+    global $wpdb;
+    $post_id  = intval($_POST['post_id']);
+    $topic_id = intval($_POST['topic_id']);
+    $posts_tbl = $wpdb->prefix . 'membership_forum_posts';
+    $mods_tbl  = $wpdb->prefix . 'membership_forum_topic_mods';
+
+    // Verify moderator
+    $is_mod = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $mods_tbl WHERE topic_id = %d AND member_id = %d",
+        $topic_id, $current['id']
+    ));
+    if (!$is_mod) wp_send_json_error(array('message' => 'Permission denied.'));
+
+    // Verify post belongs to the topic
+    $post_exists = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $posts_tbl WHERE id = %d AND topic_id = %d",
+        $post_id, $topic_id
+    ));
+    if (!$post_exists) wp_send_json_error(array('message' => 'Post not found.'));
+
+    $wpdb->update($posts_tbl, array('photo_url' => ''), array('id' => $post_id));
+    wp_send_json_success(array('message' => 'Photo removed.'));
 });
 
 /**

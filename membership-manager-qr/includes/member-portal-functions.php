@@ -101,7 +101,7 @@ function mmgr_create_portal_tables() {
 
     // Migration: add 'hidden' column to forum posts table if missing
     $forum_posts_tbl = $wpdb->prefix . 'membership_forum_posts';
-    $hidden_col = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '$forum_posts_tbl' AND column_name = 'hidden'");
+    $hidden_col = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '" . esc_sql($forum_posts_tbl) . "' AND column_name = 'hidden'");
     if (empty($hidden_col)) {
         $wpdb->query("ALTER TABLE `$forum_posts_tbl` ADD COLUMN `hidden` TINYINT(1) NOT NULL DEFAULT 0");
     }
