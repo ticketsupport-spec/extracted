@@ -1293,7 +1293,7 @@ add_shortcode('mmgr_member_community', function() {
                             $target_is_suspended = !empty($post['forum_suspended']) && !empty($post['forum_suspended_until']) && strtotime($post['forum_suspended_until']) > time();
                             $target_is_banned    = !empty($post['forum_banned']);
                             ?>
-                            <div style="border:2px solid <?php echo ($is_moderator && $is_hidden) ? '#ff9800' : '#f0f0f0'; ?>;border-radius:8px;padding:20px;background:<?php echo ($is_moderator && $is_hidden) ? '#fff8e7' : '#fafafa'; ?>;flex-shrink:0;">
+                            <div style="border:2px solid <?php echo ($is_moderator && $is_hidden) ? '#dc3232' : '#f0f0f0'; ?>;border-radius:8px;padding:20px;background:<?php echo ($is_moderator && $is_hidden) ? '#ffeaea' : '#fafafa'; ?>;flex-shrink:0;">
                                 <!-- Post Header -->
                                 <div style="display:flex;align-items:center;gap:15px;margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid #e0e0e0;">
                                     <?php if (!empty($post['member_photo'])): ?>
@@ -1335,7 +1335,7 @@ add_shortcode('mmgr_member_community', function() {
                                                 <span style="background:#ff9800;color:white;padding:2px 8px;border-radius:10px;font-size:11px;" title="Suspended until <?php echo esc_attr($sus_until); ?>">⏸️ Suspended</span>
                                             <?php endif; ?>
                                             <?php if ($is_moderator && $is_hidden): ?>
-                                                <span style="background:#888;color:white;padding:2px 8px;border-radius:10px;font-size:11px;">🙈 Hidden</span>
+                                                <span style="background:#dc3232;color:white;padding:2px 8px;border-radius:10px;font-size:11px;">🙈 Hidden</span>
                                             <?php endif; ?>
                                         </div>                                 
                                         <br>
