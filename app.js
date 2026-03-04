@@ -196,4 +196,24 @@
   btnCheckin.addEventListener('click', handleCheckin);
 
   memberNameInput.addEventListener('input', updateCheckinButton);
+
+  // ── Push notification permission prompt ───────────────────────────────────────
+
+  function requestNotificationPermission() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'granted' || Notification.permission === 'denied') return;
+
+    var btn = document.createElement('button');
+    btn.id = 'btn-enable-notifications';
+    btn.textContent = '🔔 Enable Notifications';
+    document.body.appendChild(btn);
+
+    btn.addEventListener('click', function () {
+      Notification.requestPermission().finally(function () {
+        btn.remove();
+      });
+    });
+  }
+
+  requestNotificationPermission();
 }());
