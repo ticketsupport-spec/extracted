@@ -1334,12 +1334,13 @@ add_shortcode('mmgr_member_community', function() {
                                 </div>
                                 <?php endif; ?>
                                 
-                                <!-- Post Photo -->
+                                <!-- Post Photo (thumbnail → lightbox) -->
                                 <?php if (!empty($post['photo_url'])): ?>
                                     <div style="margin-top:15px;">
-                                        <a href="<?php echo esc_url($post['photo_url']); ?>" target="_blank">
-                                            <img src="<?php echo esc_url($post['photo_url']); ?>" style="max-width:100%;height:auto;border-radius:8px;border:2px solid #e0e0e0;" alt="Post photo">
-                                        </a>
+                                        <img src="<?php echo esc_url($post['photo_url']); ?>"
+                                             alt="Post photo"
+                                             onclick="openPhotoLightbox('<?php echo esc_js($post['photo_url']); ?>')"
+                                             style="max-width:150px;max-height:150px;object-fit:cover;border-radius:8px;border:2px solid #e0e0e0;cursor:pointer;">
                                     </div>
                                 <?php endif; ?>
                                 
@@ -1584,7 +1585,34 @@ add_shortcode('mmgr_member_community', function() {
             }
         });
     }
-</script>		
+
+    // Photo lightbox
+    function openPhotoLightbox(url) {
+        const lb = document.getElementById('mmgr-photo-lightbox');
+        const img = document.getElementById('mmgr-lightbox-img');
+        img.src = url;
+        lb.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    function closePhotoLightbox() {
+        const lb = document.getElementById('mmgr-photo-lightbox');
+        lb.style.display = 'none';
+        document.getElementById('mmgr-lightbox-img').src = '';
+        document.body.style.overflow = '';
+    }
+</script>
+
+<!-- Photo Lightbox Overlay -->
+<div id="mmgr-photo-lightbox"
+     onclick="if(event.target===this)closePhotoLightbox();"
+     style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:99999;align-items:center;justify-content:center;">
+    <div style="position:relative;max-width:90vw;max-height:90vh;">
+        <button onclick="closePhotoLightbox()"
+                style="position:absolute;top:-14px;right:-14px;width:30px;height:30px;border-radius:50%;background:#FF2197;color:white;border:none;font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;">✕</button>
+        <img id="mmgr-lightbox-img" src="" alt="Full size photo"
+             style="max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px;display:block;">
+    </div>
+</div>
     <?php
     return ob_get_clean();
 });
