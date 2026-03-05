@@ -143,6 +143,18 @@ function mmgr_create_portal_tables() {
         INDEX idx_post_id (post_id)
     ) $charset_collate");
 
+    // Forum comment likes table
+    $comment_likes_tbl = $wpdb->prefix . 'membership_forum_comment_likes';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$comment_likes_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        comment_id INT NOT NULL,
+        liked_at DATETIME NOT NULL,
+        UNIQUE KEY unique_comment_like (member_id, comment_id),
+        INDEX idx_member_id (member_id),
+        INDEX idx_comment_id (comment_id)
+    ) $charset_collate");
+
     // Private member notes table (notes a viewer leaves on another member's profile, only visible to them)
     $member_notes_tbl = $wpdb->prefix . 'membership_member_notes';
     $wpdb->query("CREATE TABLE IF NOT EXISTS `$member_notes_tbl` (
