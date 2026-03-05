@@ -62,7 +62,7 @@ function mmgr_handle_checkin() {
     
     // Check for special event fee
     $special_fee = $wpdb->get_var($wpdb->prepare(
-        "SELECT fee_amount FROM {$wpdb->prefix}membership_fees WHERE fee_date = %s",
+        "SELECT fee_amount FROM {$wpdb->prefix}membership_special_fees WHERE event_date = %s AND active = 1",
         $today
     ));
     

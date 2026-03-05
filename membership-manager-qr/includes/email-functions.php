@@ -193,27 +193,6 @@ function mmgr_generate_qr_file($code) {
 
 
 
-
-
-// TEMPORARY DEBUG FUNCTION
-function mmgr_debug_token($token) {
-    $decoded = base64_decode($token);
-    $parts = explode('|', $decoded);
-    
-    if (count($parts) !== 2) {
-        error_log('MMGR Token Debug: Invalid format - parts count: ' . count($parts));
-        return;
-    }
-    
-    list($member_id, $token_value) = $parts;
-    $stored_token = get_transient('mmgr_portal_token_' . $member_id);
-    
-    error_log('MMGR Token Debug: Member ID: ' . $member_id);
-    error_log('MMGR Token Debug: Token from URL: ' . substr($token_value, 0, 10) . '...');
-    error_log('MMGR Token Debug: Stored token: ' . ($stored_token ? substr($stored_token, 0, 10) . '...' : 'NOT FOUND'));
-    error_log('MMGR Token Debug: Match: ' . ($stored_token === $token_value ? 'YES' : 'NO'));
-}
-
 /**
  * Log sent emails
  */

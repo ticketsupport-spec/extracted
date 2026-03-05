@@ -256,7 +256,7 @@ add_action('init', 'mmgr_create_portal_tables');
 
 /**
  * Verify member login
- * WRAPPED to prevent redeclaration - also in auth-functions.php
+
  */
 if (!function_exists('mmgr_verify_member_login')) {
     function mmgr_verify_member_login($email, $password) {
@@ -286,7 +286,7 @@ if (!function_exists('mmgr_verify_member_login')) {
 
 /**
  * Create member session
- * WRAPPED to prevent redeclaration - also in auth-functions.php
+
  */
 if (!function_exists('mmgr_create_member_session')) {
     function mmgr_create_member_session($member_id) {
@@ -339,7 +339,7 @@ if (!function_exists('mmgr_create_member_session')) {
 
 /**
  * Get current logged-in member
- * WRAPPED to prevent redeclaration - also in auth-functions.php
+
  */
 if (!function_exists('mmgr_get_current_member')) {
     function mmgr_get_current_member() {
@@ -373,7 +373,7 @@ if (!function_exists('mmgr_get_current_member')) {
 
 /**
  * Logout member
- * WRAPPED to prevent redeclaration - also in auth-functions.php
+
  */
 if (!function_exists('mmgr_logout_member')) {
     function mmgr_logout_member() {
@@ -407,7 +407,7 @@ if (!function_exists('mmgr_logout_member')) {
 
 /**
  * Check if member is logged in (for use in templates)
- * WRAPPED to prevent redeclaration - also in auth-functions.php
+
  */
 if (!function_exists('mmgr_is_member_logged_in')) {
     function mmgr_is_member_logged_in() {
@@ -435,12 +435,12 @@ function mmgr_get_member_visits($member_id, $limit = 20) {
 function mmgr_get_member_special_events($member_id) {
     global $wpdb;
     $visits_tbl = $wpdb->prefix . 'membership_visits';
-    $fees_tbl = $wpdb->prefix . 'membership_fees';
+    $fees_tbl = $wpdb->prefix . 'membership_special_fees';
     
     return $wpdb->get_results($wpdb->prepare(
-        "SELECT v.visit_time, v.daily_fee, f.event_name, f.description, f.fee_date
+        "SELECT v.visit_time, v.daily_fee, f.event_name, f.description, f.event_date
          FROM $visits_tbl v
-         INNER JOIN $fees_tbl f ON DATE(v.visit_time) = f.fee_date
+         INNER JOIN $fees_tbl f ON DATE(v.visit_time) = f.event_date
          WHERE v.member_id = %d
          ORDER BY v.visit_time DESC",
         $member_id
@@ -452,10 +452,10 @@ function mmgr_get_member_special_events($member_id) {
  */
 function mmgr_get_upcoming_special_events() {
     global $wpdb;
-    $fees_tbl = $wpdb->prefix . 'membership_fees';
+    $fees_tbl = $wpdb->prefix . 'membership_special_fees';
     
     return $wpdb->get_results(
-        "SELECT * FROM $fees_tbl WHERE fee_date >= CURDATE() ORDER BY fee_date ASC",
+        "SELECT * FROM $fees_tbl WHERE event_date >= CURDATE() AND active = 1 ORDER BY event_date ASC",
         ARRAY_A
     );
 }

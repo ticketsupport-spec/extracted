@@ -192,16 +192,13 @@ function mmgr_mark_messages_read($from_member_id, $to_member_id) {
     global $wpdb;
     $messages_table = $wpdb->prefix . 'membership_messages';
     
-    $wpdb->update(
-        $messages_table,
-        array('read_at' => current_time('mysql')),
-        array(
-            'from_member_id' => $from_member_id, 
-            'to_member_id' => $to_member_id
-        ),
-        array('%s'),
-        array('%d', '%d')
-    );
+    $wpdb->query($wpdb->prepare(
+        "UPDATE $messages_table SET read_at = %s
+         WHERE from_member_id = %d AND to_member_id = %d AND read_at IS NULL",
+        current_time('mysql'),
+        $from_member_id,
+        $to_member_id
+    ));
 }
 
 /**
@@ -458,13 +455,4 @@ function mmgr_send_welcome_pm($member_id) {
     ));
     
     return $result !== false;
-}
-
-/**
- * Get default welcome PM message
- */
-if (!function_exists('mmgr_get_default_welcome_pm')) {
-    function mmgr_get_default_welcome_pm() {
-        return "Welcome to " . get_bloginfo('name') . ", {first_name}!\n\nWe're excited to have you as a {membership_type} member. If you have any questions, feel free to reply to this message.\n\nBest regards,\nThe Team";
-    }
 }
