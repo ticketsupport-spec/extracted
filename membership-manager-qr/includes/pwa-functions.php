@@ -47,6 +47,7 @@ register_activation_hook(MMGR_PLUGIN_FILE, 'mmgr_pwa_on_activate');
 function mmgr_pwa_on_activate() {
     mmgr_pwa_add_rewrite_rules();
     flush_rewrite_rules();
+    mmgr_pwa_write_sw_file();
 }
 
 // Ensure rewrite rules are flushed whenever the plugin version changes (or on first
@@ -57,7 +58,114 @@ function mmgr_pwa_maybe_flush_rewrites() {
     if (get_option('mmgr_pwa_rewrites_flushed') !== MMGR_VERSION) {
         mmgr_pwa_add_rewrite_rules();
         flush_rewrite_rules();
+        mmgr_pwa_write_sw_file();
         update_option('mmgr_pwa_rewrites_flushed', MMGR_VERSION);
+    }
+}
+
+// Safety net: recreate the physical file on admin page loads if it was deleted.
+// Uses a transient so the filesystem check runs at most once per hour, keeping
+// overhead minimal even on busy sites.
+add_action('admin_init', 'mmgr_pwa_ensure_sw_file');
+function mmgr_pwa_ensure_sw_file() {
+    if (get_transient('mmgr_sw_file_ok')) {
+        return;
+    }
+    if (!file_exists(ABSPATH . 'mmgr-sw.js')) {
+        mmgr_pwa_write_sw_file();
+    }
+    set_transient('mmgr_sw_file_ok', 1, HOUR_IN_SECONDS);
+}
+
+// Remove the physical service-worker file on plugin deactivation.
+register_deactivation_hook(MMGR_PLUGIN_FILE, 'mmgr_pwa_remove_sw_file');
+function mmgr_pwa_remove_sw_file() {
+    $file = ABSPATH . 'mmgr-sw.js';
+    if (file_exists($file) && !unlink($file)) {
+        error_log('[MMGR PWA] Could not delete ' . $file);
+    }
+    delete_transient('mmgr_sw_file_ok');
+}
+
+/**
+ * Write a physical mmgr-sw.js to the WordPress document root.
+ *
+ * nginx (and any other web server that does not process .htaccess) serves
+ * static files directly, so WordPress rewrite rules alone are not enough to
+ * route /mmgr-sw.js through index.php. Writing the file to disk means the
+ * server can always find it, regardless of the server software or rewrite
+ * configuration.
+ */
+function mmgr_pwa_write_sw_file() {
+    $messages_url = esc_url(home_url('/member-messages/'));
+    $site_url     = esc_url(get_site_url());
+
+    // Build the file content – keep this in sync with mmgr_pwa_serve_sw().
+    $content = <<<JS
+'use strict';
+
+const MMGR_CACHE = 'mmgr-portal-v1';
+
+// Install: pre-cache the app shell page
+self.addEventListener('install', event => {
+    self.skipWaiting();
+});
+
+// Activate: remove stale caches, claim clients
+self.addEventListener('activate', event => {
+    event.waitUntil(
+        caches.keys().then(keys =>
+            Promise.all(keys.filter(k => k !== MMGR_CACHE).map(k => caches.delete(k)))
+        ).then(() => self.clients.claim())
+    );
+});
+
+// Push: receive and display notification
+self.addEventListener('push', event => {
+    if (!event.data) return;
+    let data = {};
+    try { data = event.data.json(); } catch (e) { data = { title: 'New Message', body: event.data.text() }; }
+
+    const title   = data.title  || 'New Message \uD83D\uDCAC';
+    const options = {
+        body:               data.body   || 'You have a new message',
+        icon:               '$site_url/mmgr-icon-192.png',
+        badge:              '$site_url/mmgr-icon-72.png',
+        tag:                data.tag    || 'mmgr-message',
+        data:               { url: data.url || '$messages_url' },
+        requireInteraction: true,
+        vibrate:            [200, 100, 200],
+    };
+
+    event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Notification click: open / focus the messages page
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    const target = (event.notification.data && event.notification.data.url)
+        ? event.notification.data.url
+        : '$messages_url';
+
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+            for (const c of list) {
+                if (c.url.includes('/member-') && 'focus' in c) {
+                    c.navigate(target);
+                    return c.focus();
+                }
+            }
+            if (clients.openWindow) return clients.openWindow(target);
+        })
+    );
+});
+JS;
+
+    if (file_put_contents(ABSPATH . 'mmgr-sw.js', $content) === false) {
+        error_log('[MMGR PWA] Could not write ' . ABSPATH . 'mmgr-sw.js – check directory permissions.');
+    } else {
+        // Let the safety-net transient expire naturally so it re-verifies next hour.
+        delete_transient('mmgr_sw_file_ok');
     }
 }
 
