@@ -33,6 +33,7 @@ add_action('plugins_loaded', function() {
 
 // Register activation hooks
 register_activation_hook(__FILE__, 'mmgr_create_tables');
+register_activation_hook(__FILE__, 'mmgr_migrate_columns');
 register_activation_hook(__FILE__, 'mmgr_create_plugin_pages');
 
 // Helper Functions
@@ -119,50 +120,80 @@ function mmgr_get_absolute_url($url) {
 function mmgr_newsletter_page() {
     global $wpdb;
     $tbl = $wpdb->prefix . 'memberships';
-    
-    $subscribers = $wpdb->get_results("SELECT id, first_name, last_name, email, phone, level, created_at FROM $tbl WHERE newsletter = 1 ORDER BY created_at DESC", ARRAY_A);
-    $total = count($subscribers);
-    
+
+    // Ensure the newsletter column exists (in case migration hasn't run yet)
+    if (!$wpdb->get_row("SHOW COLUMNS FROM `$tbl` LIKE 'newsletter'")) {
+        $wpdb->query("ALTER TABLE `$tbl` ADD COLUMN `newsletter` TINYINT(1) NOT NULL DEFAULT 0");
+    }
+    if (!$wpdb->get_row("SHOW COLUMNS FROM `$tbl` LIKE 'created_at'")) {
+        $wpdb->query("ALTER TABLE `$tbl` ADD COLUMN `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP");
+    }
+
+    $subscribers = $wpdb->get_results(
+        "SELECT id, first_name, last_name, email, phone, level, created_at
+         FROM $tbl
+         WHERE newsletter = 1
+         ORDER BY created_at DESC",
+        ARRAY_A
+    );
+
     echo '<div class="wrap">';
     echo '<h1>Newsletter Subscribers</h1>';
+
+    // Surface any database error to the admin
+    if ($wpdb->last_error) {
+        echo '<div class="notice notice-error"><p><strong>Database error:</strong> ' . esc_html($wpdb->last_error) . '</p></div>';
+    }
+
+    $total = is_array($subscribers) ? count($subscribers) : 0;
+
     echo '<p>Total subscribers: <strong>' . $total . '</strong></p>';
-    echo '<p><a href="' . admin_url('admin.php?mmgr_export_newsletter=1') . '" class="button button-primary">📥 Export to CSV</a></p>';
-    
+    echo '<p><a href="' . esc_url(wp_nonce_url(admin_url('admin.php?mmgr_export_newsletter=1'), 'mmgr_export_newsletter')) . '" class="button button-primary">📥 Export to CSV</a></p>';
+
     if ($total > 0) {
         echo '<table class="widefat"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Level</th><th>Subscribed</th></tr></thead><tbody>';
         foreach ($subscribers as $sub) {
+            $subscribed = !empty($sub['created_at']) ? date_i18n('M d, Y', strtotime($sub['created_at'])) : '—';
             echo '<tr>';
             echo '<td>' . esc_html($sub['first_name'] . ' ' . $sub['last_name']) . '</td>';
             echo '<td>' . esc_html($sub['email']) . '</td>';
             echo '<td>' . esc_html($sub['phone']) . '</td>';
             echo '<td>' . esc_html($sub['level']) . '</td>';
-            echo '<td>' . esc_html(date('M d, Y', strtotime($sub['created_at']))) . '</td>';
+            echo '<td>' . esc_html($subscribed) . '</td>';
             echo '</tr>';
         }
         echo '</tbody></table>';
     } else {
         echo '<p>No newsletter subscribers yet.</p>';
     }
-    
+
     echo '</div>';
 }
 
 add_action('admin_init', function() {
     if (isset($_GET['mmgr_export_newsletter']) && current_user_can('manage_options')) {
+        // Verify nonce
+        if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'mmgr_export_newsletter')) {
+            wp_die('Security check failed.');
+        }
+
         global $wpdb;
         $tbl = $wpdb->prefix . 'memberships';
-        $subscribers = $wpdb->get_results("SELECT email, first_name, last_name FROM $tbl WHERE newsletter = 1 ORDER BY email", ARRAY_A);
-        
+        $subscribers = $wpdb->get_results(
+            "SELECT email, first_name, last_name, phone, level FROM $tbl WHERE newsletter = 1 ORDER BY email",
+            ARRAY_A
+        );
+
         header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="newsletter-subscribers-'.date('Y-m-d').'.csv"');
-        
+        header('Content-Disposition: attachment; filename="newsletter-subscribers-' . current_time('Y-m-d') . '.csv"');
+
         $output = fopen('php://output', 'w');
-        fputcsv($output, array('Email', 'First Name', 'Last Name'));
-        
-        foreach ($subscribers as $sub) {
-            fputcsv($output, array($sub['email'], $sub['first_name'], $sub['last_name']));
+        fputcsv($output, array('Email', 'First Name', 'Last Name', 'Phone', 'Level'));
+
+        foreach ((array) $subscribers as $sub) {
+            fputcsv($output, array($sub['email'], $sub['first_name'], $sub['last_name'], $sub['phone'], $sub['level']));
         }
-        
+
         fclose($output);
         exit;
     }

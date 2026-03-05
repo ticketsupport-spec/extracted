@@ -572,6 +572,22 @@ function mmgr_settings_admin() {
                 endif;
             }
             ?>
+
+            <h3 style="margin-top:20px;">🔔 Push Notification — No Third Party Required</h3>
+            <p>Push notifications are built directly into this plugin using the <strong>Web Push standard</strong> (VAPID). <strong>No third-party service or subscription is needed.</strong></p>
+            <p>Notifications are delivered automatically when a member receives a private message. Here is how to ensure they work correctly:</p>
+            <ol style="list-style:decimal;margin-left:20px;line-height:2;">
+                <li><strong>HTTPS is required.</strong> Push notifications only work on sites served over <code>https://</code>. Plain <code>http://</code> will not work.</li>
+                <li><strong>Member must grant permission.</strong> On their first visit to the member portal a browser prompt will ask for notification permission. If a member previously tapped <em>"Block"</em> they must manually re-enable it:
+                    <ul style="list-style:disc;margin-left:20px;">
+                        <li><em>Chrome / Android:</em> Site settings → Notifications → Allow</li>
+                        <li><em>Safari / iPhone:</em> Settings app → Safari → (site) → Notifications → Allow. Requires iOS 16.4+ and the site must be added to the Home Screen first.</li>
+                        <li><em>Firefox:</em> Address bar lock icon → Permissions → Notifications → Allow</li>
+                    </ul>
+                </li>
+                <li><strong>Service worker must register.</strong> Visit <a href="<?php echo esc_url(home_url('/mmgr-sw.js')); ?>" target="_blank"><?php echo esc_html(home_url('/mmgr-sw.js')); ?></a> — it should show JavaScript, not a 404. If you see a 404, go to <em>Settings → Permalinks</em> and click <strong>Save Changes</strong> to flush rewrite rules.</li>
+                <li><strong>Active subscriptions above should be &gt; 0</strong> once at least one member has granted permission and visited the portal.</li>
+            </ol>
         </div>
 
         <hr>
