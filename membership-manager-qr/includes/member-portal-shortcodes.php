@@ -641,6 +641,13 @@ add_shortcode('mmgr_member_activity', function() {
 
     // Total received-like count (for Load More logic)
     $total_received_likes = mmgr_count_received_likes($member['id']);
+
+    // Get items this member has LIKED (sent likes), first 10 for the initial render.
+    $sent_likes_per_page = 10;
+    $sent_likes = mmgr_get_sent_likes($member['id'], 0, $sent_likes_per_page);
+
+    // Total sent-like count (for Load More logic)
+    $total_sent_likes = mmgr_count_sent_likes($member['id']);
     
     ob_start();
     ?>
@@ -684,6 +691,33 @@ add_shortcode('mmgr_member_activity', function() {
                             data-offset="<?php echo $received_likes_per_page; ?>"
                             data-nonce="<?php echo wp_create_nonce('mmgr_load_received_likes'); ?>"
                             style="background:white;color:#FF2197;border:1.5px solid #FF2197;padding:7px 22px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:bold;">
+                        Load More
+                    </button>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Things I Liked -->
+            <div class="mmgr-portal-card">
+                <h3>👍 Things I Liked</h3>
+                <div id="mmgr-sent-likes-list" style="max-height:300px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:6px;padding:15px;display:flex;flex-direction:column;gap:12px;">
+                    <?php if (empty($sent_likes)): ?>
+                        <p style="text-align:center;color:#999;font-size:13px;margin:40px 0;">
+                            You haven't liked anything yet
+                        </p>
+                    <?php else: ?>
+                        <?php foreach ($sent_likes as $like): ?>
+                            <?php echo mmgr_render_sent_like_item($like); ?>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+                <?php if ($total_sent_likes > $sent_likes_per_page): ?>
+                <div style="text-align:center;margin-top:12px;">
+                    <button id="mmgr-sent-likes-load-more"
+                            onclick="mmgrLoadMoreSentLikes(this)"
+                            data-offset="<?php echo $sent_likes_per_page; ?>"
+                            data-nonce="<?php echo wp_create_nonce('mmgr_load_sent_likes'); ?>"
+                            style="background:white;color:#9b51e0;border:1.5px solid #9b51e0;padding:7px 22px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:bold;">
                         Load More
                     </button>
                 </div>
@@ -789,6 +823,40 @@ add_shortcode('mmgr_member_activity', function() {
         .then(function(data) {
             if (data.success) {
                 var list = document.getElementById('mmgr-received-likes-list');
+                list.insertAdjacentHTML('beforeend', data.data.html);
+                if (data.data.has_more) {
+                    button.dataset.offset = data.data.next_offset;
+                    button.disabled = false;
+                    button.textContent = 'Load More';
+                } else {
+                    button.parentNode.removeChild(button);
+                }
+            } else {
+                button.disabled = false;
+                button.textContent = 'Load More';
+            }
+        })
+        .catch(function() {
+            button.disabled = false;
+            button.textContent = 'Load More';
+        });
+    }
+
+    function mmgrLoadMoreSentLikes(button) {
+        var offset = parseInt(button.dataset.offset, 10);
+        var nonce  = button.dataset.nonce;
+        button.disabled = true;
+        button.textContent = 'Loading…';
+
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'action=mmgr_load_sent_likes&offset=' + offset + '&nonce=' + encodeURIComponent(nonce)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                var list = document.getElementById('mmgr-sent-likes-list');
                 list.insertAdjacentHTML('beforeend', data.data.html);
                 if (data.data.has_more) {
                     button.dataset.offset = data.data.next_offset;

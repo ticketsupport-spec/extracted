@@ -697,3 +697,175 @@ add_action( 'wp_ajax_mmgr_load_received_likes', function() {
         'next_offset' => $offset + $per_page,
     ) );
 } );
+
+/**
+ * Get a paginated list of items that a member has liked (sent likes).
+ *
+ * Returns rows with: liked_at, like_type, context_id, context_label, target_member_id, target_alias, photo_url
+ *
+ * @param int $member_id  The member whose likes we are fetching.
+ * @param int $offset     Pagination offset.
+ * @param int $per_page   LIMIT for pagination.
+ * @return array
+ */
+function mmgr_get_sent_likes( $member_id, $offset = 0, $per_page = 10 ) {
+    global $wpdb;
+
+    $likes_tbl           = $wpdb->prefix . 'membership_likes';
+    $photo_likes_tbl     = $wpdb->prefix . 'membership_bio_photo_likes';
+    $bio_photos_tbl      = $wpdb->prefix . 'membership_bio_photos';
+    $post_likes_tbl      = $wpdb->prefix . 'membership_forum_post_likes';
+    $posts_tbl           = $wpdb->prefix . 'membership_forum_posts';
+    $topics_tbl          = $wpdb->prefix . 'membership_forum_topics';
+    $members_tbl         = $wpdb->prefix . 'memberships';
+
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT sl.liked_at, sl.like_type, sl.context_id, sl.context_label,
+                    sl.target_member_id, m.community_alias AS target_alias, m.community_photo_url AS photo_url
+             FROM (
+                 SELECT l.liked_at,
+                        'profile' AS like_type,
+                        l.liked_member_id AS context_id,
+                        NULL AS context_label,
+                        l.liked_member_id AS target_member_id
+                 FROM $likes_tbl l
+                 WHERE l.member_id = %d
+
+                 UNION ALL
+
+                 SELECT bpl.liked_at,
+                        'photo' AS like_type,
+                        bpl.photo_id AS context_id,
+                        NULL AS context_label,
+                        bp.member_id AS target_member_id
+                 FROM $photo_likes_tbl bpl
+                 JOIN $bio_photos_tbl bp ON bpl.photo_id = bp.id
+                 WHERE bpl.member_id = %d
+
+                 UNION ALL
+
+                 SELECT fpl.liked_at,
+                        'post' AS like_type,
+                        fp.topic_id AS context_id,
+                        t.topic_name AS context_label,
+                        fp.member_id AS target_member_id
+                 FROM $post_likes_tbl fpl
+                 JOIN $posts_tbl fp ON fpl.post_id = fp.id
+                 LEFT JOIN $topics_tbl t ON fp.topic_id = t.id
+                 WHERE fpl.member_id = %d
+             ) sl
+             LEFT JOIN $members_tbl m ON sl.target_member_id = m.id
+             ORDER BY sl.liked_at DESC
+             LIMIT %d OFFSET %d",
+            $member_id,
+            $member_id,
+            $member_id,
+            $per_page,
+            $offset
+        ),
+        ARRAY_A
+    );
+
+    return $rows ?: array();
+}
+
+/**
+ * Count total items a member has liked across all sources.
+ *
+ * @param int $member_id
+ * @return int
+ */
+function mmgr_count_sent_likes( $member_id ) {
+    global $wpdb;
+
+    $likes_tbl       = $wpdb->prefix . 'membership_likes';
+    $photo_likes_tbl = $wpdb->prefix . 'membership_bio_photo_likes';
+    $post_likes_tbl  = $wpdb->prefix . 'membership_forum_post_likes';
+
+    return
+        (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $likes_tbl WHERE member_id = %d",
+            $member_id
+        ) ) +
+        (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $photo_likes_tbl WHERE member_id = %d",
+            $member_id
+        ) ) +
+        (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $post_likes_tbl WHERE member_id = %d",
+            $member_id
+        ) );
+}
+
+/**
+ * Render a single "things I liked" list item as an HTML string.
+ *
+ * @param array $like  Row from mmgr_get_sent_likes().
+ * @return string
+ */
+function mmgr_render_sent_like_item( $like ) {
+    $alias    = esc_html( $like['target_alias'] ?: 'Member' );
+    $time_ago = human_time_diff( strtotime( $like['liked_at'] ), current_time( 'timestamp' ) ) . ' ago';
+
+    switch ( $like['like_type'] ) {
+        case 'photo':
+            $icon    = '📸';
+            $label   = $alias . "'s photo";
+            $link    = esc_url( home_url( '/member-community-profile/' ) . '?id=' . (int) $like['target_member_id'] );
+            $border  = '#FF2197';
+            break;
+        case 'post':
+            $icon       = '💬';
+            $topic_name = $like['context_label'] ? esc_html( mb_substr( $like['context_label'], 0, 30 ) ) : 'a post';
+            $label      = 'Post in ' . $topic_name . ' by ' . $alias;
+            $link       = esc_url( home_url( '/member-community/' ) . '?topic=' . (int) $like['context_id'] );
+            $border     = '#9b51e0';
+            break;
+        default: // 'profile'
+            $icon   = '❤️';
+            $label  = $alias . "'s profile";
+            $link   = esc_url( home_url( '/member-community-profile/' ) . '?id=' . (int) $like['context_id'] );
+            $border = '#0073aa';
+            break;
+    }
+
+    return '<div style="padding:10px;background:#f9f9f9;border-radius:6px;border-left:3px solid ' . $border . ';cursor:pointer;transition:all 0.3s;" onclick="window.location.href=\'' . $link . '\'">'
+        . '<div style="font-weight:bold;color:#333;font-size:14px;">' . $icon . ' ' . esc_html( $label ) . '</div>'
+        . '<div style="font-size:12px;color:#666;">' . esc_html( $time_ago ) . '</div>'
+        . '</div>';
+}
+
+/**
+ * AJAX: Load more sent likes (pagination for the activity page "Things I Liked" section).
+ */
+add_action( 'wp_ajax_nopriv_mmgr_load_sent_likes', function() { do_action( 'wp_ajax_mmgr_load_sent_likes' ); } );
+add_action( 'wp_ajax_mmgr_load_sent_likes', function() {
+    check_ajax_referer( 'mmgr_load_sent_likes', 'nonce' );
+
+    $member = mmgr_get_current_member();
+    if ( ! $member ) {
+        wp_send_json_error( 'Not logged in' );
+    }
+
+    $per_page = 10;
+    $offset   = absint( $_POST['offset'] );
+
+    $likes    = mmgr_get_sent_likes( $member['id'], $offset, $per_page + 1 );
+    $has_more = count( $likes ) > $per_page;
+    if ( $has_more ) {
+        array_pop( $likes );
+    }
+
+    ob_start();
+    foreach ( $likes as $like ) {
+        echo mmgr_render_sent_like_item( $like );
+    }
+    $html = ob_get_clean();
+
+    wp_send_json_success( array(
+        'html'        => $html,
+        'has_more'    => $has_more,
+        'next_offset' => $offset + $per_page,
+    ) );
+} );
