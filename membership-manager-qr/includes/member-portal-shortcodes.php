@@ -3629,6 +3629,7 @@ add_shortcode('mmgr_member_community_profile', function() {
 /**
  * AJAX: Save private member note
  */
+add_action('wp_ajax_nopriv_mmgr_save_member_note', function() { do_action('wp_ajax_mmgr_save_member_note'); });
 add_action('wp_ajax_mmgr_save_member_note', function() {
     check_ajax_referer('mmgr_save_member_note', 'nonce');
 
