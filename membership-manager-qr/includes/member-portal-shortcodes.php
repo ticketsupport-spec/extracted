@@ -621,18 +621,6 @@ add_shortcode('mmgr_member_activity', function() {
     
     $total_visits = count($visits);
     
-    // Get recent likes (last 30 days)
-    $likes_tbl = $wpdb->prefix . 'membership_likes';
-    $likes = $wpdb->get_results($wpdb->prepare(
-        "SELECT l.liked_at, m.id, m.community_alias 
-         FROM $likes_tbl l 
-         LEFT JOIN {$wpdb->prefix}memberships m ON l.liked_member_id = m.id 
-         WHERE l.member_id = %d AND l.liked_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-         ORDER BY l.liked_at DESC 
-         LIMIT 20",
-        $member['id']
-    ), ARRAY_A);
-    
     // Get recent forum posts (last 30 days)
     $posts_tbl = $wpdb->prefix . 'membership_forum_posts';
     $topics_tbl = $wpdb->prefix . 'membership_forum_topics';
@@ -646,18 +634,13 @@ add_shortcode('mmgr_member_activity', function() {
         $member['id']
     ), ARRAY_A);
 
-    // Get recent forum post likes (last 30 days)
-    $post_likes_tbl = $wpdb->prefix . 'membership_forum_post_likes';
-    $post_likes = $wpdb->get_results($wpdb->prepare(
-        "SELECT pl.liked_at, p.id as post_id, t.id as topic_id, t.topic_name
-         FROM $post_likes_tbl pl 
-         LEFT JOIN {$wpdb->prefix}membership_forum_posts p ON pl.post_id = p.id
-         LEFT JOIN {$wpdb->prefix}membership_forum_topics t ON p.topic_id = t.id 
-         WHERE pl.member_id = %d AND pl.liked_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-         ORDER BY pl.liked_at DESC 
-         LIMIT 20",
-        $member['id']
-    ), ARRAY_A);
+    // Get ALL likes this member has RECEIVED (profile likes + photo likes + post likes),
+    // sorted newest first, first 10 for the initial render.
+    $received_likes_per_page = 10;
+    $received_likes = mmgr_get_received_likes($member['id'], 0, $received_likes_per_page);
+
+    // Total received-like count (for Load More logic)
+    $total_received_likes = mmgr_count_received_likes($member['id']);
     
     ob_start();
     ?>
@@ -680,30 +663,31 @@ add_shortcode('mmgr_member_activity', function() {
                 </p>
             </div>
             
-            <!-- Recent Likes -->
+            <!-- Likes Received -->
             <div class="mmgr-portal-card">
-                <h3>❤️ Recent Likes</h3>
-                <div style="height: 250px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 15px;">
-                    <?php if (empty($likes)): ?>
-                        <p style="text-align: center; color: #999; font-size: 13px; margin: 40px 0;">
-                            No likes yet
+                <h3>❤️ Likes Received</h3>
+                <div id="mmgr-received-likes-list" style="max-height:300px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:6px;padding:15px;display:flex;flex-direction:column;gap:12px;">
+                    <?php if (empty($received_likes)): ?>
+                        <p style="text-align:center;color:#999;font-size:13px;margin:40px 0;">
+                            No likes received yet
                         </p>
                     <?php else: ?>
-                        <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <?php foreach ($likes as $like): ?>
-                                <div style="padding: 10px; background: #f9f9f9; border-radius: 6px; border-left: 3px solid #FF2197; cursor: pointer; transition: all 0.3s;" 
-                                     onclick="window.location.href='<?php echo home_url('/member-community-profile/'); ?>?id=<?php echo $like['id']; ?>'">
-                                    <div style="font-weight: bold; color: #9b51e0; font-size: 14px;">
-                                        ❤️ <?php echo esc_html($like['community_alias'] ?: 'Member'); ?>
-                                    </div>
-                                    <div style="font-size: 12px; color: #666;">
-                                        <?php echo human_time_diff(strtotime($like['liked_at']), current_time('timestamp')) . ' ago'; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
+                        <?php foreach ($received_likes as $like): ?>
+                            <?php echo mmgr_render_received_like_item($like); ?>
+                        <?php endforeach; ?>
                     <?php endif; ?>
                 </div>
+                <?php if ($total_received_likes > $received_likes_per_page): ?>
+                <div style="text-align:center;margin-top:12px;">
+                    <button id="mmgr-likes-load-more"
+                            onclick="mmgrLoadMoreLikes(this)"
+                            data-offset="<?php echo $received_likes_per_page; ?>"
+                            data-nonce="<?php echo wp_create_nonce('mmgr_load_received_likes'); ?>"
+                            style="background:white;color:#FF2197;border:1.5px solid #FF2197;padding:7px 22px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:bold;">
+                        Load More
+                    </button>
+                </div>
+                <?php endif; ?>
             </div>
             
             <!-- Recent Forum Posts -->
@@ -724,32 +708,6 @@ add_shortcode('mmgr_member_activity', function() {
                                     </div>
                                     <div style="font-size: 12px; color: #666;">
                                         <?php echo human_time_diff(strtotime($post['posted_at']), current_time('timestamp')) . ' ago'; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            
-            <!-- Recent Post Likes -->
-            <div class="mmgr-portal-card">
-                <h3>💗 Recent Post Likes</h3>
-                <div style="height: 250px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; padding: 15px;">
-                    <?php if (empty($post_likes)): ?>
-                        <p style="text-align: center; color: #999; font-size: 13px; margin: 40px 0;">
-                            No post likes yet
-                        </p>
-                    <?php else: ?>
-                        <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <?php foreach ($post_likes as $like): ?>
-                                <div style="padding: 10px; background: #f9f9f9; border-radius: 6px; border-left: 3px solid #FF2197; cursor: pointer; transition: all 0.3s;" 
-                                     onclick="window.location.href='<?php echo home_url('/member-community/'); ?>?topic=<?php echo $like['topic_id']; ?>'">
-                                    <div style="font-weight: bold; color: #9b51e0; font-size: 14px;">
-                                        💗 <?php echo esc_html(substr($like['topic_name'], 0, 20)); ?>...
-                                    </div>
-                                    <div style="font-size: 12px; color: #666;">
-                                        <?php echo human_time_diff(strtotime($like['liked_at']), current_time('timestamp')) . ' ago'; ?>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
@@ -815,11 +773,44 @@ add_shortcode('mmgr_member_activity', function() {
             <?php endif; ?>
         </div>
     </div>
+    <script>
+    function mmgrLoadMoreLikes(button) {
+        var offset = parseInt(button.dataset.offset, 10);
+        var nonce  = button.dataset.nonce;
+        button.disabled = true;
+        button.textContent = 'Loading…';
+
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'action=mmgr_load_received_likes&offset=' + offset + '&nonce=' + encodeURIComponent(nonce)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                var list = document.getElementById('mmgr-received-likes-list');
+                list.insertAdjacentHTML('beforeend', data.data.html);
+                if (data.data.has_more) {
+                    button.dataset.offset = data.data.next_offset;
+                    button.disabled = false;
+                    button.textContent = 'Load More';
+                } else {
+                    button.parentNode.removeChild(button);
+                }
+            } else {
+                button.disabled = false;
+                button.textContent = 'Load More';
+            }
+        })
+        .catch(function() {
+            button.disabled = false;
+            button.textContent = 'Load More';
+        });
+    }
+    </script>
     <?php
     return ob_get_clean();
 });
-
-
 
 /**
  * Member Profile Page - Update Info
@@ -3299,11 +3290,24 @@ add_shortcode('mmgr_member_community_profile', function() {
         ));
     }
 
-    // Get total likes this profile has received
-    $total_likes = (int) $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM {$wpdb->prefix}membership_likes WHERE liked_member_id = %d",
-        $profile_member_id
-    ));
+    // Get total likes this profile has received (all sources)
+    $total_likes =
+        (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}membership_likes WHERE liked_member_id = %d",
+            $profile_member_id
+        )) +
+        (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}membership_bio_photo_likes bpl
+             JOIN {$wpdb->prefix}membership_bio_photos bp ON bpl.photo_id = bp.id
+             WHERE bp.member_id = %d",
+            $profile_member_id
+        )) +
+        (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}membership_forum_post_likes fpl
+             JOIN {$wpdb->prefix}membership_forum_posts fp ON fpl.post_id = fp.id
+             WHERE fp.member_id = %d",
+            $profile_member_id
+        ));
     
     ob_start();
     ?>
