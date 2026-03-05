@@ -314,7 +314,7 @@ function mmgr_admin_page() {
                 }
                 echo '</td>';
                 echo '<td>'.esc_html($aff['expire_date']).'</td>';
-                echo '<td><a href="'.admin_url('admin.php?page=membership_manager&edit='.$aff['id']).'" class="button button-small">View</a></td>';
+                echo '<td><a href="'.admin_url('admin.php?page=membership_add&id='.$aff['id']).'" class="button button-small">View</a></td>';
                 echo '</tr>';
             }
             
@@ -498,7 +498,7 @@ function mmgr_admin_page() {
         echo "<td>".($m['last_visited'] ? esc_html(date('M d, Y', strtotime($m['last_visited']))) : "Never")."</td>";
         echo "<td style='text-align:center;'>{$aff_display}</td>";
 		echo "<td>";
-		echo "<a href='".admin_url('admin.php?page=membership_manager&edit='.$m['id'])."'>Edit</a> | ";
+		echo "<a href='".admin_url('admin.php?page=membership_add&id='.$m['id'])."'>Edit</a> | ";
 		echo "<a href='".home_url('/member-dashboard/?view_member='.$m['id'])."' target='_blank' style='color:#0073aa;font-weight:bold;'>👁️ View Portal</a> | ";
 		echo "<a href='".admin_url('admin.php?page=membership_manager&checkin='.$m['id'].'&nonce='.wp_create_nonce('checkin_member'))."'>Check-In</a> | ";
 		echo ($m['banned'] ? "<span style='color:red;'>🚫 BANNED</span>" : "<a href='".admin_url('admin.php?page=membership_manager&ban='.$m['id'])."'>Ban</a>");

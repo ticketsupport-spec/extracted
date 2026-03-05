@@ -165,7 +165,7 @@ function mmgr_admin_messages_page() {
                             <div style="font-size:13px;opacity:0.9;"><?php echo esc_html($active_member['email']); ?></div>
                         </div>
                         
-                        <a href="<?php echo admin_url('admin.php?page=membership_manager&edit=' . $active_member['id']); ?>" class="button button-secondary" style="background:rgba(255,255,255,0.2);border:none;color:white;">
+                        <a href="<?php echo admin_url('admin.php?page=membership_add&id=' . $active_member['id']); ?>" class="button button-secondary" style="background:rgba(255,255,255,0.2);border:none;color:white;">
                             👤 View Profile
                         </a>
                     </div>

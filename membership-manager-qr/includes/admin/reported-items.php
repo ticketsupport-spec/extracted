@@ -156,7 +156,7 @@ $active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'messages';
                         <tr>
                             <td>
                                 <?php if (!empty($r['reporter_id'])): ?>
-                                    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_manager&edit=' . $r['reporter_id'])); ?>" title="View reporter profile">
+                                    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_add&id=' . $r['reporter_id'])); ?>" title="View reporter profile">
                                         <?php echo esc_html($r['reporter_name'] ?: '(unknown)'); ?>
                                     </a>
                                 <?php else: ?>
@@ -168,7 +168,7 @@ $active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'messages';
                                     <em>Admin / Support</em>
                                 <?php elseif (!empty($r['sender_id'])): ?>
                                     <strong>
-                                        <a href="<?php echo esc_url(admin_url('admin.php?page=membership_manager&edit=' . $r['sender_id'])); ?>" title="View sender profile">
+                                        <a href="<?php echo esc_url(admin_url('admin.php?page=membership_add&id=' . $r['sender_id'])); ?>" title="View sender profile">
                                             <?php echo esc_html($r['sender_name'] ?: '(unknown)'); ?>
                                         </a>
                                     </strong>
@@ -180,7 +180,7 @@ $active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'messages';
                                 <?php if ($r['to_member_id'] == 0): ?>
                                     <em>Admin / Support</em>
                                 <?php elseif (!empty($r['recipient_id'])): ?>
-                                    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_manager&edit=' . $r['recipient_id'])); ?>">
+                                    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_add&id=' . $r['recipient_id'])); ?>">
                                         <?php echo esc_html($r['recipient_name'] ?: '(unknown)'); ?>
                                     </a>
                                 <?php else: ?>
@@ -201,7 +201,7 @@ $active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'messages';
                             <td style="white-space:nowrap;"><?php echo esc_html(date_i18n('M j, Y g:i A', strtotime($r['reported_at']))); ?></td>
                             <td style="white-space:nowrap;">
                                 <?php if (!empty($r['sender_id']) && $r['from_member_id'] != 0): ?>
-                                    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_manager&edit=' . $r['sender_id'])); ?>"
+                                    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_add&id=' . $r['sender_id'])); ?>"
                                        class="button button-small" style="margin-bottom:4px;display:inline-block;">👤 Sender Profile</a><br>
                                 <?php endif; ?>
                                 <form method="POST" style="display:inline;">
@@ -247,7 +247,7 @@ $active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'messages';
                         <tr>
                             <td>
                                 <?php if (!empty($r['reporter_id'])): ?>
-                                    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_manager&edit=' . $r['reporter_id'])); ?>" title="View reporter profile">
+                                    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_add&id=' . $r['reporter_id'])); ?>" title="View reporter profile">
                                         <?php echo esc_html($r['reporter_name'] ?: '(unknown)'); ?>
                                     </a>
                                 <?php else: ?>
@@ -257,7 +257,7 @@ $active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'messages';
                             <td>
                                 <?php if (!empty($r['author_id'])): ?>
                                     <strong>
-                                        <a href="<?php echo esc_url(admin_url('admin.php?page=membership_manager&edit=' . $r['author_id'])); ?>" title="View author profile">
+                                        <a href="<?php echo esc_url(admin_url('admin.php?page=membership_add&id=' . $r['author_id'])); ?>" title="View author profile">
                                             <?php echo esc_html($author_display); ?>
                                         </a>
                                     </strong>
@@ -288,7 +288,7 @@ $active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'messages';
                             <td style="white-space:nowrap;"><?php echo esc_html(date_i18n('M j, Y g:i A', strtotime($r['reported_at']))); ?></td>
                             <td style="white-space:nowrap;">
                                 <?php if (!empty($r['author_id'])): ?>
-                                    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_manager&edit=' . $r['author_id'])); ?>"
+                                    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_add&id=' . $r['author_id'])); ?>"
                                        class="button button-small" style="margin-bottom:4px;display:inline-block;">👤 Author Profile</a><br>
                                 <?php endif; ?>
                                 <?php if (!empty($r['topic_id'])): ?>

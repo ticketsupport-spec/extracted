@@ -425,7 +425,7 @@ add_shortcode('mmgr_member_dashboard', function() {
         <?php if ($admin_mode ?? false): ?>
             <div style="background:#ff9800;color:white;padding:15px;text-align:center;font-weight:bold;margin-bottom:20px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2);">
                 🔐 ADMIN MODE: Viewing as <?php echo esc_html($member['name']); ?> 
-                <a href="<?php echo admin_url('admin.php?page=membership_manager&edit=' . $member['id']); ?>" style="color:white;text-decoration:underline;margin-left:15px;">Edit Member</a>
+                <a href="<?php echo admin_url('admin.php?page=membership_add&id=' . $member['id']); ?>" style="color:white;text-decoration:underline;margin-left:15px;">Edit Member</a>
                 <a href="<?php echo admin_url('admin.php?page=membership_manager'); ?>" style="color:white;text-decoration:underline;margin-left:15px;">← Back to Admin</a>
             </div>
         <?php endif; ?>
