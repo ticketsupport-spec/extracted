@@ -19,6 +19,29 @@ function mmgr_card_requests_menu_label() {
     return 'Card Requests';
 }
 
+/**
+ * Build the "Reported Items(#)" submenu label with a pending count badge.
+ */
+function mmgr_reported_items_menu_label() {
+    global $wpdb;
+    $msg_reports_tbl   = $wpdb->prefix . 'membership_message_reports';
+    $post_reports_tbl  = $wpdb->prefix . 'membership_forum_post_reports';
+
+    $count = 0;
+
+    if ($wpdb->get_var("SHOW TABLES LIKE '$msg_reports_tbl'") === $msg_reports_tbl) {
+        $count += (int) $wpdb->get_var("SELECT COUNT(*) FROM `$msg_reports_tbl` WHERE status = 'pending'");
+    }
+    if ($wpdb->get_var("SHOW TABLES LIKE '$post_reports_tbl'") === $post_reports_tbl) {
+        $count += (int) $wpdb->get_var("SELECT COUNT(*) FROM `$post_reports_tbl` WHERE status = 'pending'");
+    }
+
+    if ($count > 0) {
+        return 'Reported Items <span class="awaiting-mod">' . $count . '</span>';
+    }
+    return 'Reported Items';
+}
+
 // Add admin menu
 add_action('admin_menu', function() {
     add_menu_page(
@@ -106,6 +129,18 @@ add_action('admin_menu', function() {
 		'membership_card_requests',
 		function() {
 			require_once MMGR_PLUGIN_DIR . 'includes/admin/card-requests.php';
+		}
+	);
+
+	// Reported Items with pending count badge
+	add_submenu_page(
+		'membership_manager',
+		'Reported Items',
+		mmgr_reported_items_menu_label(),
+		'manage_options',
+		'membership_reported_items',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/reported-items.php';
 		}
 	);
     

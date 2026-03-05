@@ -4,6 +4,7 @@ if (!defined('ABSPATH')) exit;
 global $wpdb;
 $messages_table = $wpdb->prefix . 'membership_messages';
 $members_table = $wpdb->prefix . 'memberships';
+$msg_reports_table = $wpdb->prefix . 'membership_message_reports';
 
 // Handle admin send message to all members
 if (isset($_POST['send_broadcast']) && isset($_POST['broadcast_nonce'])) {
@@ -31,27 +32,16 @@ if (isset($_POST['send_broadcast']) && isset($_POST['broadcast_nonce'])) {
     }
 }
 
-// Get reported messages
-$reported_messages = $wpdb->get_results(
-    "SELECT m.*, 
-     from_m.name as from_name, 
-     to_m.name as to_name
-     FROM $messages_table m
-     LEFT JOIN $members_table from_m ON m.from_member_id = from_m.id
-     LEFT JOIN $members_table to_m ON m.to_member_id = to_m.id
-     WHERE m.is_reported = 1
-     ORDER BY m.sent_at DESC",
-    ARRAY_A
-);
-
 // Get all images (for admin review)
 $all_images = $wpdb->get_results(
     "SELECT m.*, 
      from_m.name as from_name, 
-     to_m.name as to_name
+     to_m.name as to_name,
+     CASE WHEN r.id IS NOT NULL THEN 1 ELSE 0 END as has_pending_report
      FROM $messages_table m
      LEFT JOIN $members_table from_m ON m.from_member_id = from_m.id
      LEFT JOIN $members_table to_m ON m.to_member_id = to_m.id
+     LEFT JOIN $msg_reports_table r ON r.message_id = m.id AND r.status = 'pending'
      WHERE m.image_url IS NOT NULL AND m.image_url != ''
      ORDER BY m.sent_at DESC
      LIMIT 100",
@@ -61,7 +51,10 @@ $all_images = $wpdb->get_results(
 // Get statistics
 $total_messages = $wpdb->get_var("SELECT COUNT(*) FROM $messages_table");
 $total_images = $wpdb->get_var("SELECT COUNT(*) FROM $messages_table WHERE image_url IS NOT NULL AND image_url != ''");
-$reported_count = $wpdb->get_var("SELECT COUNT(*) FROM $messages_table WHERE is_reported = 1");
+$reported_count = 0;
+if ($wpdb->get_var("SHOW TABLES LIKE '$msg_reports_table'") === $msg_reports_table) {
+    $reported_count = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$msg_reports_table` WHERE status = 'pending'");
+}
 
 ?>
 <div class="wrap">
@@ -91,9 +84,10 @@ $reported_count = $wpdb->get_var("SELECT COUNT(*) FROM $messages_table WHERE is_
             <button class="mmgr-admin-tab active" onclick="showAdminTab('broadcast')" style="flex:1;padding:15px;border:none;background:none;cursor:pointer;font-weight:bold;border-bottom:3px solid #9b51e0;">
                 📢 Broadcast
             </button>
-            <button class="mmgr-admin-tab" onclick="showAdminTab('reported')" style="flex:1;padding:15px;border:none;background:none;cursor:pointer;font-weight:bold;">
-                🚩 Reported (<?php echo $reported_count; ?>)
-            </button>
+            <a href="<?php echo esc_url(admin_url('admin.php?page=membership_reported_items')); ?>"
+               style="flex:1;padding:15px;border:none;background:none;cursor:pointer;font-weight:bold;text-align:center;text-decoration:none;color:#d63638;display:flex;align-items:center;justify-content:center;gap:6px;">
+                🚩 Reported Items <?php if ($reported_count > 0): ?><span class="awaiting-mod"><?php echo $reported_count; ?></span><?php endif; ?>
+            </a>
             <button class="mmgr-admin-tab" onclick="showAdminTab('images')" style="flex:1;padding:15px;border:none;background:none;cursor:pointer;font-weight:bold;">
                 🖼️ All Images
             </button>
@@ -138,51 +132,6 @@ $reported_count = $wpdb->get_var("SELECT COUNT(*) FROM $messages_table WHERE is_
 		</div>
 		
         
-        <!-- Reported Messages Tab -->
-        <div id="reported-tab" class="mmgr-admin-tab-content" style="padding:30px;display:none;">
-            <h2>🚩 Reported Messages</h2>
-            
-            <?php if (empty($reported_messages)): ?>
-                <p style="text-align:center;padding:40px;color:#666;">
-                    No reported messages. Great! 🎉
-                </p>
-            <?php else: ?>
-                <table class="widefat" style="margin-top:20px;">
-                    <thead>
-                        <tr>
-                            <th>From</th>
-                            <th>To</th>
-                            <th>Message</th>
-                            <th>Reason</th>
-                            <th>Date</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($reported_messages as $msg): ?>
-                            <tr>
-                                <td><strong><?php echo esc_html($msg['from_name']); ?></strong></td>
-                                <td><?php echo esc_html($msg['to_name']); ?></td>
-                                <td style="max-width:300px;">
-                                    <?php echo esc_html(substr($msg['message'], 0, 100)) . (strlen($msg['message']) > 100 ? '...' : ''); ?>
-                                    <?php if (!empty($msg['image_url'])): ?>
-                                        <br><a href="<?php echo esc_url($msg['image_url']); ?>" target="_blank" style="color:#0073aa;">📎 View Image</a>
-                                    <?php endif; ?>
-                                </td>
-                                <td style="color:#d00;"><strong><?php echo esc_html($msg['report_reason']); ?></strong></td>
-                                <td><?php echo date('M j, Y g:i A', strtotime($msg['sent_at'])); ?></td>
-                                <td>
-                                    <a href="<?php echo admin_url('admin.php?page=membership_manager&edit=' . $msg['from_member_id']); ?>" class="button button-small">
-                                        View Sender
-                                    </a>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            <?php endif; ?>
-        </div>
-        
         <!-- All Images Tab -->
         <div id="images-tab" class="mmgr-admin-tab-content" style="padding:30px;display:none;">
             <h2>🖼️ All Shared Images</h2>
@@ -215,7 +164,7 @@ $reported_count = $wpdb->get_var("SELECT COUNT(*) FROM $messages_table WHERE is_
                                     </span>
                                 <?php endif; ?>
                                 
-                                <?php if ($img['is_reported']): ?>
+                                <?php if ($img['has_pending_report']): ?>
                                     <span style="background:#d00;color:white;padding:3px 8px;border-radius:10px;font-size:11px;margin-left:5px;">
                                         🚩 Reported
                                     </span>
@@ -260,14 +209,10 @@ function showAdminTab(tabName) {
         tabs[0].style.borderBottom = '3px solid #9b51e0';
         tabs[0].style.color = '#000';
         contents[0].style.display = 'block';
-    } else if (tabName === 'reported') {
+    } else if (tabName === 'images') {
         tabs[1].style.borderBottom = '3px solid #9b51e0';
         tabs[1].style.color = '#000';
         contents[1].style.display = 'block';
-    } else if (tabName === 'images') {
-        tabs[2].style.borderBottom = '3px solid #9b51e0';
-        tabs[2].style.color = '#000';
-        contents[2].style.display = 'block';
     }
 }
 </script>
