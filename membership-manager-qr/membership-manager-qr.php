@@ -35,7 +35,10 @@ add_action('plugins_loaded', function() {
 // Register activation hooks
 register_activation_hook(__FILE__, 'mmgr_create_tables');
 register_activation_hook(__FILE__, 'mmgr_migrate_columns');
-register_activation_hook(__FILE__, 'mmgr_create_plugin_pages');
+register_activation_hook(__FILE__, function() {
+    require_once MMGR_PLUGIN_DIR . 'includes/admin/settings-page.php';
+    mmgr_create_plugin_pages();
+});
 
 // Helper Functions
 function mmgr_generate_member_code($name) {
