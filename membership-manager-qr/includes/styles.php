@@ -122,6 +122,24 @@ add_action('wp_head', function() {
         }
     }
 
+    /* ============================================
+       UNREAD MESSAGE BADGE
+       ============================================ */
+    .mmgr-nav-unread-badge {
+        display: inline-block;
+        background: #FF2197;
+        color: #fff;
+        border-radius: 10px;
+        padding: 1px 7px;
+        font-size: 12px;
+        font-weight: bold;
+        min-width: 20px;
+        text-align: center;
+        margin-left: 4px;
+        vertical-align: middle;
+        line-height: 1.6;
+    }
+
 
 
     /* ============================================
@@ -1645,5 +1663,58 @@ add_action('admin_head', function() {
         }
     }
     </style>
+    <?php
+});
+
+// AJAX polling script for unread message count in portal navigation
+add_action('wp_footer', function() {
+    // Only output on pages that include the portal navigation
+    if (!function_exists('mmgr_get_current_member') || !mmgr_get_current_member()) {
+        return;
+    }
+    ?>
+    <script>
+    (function() {
+        var navBadge = document.getElementById('mmgr-nav-unread-badge');
+        var msgBadge = document.getElementById('mmgr-messages-unread-badge');
+
+        // Only run on pages with the portal navigation
+        if (!navBadge && !msgBadge) return;
+
+        var ajaxUrl = '<?php echo esc_url(admin_url('admin-ajax.php')); ?>';
+
+        function mmgrUpdateUnreadBadges(count) {
+            var label = count > 0 ? '(' + count + ')' : '';
+            var show  = count > 0;
+
+            if (navBadge) {
+                navBadge.textContent = label;
+                navBadge.style.display = show ? 'inline-block' : 'none';
+            }
+            if (msgBadge) {
+                msgBadge.textContent = label;
+                msgBadge.style.display = show ? 'inline-block' : 'none';
+            }
+        }
+
+        function mmgrFetchUnreadCount() {
+            var formData = new FormData();
+            formData.append('action', 'mmgr_get_unread_count');
+
+            fetch(ajaxUrl, { method: 'POST', body: formData })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data && data.success && typeof data.data.count !== 'undefined') {
+                        mmgrUpdateUnreadBadges(parseInt(data.data.count, 10));
+                    }
+                })
+                .catch(function() { /* Network error – will retry on next interval. */ });
+        }
+
+        // Initial check and then every 30 seconds
+        mmgrFetchUnreadCount();
+        setInterval(mmgrFetchUnreadCount, 30000);
+    })();
+    </script>
     <?php
 });

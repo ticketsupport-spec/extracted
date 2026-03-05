@@ -303,3 +303,26 @@ add_action('wp_ajax_mmgr_admin_load_more_messages', function() {
 add_action('wp_ajax_nopriv_mmgr_admin_load_more_messages', function() {
     wp_send_json_error(array('message' => 'Permission denied'));
 });
+
+// AJAX: Get total unread private message count for the current portal member
+add_action('wp_ajax_mmgr_get_unread_count', 'mmgr_ajax_get_unread_count');
+add_action('wp_ajax_nopriv_mmgr_get_unread_count', 'mmgr_ajax_get_unread_count');
+
+function mmgr_ajax_get_unread_count() {
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Not logged in'));
+        return;
+    }
+
+    global $wpdb;
+    $messages_table = $wpdb->prefix . 'membership_messages';
+
+    $count = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $messages_table
+         WHERE to_member_id = %d AND read_at IS NULL AND deleted_by_receiver = 0",
+        $member['id']
+    ));
+
+    wp_send_json_success(array('count' => $count));
+}
