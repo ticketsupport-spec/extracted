@@ -308,14 +308,47 @@ function mmgr_create_tables() {
 }
 
 /**
+ * Add columns that were introduced after the initial schema.
+ * Uses ALTER TABLE … ADD COLUMN so existing tables get patched without
+ * data loss. Safe to call repeatedly – each check is guarded by SHOW COLUMNS.
+ */
+function mmgr_migrate_columns() {
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'memberships';
+
+    // Bail if the memberships table doesn't exist yet.
+    if ($wpdb->get_var("SHOW TABLES LIKE '$tbl'") !== $tbl) {
+        return;
+    }
+
+    // newsletter column (required for the Newsletter Subscribers admin page)
+    if (!$wpdb->get_row("SHOW COLUMNS FROM `$tbl` LIKE 'newsletter'")) {
+        $wpdb->query("ALTER TABLE `$tbl` ADD COLUMN `newsletter` TINYINT(1) NOT NULL DEFAULT 0");
+    }
+
+    // created_at column (displayed in the newsletter admin page subscriber list)
+    if (!$wpdb->get_row("SHOW COLUMNS FROM `$tbl` LIKE 'created_at'")) {
+        $wpdb->query("ALTER TABLE `$tbl` ADD COLUMN `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP");
+    }
+
+    // updated_at column
+    if (!$wpdb->get_row("SHOW COLUMNS FROM `$tbl` LIKE 'updated_at'")) {
+        $wpdb->query("ALTER TABLE `$tbl` ADD COLUMN `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+    }
+
+    update_option('mmgr_db_version', '1.1.0');
+}
+
+/**
  * Check and update database schema on plugin load
  */
 function mmgr_check_database() {
     $current_version = get_option('mmgr_db_version', '0.0.0');
-    $required_version = '1.0.0';
+    $required_version = '1.1.0';
     
     if (version_compare($current_version, $required_version, '<')) {
         mmgr_create_tables();
+        mmgr_migrate_columns();
     }
 }
 

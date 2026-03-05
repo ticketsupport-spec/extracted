@@ -108,6 +108,17 @@ add_action('admin_menu', function() {
         'membership_special_fees',
         'mmgr_special_fees_page'
     );
+
+	add_submenu_page(
+		'membership_manager',
+		'Upcoming Events',
+		'Upcoming Events',
+		'manage_options',
+		'membership_events',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/events-page.php';
+		}
+	);
 	
 	add_submenu_page(
 		'membership_manager',
