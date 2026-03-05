@@ -1752,6 +1752,12 @@ add_shortcode('mmgr_member_community', function() {
                                         <?php echo $target_is_banned ? '✓ Unban' : '⛔ Forum Ban'; ?>
                                     </button>
                                     <?php endif; ?>
+                                    <?php if (!$is_own_post): ?>
+                                    <button onclick="reportForumPost(<?php echo $post['id']; ?>, '<?php echo esc_js($display_name); ?>')"
+                                            style="background:white;color:#999;border:2px solid #ddd;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;margin-left:auto;">
+                                        🚩 Report
+                                    </button>
+                                    <?php endif; ?>
                                 </div>
 
                                 <!-- Comments Section -->
@@ -2152,6 +2158,27 @@ add_shortcode('mmgr_member_community', function() {
         lb.style.display = 'none';
         document.getElementById('mmgr-lightbox-img').src = '';
         document.body.style.overflow = '';
+    }
+
+    // Report a forum post
+    function reportForumPost(postId, memberName) {
+        const reason = prompt('Why are you reporting this post by ' + memberName + '?\n(Your report will be reviewed by an admin.)');
+        if (!reason || reason.trim() === '') return;
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=mmgr_report_forum_post&post_id=' + postId
+                + '&reason=' + encodeURIComponent(reason.trim())
+                + '&nonce=<?php echo wp_create_nonce('mmgr_report_forum_post'); ?>'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('✅ Report submitted. Thank you — an admin will review it.');
+            } else {
+                alert('❌ ' + (data.data ? data.data.message : 'Could not submit report.'));
+            }
+        });
     }
 </script>
 
@@ -4342,6 +4369,55 @@ add_action('wp_ajax_mmgr_add_post_comment', function() {
         'comment'   => $comment,
         'posted_at' => date_i18n('M j, Y @ g:i A', current_time('timestamp')),
     ));
+});
+
+/**
+ * AJAX: Any member – report a forum post
+ */
+add_action('wp_ajax_nopriv_mmgr_report_forum_post', function() { do_action('wp_ajax_mmgr_report_forum_post'); });
+add_action('wp_ajax_mmgr_report_forum_post', function() {
+    check_ajax_referer('mmgr_report_forum_post', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Not logged in.'));
+    }
+
+    global $wpdb;
+    $post_id = intval($_POST['post_id']);
+    $reason  = sanitize_textarea_field($_POST['reason'] ?? '');
+
+    if (empty($reason)) {
+        wp_send_json_error(array('message' => 'Please provide a reason for the report.'));
+    }
+
+    $posts_tbl   = $wpdb->prefix . 'membership_forum_posts';
+    $reports_tbl = $wpdb->prefix . 'membership_forum_post_reports';
+
+    // Verify post exists
+    $post = $wpdb->get_row($wpdb->prepare("SELECT id, member_id FROM $posts_tbl WHERE id = %d", $post_id), ARRAY_A);
+    if (!$post) {
+        wp_send_json_error(array('message' => 'Post not found.'));
+    }
+
+    // Prevent reporting own posts
+    if ($post['member_id'] == $member['id']) {
+        wp_send_json_error(array('message' => 'You cannot report your own post.'));
+    }
+
+    $result = $wpdb->insert($reports_tbl, array(
+        'post_id'     => $post_id,
+        'reported_by' => $member['id'],
+        'reason'      => $reason,
+        'reported_at' => current_time('mysql'),
+        'status'      => 'pending',
+    ));
+
+    if ($result) {
+        wp_send_json_success(array('message' => 'Report submitted successfully.'));
+    } else {
+        wp_send_json_error(array('message' => 'Failed to submit report.'));
+    }
 });
 
 /**

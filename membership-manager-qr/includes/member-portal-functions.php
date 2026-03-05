@@ -231,6 +231,20 @@ function mmgr_create_portal_tables() {
         INDEX idx_expires_at (expires_at)
     ) $charset_collate;";
     
+    // Forum post reports table
+    $forum_post_reports_tbl = $wpdb->prefix . 'membership_forum_post_reports';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$forum_post_reports_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        post_id INT NOT NULL,
+        reported_by INT NOT NULL,
+        reason TEXT NOT NULL,
+        reported_at DATETIME NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        INDEX idx_post_id (post_id),
+        INDEX idx_reported_by (reported_by),
+        INDEX idx_status (status)
+    ) $charset_collate");
+
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql_card);
     dbDelta($sql_forum);
