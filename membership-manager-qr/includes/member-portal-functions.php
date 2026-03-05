@@ -167,6 +167,18 @@ function mmgr_create_portal_tables() {
         INDEX idx_sort (member_id, sort_order)
     ) $charset_collate");
 
+    // Bio photo likes table (members liking individual bio photos)
+    $bio_photo_likes_tbl = $wpdb->prefix . 'membership_bio_photo_likes';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$bio_photo_likes_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        photo_id INT NOT NULL,
+        liked_at DATETIME NOT NULL,
+        UNIQUE KEY unique_photo_like (member_id, photo_id),
+        INDEX idx_member_id (member_id),
+        INDEX idx_photo_id (photo_id)
+    ) $charset_collate");
+
     // Card requests table
     $card_requests_tbl = $wpdb->prefix . 'mmgr_card_requests';
     $sql_card = "CREATE TABLE IF NOT EXISTS $card_requests_tbl (

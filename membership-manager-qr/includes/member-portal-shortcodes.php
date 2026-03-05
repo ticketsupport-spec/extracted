@@ -3400,20 +3400,66 @@ add_shortcode('mmgr_member_community_profile', function() {
         <?php
         $bio_photos_tbl2  = $wpdb->prefix . 'membership_bio_photos';
         $profile_bio_photos = $wpdb->get_results($wpdb->prepare(
-            "SELECT photo_url FROM $bio_photos_tbl2 WHERE member_id = %d ORDER BY sort_order ASC, id ASC",
+            "SELECT id, photo_url FROM $bio_photos_tbl2 WHERE member_id = %d ORDER BY sort_order ASC, id ASC",
             $profile_member_id
         ), ARRAY_A);
         if (!empty($profile_bio_photos)):
+            // Collect photo IDs for bulk like-count query
+            $bio_photo_ids = array_map('intval', array_column($profile_bio_photos, 'id'));
+            $bio_photo_likes_tbl = $wpdb->prefix . 'membership_bio_photo_likes';
+            $id_placeholders = implode(',', array_fill(0, count($bio_photo_ids), '%d'));
+
+            // Get like counts per photo
+            $photo_like_counts_raw = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT photo_id, COUNT(*) AS like_count FROM $bio_photo_likes_tbl WHERE photo_id IN ($id_placeholders) GROUP BY photo_id",
+                    ...$bio_photo_ids
+                ), ARRAY_A
+            );
+            $photo_like_counts = array();
+            foreach ($photo_like_counts_raw as $row) {
+                $photo_like_counts[$row['photo_id']] = (int) $row['like_count'];
+            }
+
+            // Get which photos the current member has liked
+            $my_photo_likes = array();
+            if ($current_member) {
+                $liked_rows = $wpdb->get_results(
+                    $wpdb->prepare(
+                        "SELECT photo_id FROM $bio_photo_likes_tbl WHERE member_id = %d AND photo_id IN ($id_placeholders)",
+                        array_merge(array($current_member['id']), $bio_photo_ids)
+                    ), ARRAY_A
+                );
+                foreach ($liked_rows as $row) {
+                    $my_photo_likes[$row['photo_id']] = true;
+                }
+            }
         ?>
         <div class="mmgr-portal-card" style="margin-top:20px;">
             <h2>📸 Photos</h2>
-            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;">
-                <?php foreach ($profile_bio_photos as $bp): ?>
-                <img src="<?php echo esc_url($bp['photo_url']); ?>"
-                     onclick="openPhotoLightbox('<?php echo esc_js($bp['photo_url']); ?>')"
-                     style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #e0e0e0;cursor:pointer;transition:transform 0.2s;"
-                     onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"
-                     alt="Bio photo">
+            <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;">
+                <?php foreach ($profile_bio_photos as $bp):
+                    $pid        = (int) $bp['id'];
+                    $plikes     = isset($photo_like_counts[$pid]) ? $photo_like_counts[$pid] : 0;
+                    $p_is_liked = !empty($my_photo_likes[$pid]);
+                ?>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                    <img src="<?php echo esc_url($bp['photo_url']); ?>"
+                         onclick="openPhotoLightbox('<?php echo esc_js($bp['photo_url']); ?>')"
+                         style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #e0e0e0;cursor:pointer;transition:transform 0.2s;"
+                         onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"
+                         alt="Bio photo">
+                    <div style="display:flex;align-items:center;gap:5px;">
+                        <?php if ($profile_member_id != $current_member['id']): ?>
+                        <button onclick="togglePhotoLike(<?php echo $pid; ?>, this)"
+                                data-liked="<?php echo $p_is_liked ? '1' : '0'; ?>"
+                                style="background:<?php echo $p_is_liked ? '#FF2197' : 'white'; ?>;color:<?php echo $p_is_liked ? 'white' : '#FF2197'; ?>;border:1.5px solid #FF2197;padding:3px 10px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:bold;">
+                            ❤️ <?php echo $p_is_liked ? 'Unlike' : 'Like'; ?>
+                        </button>
+                        <?php endif; ?>
+                        <span id="photo-like-count-<?php echo $pid; ?>" style="font-size:13px;color:#888;"><?php echo $plikes; ?> ❤️</span>
+                    </div>
+                </div>
                 <?php endforeach; ?>
             </div>
         </div>
@@ -3542,6 +3588,35 @@ add_shortcode('mmgr_member_community_profile', function() {
             document.getElementById('mmgr-profile-lb-img').src = url;
             lb.style.display = 'flex';
         }
+
+        function togglePhotoLike(photoId, button) {
+            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: 'action=mmgr_toggle_photo_like&photo_id=' + photoId + '&nonce=<?php echo wp_create_nonce('mmgr_toggle_photo_like'); ?>'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const liked = data.data.liked;
+                    button.textContent = liked ? '❤️ Unlike' : '❤️ Like';
+                    button.style.background = liked ? '#FF2197' : 'white';
+                    button.style.color = liked ? 'white' : '#FF2197';
+                    button.dataset.liked = liked ? '1' : '0';
+                    const countEl = document.getElementById('photo-like-count-' + photoId);
+                    if (countEl) {
+                        countEl.textContent = data.data.like_count + ' ❤️';
+                    }
+                } else {
+                    alert('❌ ' + data.data);
+                }
+            })
+            .catch(error => {
+                alert('❌ Error: ' + error);
+            });
+        }
     </script>
     <?php
     return ob_get_clean();
@@ -3608,6 +3683,70 @@ add_action('wp_ajax_mmgr_save_member_note', function() {
     }
 
     wp_send_json_success();
+});
+
+/**
+ * AJAX: Toggle bio photo like
+ */
+add_action('wp_ajax_nopriv_mmgr_toggle_photo_like', function() { do_action('wp_ajax_mmgr_toggle_photo_like'); });
+add_action('wp_ajax_mmgr_toggle_photo_like', function() {
+    check_ajax_referer('mmgr_toggle_photo_like', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error('Not logged in');
+    }
+
+    $photo_id = intval($_POST['photo_id']);
+    if ($photo_id <= 0) {
+        wp_send_json_error('Invalid photo');
+    }
+
+    global $wpdb;
+    $bio_photo_likes_tbl = $wpdb->prefix . 'membership_bio_photo_likes';
+    $bio_photos_tbl      = $wpdb->prefix . 'membership_bio_photos';
+
+    // Verify photo exists and does not belong to the current member (can't like own photos)
+    $photo = $wpdb->get_row($wpdb->prepare(
+        "SELECT id, member_id FROM $bio_photos_tbl WHERE id = %d",
+        $photo_id
+    ), ARRAY_A);
+    if (!$photo) {
+        wp_send_json_error('Photo not found');
+    }
+    if ((int) $photo['member_id'] === (int) $member['id']) {
+        wp_send_json_error('Cannot like your own photo');
+    }
+
+    // Toggle like
+    $is_liked = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $bio_photo_likes_tbl WHERE member_id = %d AND photo_id = %d",
+        $member['id'],
+        $photo_id
+    ));
+
+    if ($is_liked) {
+        $wpdb->delete($bio_photo_likes_tbl, array(
+            'member_id' => $member['id'],
+            'photo_id'  => $photo_id,
+        ));
+    } else {
+        $wpdb->insert($bio_photo_likes_tbl, array(
+            'member_id' => $member['id'],
+            'photo_id'  => $photo_id,
+            'liked_at'  => current_time('mysql'),
+        ));
+    }
+
+    $like_count = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $bio_photo_likes_tbl WHERE photo_id = %d",
+        $photo_id
+    ));
+
+    wp_send_json_success(array(
+        'liked'      => !$is_liked,
+        'like_count' => $like_count,
+    ));
 });
 
 add_action('wp_ajax_nopriv_mmgr_get_member_alias', function() { do_action('wp_ajax_mmgr_get_member_alias'); });
