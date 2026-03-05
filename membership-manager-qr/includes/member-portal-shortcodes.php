@@ -159,8 +159,12 @@ add_shortcode('mmgr_password_setup', function() {
                     // Delete token ONLY after successful password setup
                     delete_transient('mmgr_portal_token_' . $member_id);
                     
-                    // Auto-login
-                    mmgr_create_member_session($member_id);
+                    // Auto-login: look up the member's email to store in the session
+                    // so the cross-account security check works correctly.
+                    global $wpdb;
+                    $members_tbl   = $wpdb->prefix . 'memberships';
+                    $member_email  = $wpdb->get_var($wpdb->prepare("SELECT email FROM `$members_tbl` WHERE id = %d", $member_id));
+                    mmgr_create_member_session($member_id, $member_email ?: '');
                     
                     $success = true;
                 } else {
@@ -267,12 +271,15 @@ add_shortcode('mmgr_member_login', function() {
             $result = mmgr_verify_member_login($email, $password);
             
             if (is_array($result) && isset($result['error']) && $result['error'] === 'no_password') {
+                mmgr_log_login_attempt($email, $result['member_id'], $email, false, 'no_password');
                 $error = 'You haven\'t set up your password yet. Please check your email for the setup link.';
             } elseif ($result) {
-                mmgr_create_member_session($result['id']);
+                mmgr_log_login_attempt($email, $result['id'], $result['email'], true);
+                mmgr_create_member_session($result['id'], $email);
                 wp_redirect(home_url('/member-dashboard/'));
                 exit;
             } else {
+                mmgr_log_login_attempt($email, null, null, false, 'invalid_credentials');
                 $error = 'Invalid email or password.';
             }
         }

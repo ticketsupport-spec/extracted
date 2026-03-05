@@ -154,6 +154,18 @@ add_action('admin_menu', function() {
 			require_once MMGR_PLUGIN_DIR . 'includes/admin/reported-items.php';
 		}
 	);
+
+	// Login Audit Logs
+	add_submenu_page(
+		'membership_manager',
+		'Login Logs',
+		'Login Logs',
+		'manage_options',
+		'membership_login_logs',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/login-logs.php';
+		}
+	);
     
     add_submenu_page(
         'membership_manager',

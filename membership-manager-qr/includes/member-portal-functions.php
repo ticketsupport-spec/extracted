@@ -222,6 +222,7 @@ function mmgr_create_portal_tables() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         member_id INT NOT NULL,
         session_token VARCHAR(64) NOT NULL,
+        login_email VARCHAR(255) DEFAULT NULL,
         created_at DATETIME NOT NULL,
         expires_at DATETIME NOT NULL,
         ip_address VARCHAR(45),
@@ -245,14 +246,74 @@ function mmgr_create_portal_tables() {
         INDEX idx_status (status)
     ) $charset_collate");
 
+    // Login audit log table
+    $login_logs_tbl = $wpdb->prefix . 'mmgr_login_logs';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$login_logs_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        login_email VARCHAR(255) NOT NULL,
+        member_id INT DEFAULT NULL,
+        member_email VARCHAR(255) DEFAULT NULL,
+        email_match TINYINT(1) DEFAULT NULL,
+        success TINYINT(1) NOT NULL DEFAULT 0,
+        failure_reason VARCHAR(100) DEFAULT NULL,
+        ip_address VARCHAR(45) DEFAULT NULL,
+        user_agent VARCHAR(255) DEFAULT NULL,
+        logged_at DATETIME NOT NULL,
+        INDEX idx_login_email (login_email),
+        INDEX idx_member_id (member_id),
+        INDEX idx_logged_at (logged_at),
+        INDEX idx_success (success)
+    ) $charset_collate");
+
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql_card);
     dbDelta($sql_forum);
     dbDelta($sql_sessions);
+
+    // Migration: add login_email column to existing sessions table if missing
+    $sessions_tbl = $wpdb->prefix . 'mmgr_member_sessions';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$sessions_tbl'") === $sessions_tbl) {
+        $col = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($sessions_tbl) . "' AND column_name = 'login_email'");
+        if (empty($col)) {
+            $wpdb->query("ALTER TABLE `$sessions_tbl` ADD COLUMN `login_email` VARCHAR(255) DEFAULT NULL");
+        }
+    }
 }
 
 // Run on plugin activation
 add_action('init', 'mmgr_create_portal_tables');
+
+/**
+ * Log a login attempt to the audit log.
+ */
+if (!function_exists('mmgr_log_login_attempt')) {
+    function mmgr_log_login_attempt($login_email, $member_id, $member_email, $success, $failure_reason = null) {
+        global $wpdb;
+        $tbl = $wpdb->prefix . 'mmgr_login_logs';
+
+        // Guard: table may not exist on very first request before init runs.
+        if ($wpdb->get_var("SHOW TABLES LIKE '$tbl'") !== $tbl) {
+            return;
+        }
+
+        $email_match = null;
+        if ($member_email !== null) {
+            $email_match = (strtolower(trim($login_email)) === strtolower(trim($member_email))) ? 1 : 0;
+        }
+
+        $wpdb->insert($tbl, array(
+            'login_email'    => sanitize_email($login_email),
+            'member_id'      => $member_id,
+            'member_email'   => $member_email,
+            'email_match'    => $email_match,
+            'success'        => $success ? 1 : 0,
+            'failure_reason' => $failure_reason,
+            'ip_address'     => isset($_SERVER['REMOTE_ADDR']) && filter_var($_SERVER['REMOTE_ADDR'], FILTER_VALIDATE_IP) ? $_SERVER['REMOTE_ADDR'] : '',
+            'user_agent'     => isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field(substr($_SERVER['HTTP_USER_AGENT'], 0, 255)) : '',
+            'logged_at'      => current_time('mysql'),
+        ));
+    }
+}
 
 /**
  * Verify member login
@@ -289,7 +350,7 @@ if (!function_exists('mmgr_verify_member_login')) {
 
  */
 if (!function_exists('mmgr_create_member_session')) {
-    function mmgr_create_member_session($member_id) {
+    function mmgr_create_member_session($member_id, $login_email = '') {
         global $wpdb;
         $sessions_tbl = $wpdb->prefix . 'mmgr_member_sessions';
         
@@ -307,14 +368,16 @@ if (!function_exists('mmgr_create_member_session')) {
         // Clean old sessions for this member
         $wpdb->delete($sessions_tbl, array('member_id' => $member_id));
         
-        // Create new session
+        // Create new session, storing the email used to authenticate so we can
+        // verify it matches the member profile email on every subsequent request.
         $wpdb->insert($sessions_tbl, array(
-            'member_id' => $member_id,
-            'session_token' => $token,
-            'created_at' => current_time('mysql'),
-            'expires_at' => date('Y-m-d H:i:s', strtotime('+30 days')),
-            'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '',
-            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? ''
+            'member_id'    => $member_id,
+            'session_token'=> $token,
+            'login_email'  => sanitize_email($login_email),
+            'created_at'   => current_time('mysql'),
+            'expires_at'   => date('Y-m-d H:i:s', strtotime('+30 days')),
+            'ip_address'   => isset($_SERVER['REMOTE_ADDR']) && filter_var($_SERVER['REMOTE_ADDR'], FILTER_VALIDATE_IP) ? $_SERVER['REMOTE_ADDR'] : '',
+            'user_agent'   => isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field(substr($_SERVER['HTTP_USER_AGENT'], 0, 255)) : '',
         ));
         
         // Set cookie with Secure, HttpOnly, and SameSite=Strict to prevent CSRF and
@@ -366,6 +429,20 @@ if (!function_exists('mmgr_get_current_member')) {
             "SELECT * FROM $members_tbl WHERE id = %d",
             $session['member_id']
         ), ARRAY_A);
+
+        if (!$member) {
+            return null;
+        }
+
+        // Security check: the email used to authenticate must match the email on the
+        // member profile.  A mismatch means the session is cross-contaminated (e.g.,
+        // a stale cookie from a different account), so we invalidate it immediately.
+        if (!empty($session['login_email']) &&
+            strtolower(trim($session['login_email'])) !== strtolower(trim($member['email']))) {
+            // Destroy the compromised session.
+            $wpdb->delete($sessions_tbl, array('session_token' => $token));
+            return null;
+        }
         
         return $member;
     }
