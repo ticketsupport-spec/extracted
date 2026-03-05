@@ -112,6 +112,18 @@ function mmgr_settings_admin() {
     // Enqueue media uploader scripts before any HTML output
     wp_enqueue_media();
 
+    // Handle "Log Everyone Out" – clear all member session tokens
+    if (isset($_POST['mmgr_logout_everyone']) && isset($_POST['mmgr_logout_everyone_nonce']) && wp_verify_nonce($_POST['mmgr_logout_everyone_nonce'], 'mmgr_logout_everyone') && current_user_can('manage_options')) {
+        global $wpdb;
+        $table = esc_sql($wpdb->prefix . 'memberships');
+        $result = $wpdb->query("UPDATE $table SET session_token = NULL, session_expires = NULL WHERE session_token IS NOT NULL");
+        if ($result !== false) {
+            echo '<div class="notice notice-success"><p>✓ All members have been logged out and their session cookies invalidated.</p></div>';
+        } else {
+            echo '<div class="notice notice-error"><p>✕ Could not invalidate sessions. Please try again.</p></div>';
+        }
+    }
+
     // Handle PWA icon save (separate form, only saves the icon ID)
     if (isset($_POST['mmgr_save_pwa_icon']) && isset($_POST['mmgr_pwa_icon_nonce']) && wp_verify_nonce($_POST['mmgr_pwa_icon_nonce'], 'mmgr_pwa_icon') && current_user_can('manage_options')) {
         update_option('mmgr_pwa_icon_id', isset($_POST['mmgr_pwa_icon_id']) ? absint($_POST['mmgr_pwa_icon_id']) : 0);
@@ -549,6 +561,17 @@ function mmgr_settings_admin() {
             <input type="email" name="test_email_address" class="regular-text" placeholder="your-email@example.com" required>
             <button type="submit" name="send_test_email" class="button">📤 Send Test Email</button>
         </form>
+
+        <hr>
+        <h2>🔒 Security</h2>
+        <div style="background:#fff5f5;padding:20px;border-radius:6px;border-left:4px solid #d63638;margin-bottom:20px;">
+            <h3 style="margin-top:0;color:#d63638;">Log Everyone Out</h3>
+            <p>Immediately invalidate <strong>all active member sessions</strong>. Every logged-in member will be required to sign in again on their next visit.</p>
+            <form method="post" onsubmit="return confirm('Are you sure you want to log out ALL members? This will invalidate every active session immediately.');">
+                <?php wp_nonce_field('mmgr_logout_everyone', 'mmgr_logout_everyone_nonce'); ?>
+                <button type="submit" name="mmgr_logout_everyone" class="button button-large" style="background:#d63638;border-color:#d63638;color:#fff;">🚪 Log Everyone Out</button>
+            </form>
+        </div>
     </div>
     <?php
 }
