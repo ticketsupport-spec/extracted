@@ -1397,10 +1397,11 @@ add_shortcode('mmgr_member_community', function() {
     global $wpdb;
     $posts_tbl       = $wpdb->prefix . 'membership_forum_posts';
     $topics_tbl      = $wpdb->prefix . 'membership_forum_topics';
-    $post_likes_tbl  = $wpdb->prefix . 'membership_forum_post_likes';
-    $topic_mods_tbl  = $wpdb->prefix . 'membership_forum_topic_mods';
-    $post_hist_tbl   = $wpdb->prefix . 'membership_forum_post_history';
-    $comments_tbl    = $wpdb->prefix . 'membership_forum_post_comments';
+    $post_likes_tbl     = $wpdb->prefix . 'membership_forum_post_likes';
+    $topic_mods_tbl     = $wpdb->prefix . 'membership_forum_topic_mods';
+    $post_hist_tbl      = $wpdb->prefix . 'membership_forum_post_history';
+    $comments_tbl       = $wpdb->prefix . 'membership_forum_post_comments';
+    $comment_likes_tbl  = $wpdb->prefix . 'membership_forum_comment_likes';
     
     $success = $error = '';
     
@@ -1521,11 +1522,16 @@ add_shortcode('mmgr_member_community', function() {
         $placeholders = implode(',', array_fill(0, count($post_ids), '%d'));
         $all_comments = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT c.*, m.name as member_name, m.community_alias
+                "SELECT c.*, m.name as member_name, m.community_alias,
+                        COUNT(DISTINCT cl.id) as like_count,
+                        SUM(CASE WHEN cl.member_id = %d THEN 1 ELSE 0 END) as user_liked
                  FROM $comments_tbl c
                  JOIN {$wpdb->prefix}memberships m ON c.member_id = m.id
+                 LEFT JOIN $comment_likes_tbl cl ON c.id = cl.comment_id
                  WHERE c.post_id IN ($placeholders)
+                 GROUP BY c.id
                  ORDER BY c.posted_at ASC",
+                $member['id'],
                 ...$post_ids
             ),
             ARRAY_A
@@ -1769,6 +1775,13 @@ add_shortcode('mmgr_member_community', function() {
                                                         <strong><?php echo esc_html($cmt_author); ?></strong>
                                                         <span style="color:#999;font-size:12px;margin-left:8px;"><?php echo date_i18n('M j, Y @ g:i A', strtotime($cmt['posted_at'])); ?></span>
                                                         <div style="margin-top:4px;color:#333;white-space:pre-wrap;"><?php echo esc_html($cmt['comment']); ?></div>
+                                                        <div style="margin-top:6px;">
+                                                            <button onclick="toggleCommentLike(<?php echo intval($cmt['id']); ?>, this)"
+                                                                    class="mmgr-comment-like-btn <?php echo !empty($cmt['user_liked']) ? 'liked' : ''; ?>"
+                                                                    style="background:<?php echo !empty($cmt['user_liked']) ? '#FF2197' : 'white'; ?>;color:<?php echo !empty($cmt['user_liked']) ? 'white' : '#FF2197'; ?>;border:2px solid #FF2197;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;">
+                                                                ❤️ Like (<?php echo intval($cmt['like_count']); ?>)
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 <?php endforeach; ?>
                                             <?php endif; ?>
@@ -1849,6 +1862,34 @@ add_shortcode('mmgr_member_community', function() {
         });
     }
     
+    // Like Comment
+    function toggleCommentLike(commentId, button) {
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: 'action=mmgr_toggle_comment_like&comment_id=' + commentId + '&nonce=<?php echo wp_create_nonce('mmgr_toggle_comment_like'); ?>'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.data.liked) {
+                    button.classList.add('liked');
+                    button.style.background = '#FF2197';
+                    button.style.color = 'white';
+                } else {
+                    button.classList.remove('liked');
+                    button.style.background = 'white';
+                    button.style.color = '#FF2197';
+                }
+                button.textContent = '❤️ Like (' + data.data.like_count + ')';
+            } else {
+                alert('❌ ' + data.data.message);
+            }
+        });
+    }
+
     // Like Post
     function togglePostLike(postId, button) {
         fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
@@ -2055,9 +2096,18 @@ add_shortcode('mmgr_member_community', function() {
                 const bodyDiv = document.createElement('div');
                 bodyDiv.style.cssText = 'margin-top:4px;color:#333;white-space:pre-wrap;';
                 bodyDiv.textContent = data.data.comment;
+                const likeDiv = document.createElement('div');
+                likeDiv.style.cssText = 'margin-top:6px;';
+                const likeBtn = document.createElement('button');
+                likeBtn.className = 'mmgr-comment-like-btn';
+                likeBtn.style.cssText = 'background:white;color:#FF2197;border:2px solid #FF2197;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;';
+                likeBtn.textContent = '❤️ Like (0)';
+                likeBtn.setAttribute('onclick', 'toggleCommentLike(' + data.data.comment_id + ', this)');
+                likeDiv.appendChild(likeBtn);
                 div.appendChild(strong);
                 div.appendChild(timeSpan);
                 div.appendChild(bodyDiv);
+                div.appendChild(likeDiv);
                 list.appendChild(div);
                 const countSpan = document.getElementById('comment-count-' + postId);
                 if (countSpan) countSpan.textContent = parseInt(countSpan.textContent || '0') + 1;
@@ -3890,6 +3940,57 @@ add_action('wp_ajax_mmgr_toggle_post_like', function() {
 });
 
 /**
+ * Toggle Comment Like via AJAX
+ */
+add_action('wp_ajax_nopriv_mmgr_toggle_comment_like', function() { do_action('wp_ajax_mmgr_toggle_comment_like'); });
+add_action('wp_ajax_mmgr_toggle_comment_like', function() {
+    check_ajax_referer('mmgr_toggle_comment_like', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Not logged in'));
+    }
+
+    $comment_id = intval($_POST['comment_id']);
+
+    global $wpdb;
+    $comment_likes_tbl = $wpdb->prefix . 'membership_forum_comment_likes';
+
+    // Check if already liked
+    $is_liked = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $comment_likes_tbl WHERE member_id = %d AND comment_id = %d",
+        $member['id'],
+        $comment_id
+    ));
+
+    if ($is_liked) {
+        // Unlike
+        $wpdb->delete($comment_likes_tbl, array(
+            'member_id'  => $member['id'],
+            'comment_id' => $comment_id
+        ));
+    } else {
+        // Like
+        $wpdb->insert($comment_likes_tbl, array(
+            'member_id'  => $member['id'],
+            'comment_id' => $comment_id,
+            'liked_at'   => current_time('mysql')
+        ));
+    }
+
+    // Get updated like count
+    $like_count = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $comment_likes_tbl WHERE comment_id = %d",
+        $comment_id
+    ));
+
+    wp_send_json_success(array(
+        'liked'      => !$is_liked,
+        'like_count' => $like_count
+    ));
+});
+
+/**
  * Edit Forum Post via AJAX (author only)
  */
 add_action('wp_ajax_nopriv_mmgr_edit_forum_post', function() { do_action('wp_ajax_mmgr_edit_forum_post'); });
@@ -4232,9 +4333,11 @@ add_action('wp_ajax_mmgr_add_post_comment', function() {
         'posted_at' => current_time('mysql'),
     ));
 
+    $comment_id = $wpdb->insert_id;
     $display_name = !empty($member['community_alias']) ? $member['community_alias'] : $member['name'];
 
     wp_send_json_success(array(
+        'comment_id' => $comment_id,
         'author'    => $display_name,
         'comment'   => $comment,
         'posted_at' => date_i18n('M j, Y @ g:i A', current_time('timestamp')),
