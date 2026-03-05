@@ -2,12 +2,11 @@
 if (!defined('ABSPATH')) exit;
 
 function mmgr_admin_page() {
-    mmgr_ensure_tables_exist();
     global $wpdb;
     $tbl = $wpdb->prefix."memberships";
     $levels_tbl = $wpdb->prefix."membership_levels";
     $visits_tbl = $wpdb->prefix."membership_visits";
-    $fees_tbl = $wpdb->prefix."membership_fees";
+    $fees_tbl = $wpdb->prefix."membership_special_fees";
     $levels = $wpdb->get_results("SELECT * FROM $levels_tbl ORDER BY id",ARRAY_A);
     $editing = isset($_GET['edit']);
     $success = $error = false;
@@ -25,7 +24,7 @@ function mmgr_admin_page() {
         if ($member && !$member['banned']) {
             // Get available fees for today
             $today = date('Y-m-d');
-            $special_fee = $wpdb->get_row($wpdb->prepare("SELECT * FROM $fees_tbl WHERE fee_date=%s", $today), ARRAY_A);
+            $special_fee = $wpdb->get_row($wpdb->prepare("SELECT * FROM $fees_tbl WHERE event_date=%s AND active=1", $today), ARRAY_A);
             $standard_fee = mmgr_get_daily_fee($member['level']);
             
             // Show fee selection modal
@@ -273,9 +272,8 @@ function mmgr_admin_page() {
     <tr><th scope="row"><label for="photo">Photo</label></th><td><?php if (!empty($row['photo_url'])): ?><img src="<?php echo esc_url($row['photo_url']); ?>" style="max-width:90px;display:block;margin-bottom:8px;" alt="Member photo"><?php endif; ?><input type="text" name="photo_url" id="photo" value="<?php echo esc_attr($row['photo_url'] ?? ''); ?>" class="regular-text"><button type="button" onclick="mmgrUploadPhoto(this)" class="button">Upload</button></td></tr>
     <tr><th scope="row"><label for="newsletter">Newsletter</label></th><td><input type="checkbox" name="newsletter" id="newsletter" value="1" <?php echo !empty($row['newsletter'])?'checked':''; ?>></td></tr>
     <tr><th scope="row"><label for="agreed">Agreed to Terms</label></th><td><input type="checkbox" name="agreed_terms" id="agreed" value="1" <?php echo !empty($row['agreed_terms'])?'checked':''; ?>></td></tr>
-    <tr><th scope="row"><label for="notes">Notes</label></th><td><textarea name="notes" id="notes" class="large-text" rows="4"><?php echo esc_textarea($row['notes'] ?? ''); ?></textarea></td></tr>
     <tr><th scope="row"><label for="paid">Paid</label></th><td><input type="checkbox" name="paid" id="paid" value="1" <?php echo !empty($row['paid'])?'checked':''; ?>></td></tr>
-    <tr><th scope="row"><label for="amount">Amount Paid ($)</label></th><td><input name="amount_paid" id="amount" type="number" step="0.01" min="0" value="<?php echo esc_attr($row['payment_amount'] ?? 0); ?>"></td></tr>
+    <tr><th scope="row"><label for="amount_paid">Amount Paid ($)</label></th><td><input name="amount_paid" id="amount_paid" type="number" step="0.01" min="0" value="<?php echo esc_attr($row['payment_amount'] ?? 0); ?>"></td></tr>
     </tbody></table>
     </div>
     <?php wp_nonce_field('mmgr_save', 'member_nonce'); ?>

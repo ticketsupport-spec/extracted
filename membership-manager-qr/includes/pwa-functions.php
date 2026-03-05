@@ -49,6 +49,17 @@ function mmgr_pwa_on_activate() {
     flush_rewrite_rules();
 }
 
+// Ensure rewrite rules are flushed once after (re-)activation or plugin updates.
+// Without this, /mmgr-sw.js returns 404 and the service worker never registers.
+add_action('admin_init', 'mmgr_pwa_maybe_flush_rewrites');
+function mmgr_pwa_maybe_flush_rewrites() {
+    if (!get_option('mmgr_pwa_rewrites_flushed')) {
+        mmgr_pwa_add_rewrite_rules();
+        flush_rewrite_rules();
+        update_option('mmgr_pwa_rewrites_flushed', 1);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Service Worker
 // ---------------------------------------------------------------------------
@@ -336,7 +347,13 @@ function mmgr_pwa_inject_head() {
         if (isIOS && !isStandalone) return;
 
         reg.pushManager.getSubscription().then(function(existing) {
-            if (existing) return; // already subscribed
+            if (existing) {
+                // Subscription already exists in the browser — ensure it is also
+                // persisted in the database (handles the case where a previous
+                // save attempt failed, e.g. before the nopriv AJAX hook existed).
+                mmgrSaveSubscription(existing);
+                return;
+            }
 
             if (isIOS) {
                 // iOS requires Notification.requestPermission() to be initiated
@@ -956,7 +973,8 @@ function mmgr_pwa_inject_install_banner() {
 
 
 
-add_action('wp_ajax_mmgr_save_push_subscription', 'mmgr_ajax_save_push_subscription');
+add_action('wp_ajax_mmgr_save_push_subscription',        'mmgr_ajax_save_push_subscription');
+add_action('wp_ajax_nopriv_mmgr_save_push_subscription', 'mmgr_ajax_save_push_subscription');
 function mmgr_ajax_save_push_subscription() {
     check_ajax_referer('mmgr_save_push_subscription', 'nonce');
 

@@ -4,108 +4,128 @@ if (!defined('ABSPATH')) exit;
 /**
  * Create plugin pages with shortcodes
  */
-if (!function_exists('mmgr_create_plugin_pages')) {
-    function mmgr_create_plugin_pages() {
-        $pages = array(
-            array(
-                'title' => 'Member Registration',
-                'slug' => 'member-registration',
-                'content' => '[membership_registration]',
-                'option' => 'mmgr_page_registration'
-            ),
-            array(
-                'title' => 'Member Check-In',
-                'slug' => 'member-checkin',
-                'content' => '[membership_checkin]',
-                'option' => 'mmgr_page_checkin'
-            ),
-            array(
-                'title' => 'Code of Conduct',
-                'slug' => 'code-of-conduct',
-                'content' => '[membership_code_of_conduct]',
-                'option' => 'mmgr_page_coc'
-            ),
-            array(
-                'title' => 'Member Setup',
-                'slug' => 'member-setup',
-                'content' => '[mmgr_password_setup]',
-                'option' => 'mmgr_page_setup'
-            ),
-            array(
-                'title' => 'Member Login',
-                'slug' => 'member-login',
-                'content' => '[mmgr_member_login]',
-                'option' => 'mmgr_page_login'
-            ),
-            array(
-                'title' => 'Member Dashboard',
-                'slug' => 'member-dashboard',
-                'content' => '[mmgr_member_dashboard]',
-                'option' => 'mmgr_page_dashboard'
-            ),
-            array(
-                'title' => 'Member Activity',
-                'slug' => 'member-activity',
-                'content' => '[mmgr_member_activity]',
-                'option' => 'mmgr_page_activity'
-            ),
-            array(
-                'title' => 'Member Profile',
-                'slug' => 'member-profile',
-                'content' => '[mmgr_member_profile]',
-                'option' => 'mmgr_page_profile'
-            ),
-            array(
-                'title' => 'Member Community',
-                'slug' => 'member-community',
-                'content' => '[mmgr_member_community]',
-                'option' => 'mmgr_page_community'
-            ),
-            array(
-                'title' => 'Member Messages',
-                'slug' => 'member-messages',
-                'content' => '[mmgr_member_messages]',
-                'option' => 'mmgr_page_messages'
-            )
-        );
+function mmgr_create_plugin_pages() {
+    $pages = array(
+        array(
+            'title' => 'Member Registration',
+            'slug' => 'member-registration',
+            'content' => '[membership_registration]',
+            'option' => 'mmgr_page_registration'
+        ),
+        array(
+            'title' => 'Member Check-In',
+            'slug' => 'member-checkin',
+            'content' => '[membership_checkin]',
+            'option' => 'mmgr_page_checkin'
+        ),
+        array(
+            'title' => 'Code of Conduct',
+            'slug' => 'code-of-conduct',
+            'content' => '[membership_code_of_conduct]',
+            'option' => 'mmgr_page_coc'
+        ),
+        array(
+            'title' => 'Member Code of Conduct',
+            'slug' => 'member-code-of-conduct',
+            'content' => '[membership_code_of_conduct]',
+            'option' => 'mmgr_page_member_coc'
+        ),
+        array(
+            'title' => 'Member Setup',
+            'slug' => 'member-setup',
+            'content' => '[mmgr_password_setup]',
+            'option' => 'mmgr_page_setup'
+        ),
+        array(
+            'title' => 'Member Login',
+            'slug' => 'member-login',
+            'content' => '[mmgr_member_login]',
+            'option' => 'mmgr_page_login'
+        ),
+        array(
+            'title' => 'Member Dashboard',
+            'slug' => 'member-dashboard',
+            'content' => '[mmgr_member_dashboard]',
+            'option' => 'mmgr_page_dashboard'
+        ),
+        array(
+            'title' => 'Member Activity',
+            'slug' => 'member-activity',
+            'content' => '[mmgr_member_activity]',
+            'option' => 'mmgr_page_activity'
+        ),
+        array(
+            'title' => 'Member Profile',
+            'slug' => 'member-profile',
+            'content' => '[mmgr_member_profile]',
+            'option' => 'mmgr_page_profile'
+        ),
+        array(
+            'title' => 'Member Community',
+            'slug' => 'member-community',
+            'content' => '[mmgr_member_community]',
+            'option' => 'mmgr_page_community'
+        ),
+        array(
+            'title' => 'Members Directory',
+            'slug' => 'members-directory',
+            'content' => '[mmgr_members_directory]',
+            'option' => 'mmgr_page_directory'
+        ),
+        array(
+            'title' => 'Community Profile',
+            'slug' => 'member-community-profile',
+            'content' => '[mmgr_member_community_profile]',
+            'option' => 'mmgr_page_community_profile'
+        ),
+        array(
+            'title' => 'Member Messages',
+            'slug' => 'member-messages',
+            'content' => '[mmgr_member_messages]',
+            'option' => 'mmgr_page_messages'
+        )
+    );
+    
+    $created = array();
+    $skipped = array();
+    $errors = array();
+    
+    foreach ($pages as $page_data) {
+        $existing_id = get_option($page_data['option']);
         
-        $created = array();
-        $skipped = array();
-        $errors = array();
-        
-        foreach ($pages as $page_data) {
-            $existing_id = get_option($page_data['option']);
-            
-            if ($existing_id && get_post($existing_id) && get_post_status($existing_id) !== 'trash') {
-                $skipped[] = $page_data['title'];
-                continue;
-            }
-            
-            $page_id = wp_insert_post(array(
-                'post_title' => $page_data['title'],
-                'post_name' => $page_data['slug'],
-                'post_content' => $page_data['content'],
-                'post_status' => 'publish',
-                'post_type' => 'page',
-                'comment_status' => 'closed',
-                'ping_status' => 'closed'
-            ));
-            
-            if ($page_id && !is_wp_error($page_id)) {
-                update_option($page_data['option'], $page_id);
-                $created[] = $page_data['title'];
-            } else {
-                $error_msg = is_wp_error($page_id) ? $page_id->get_error_message() : 'Unknown error';
-                $errors[] = $page_data['title'] . ': ' . $error_msg;
-            }
+        if ($existing_id && get_post($existing_id) && get_post_status($existing_id) !== 'trash') {
+            $skipped[] = $page_data['title'];
+            continue;
         }
         
-        return array(
-            'created' => $created,
-            'skipped' => $skipped,
-            'errors' => $errors
-        );
+        $page_id = wp_insert_post(array(
+            'post_title' => $page_data['title'],
+            'post_name' => $page_data['slug'],
+            'post_content' => $page_data['content'],
+            'post_status' => 'publish',
+            'post_type' => 'page',
+            'comment_status' => 'closed',
+            'ping_status' => 'closed'
+        ));
+        
+        if ($page_id && !is_wp_error($page_id)) {
+            update_option($page_data['option'], $page_id);
+            $created[] = $page_data['title'];
+        } else {
+            $error_msg = is_wp_error($page_id) ? $page_id->get_error_message() : 'Unknown error';
+            $errors[] = $page_data['title'] . ': ' . $error_msg;
+        }
     }
+    
+    update_option('mmgr_checkin_page_url', '/member-checkin');
+    update_option('mmgr_registration_page_url', '/member-registration');
+    update_option('mmgr_pages_created', '1');
+
+    return array(
+        'created' => $created,
+        'skipped' => $skipped,
+        'errors' => $errors
+    );
 }
 
 function mmgr_settings_admin() {

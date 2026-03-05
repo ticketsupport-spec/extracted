@@ -2,14 +2,14 @@
 if (!defined('ABSPATH')) exit;
 
 global $wpdb;
-$tbl = $wpdb->prefix . 'membership_fees';
+$tbl = $wpdb->prefix . 'membership_special_fees';
 
 // Handle save/delete
-if (isset($_POST['save_fee'])) {
+if (isset($_POST['save_fee']) && isset($_POST['fee_nonce']) && wp_verify_nonce($_POST['fee_nonce'], 'mmgr_save_fee')) {
     $data = array(
-        'fee_date' => sanitize_text_field($_POST['fee_date']),
-        'fee_amount' => floatval($_POST['fee_amount']),
-        'event_name' => sanitize_text_field($_POST['event_name']),
+        'event_date'  => sanitize_text_field($_POST['fee_date']),
+        'fee_amount'  => floatval($_POST['fee_amount']),
+        'event_name'  => sanitize_text_field($_POST['event_name']),
         'description' => sanitize_textarea_field($_POST['description'])
     );
     
@@ -21,13 +21,13 @@ if (isset($_POST['save_fee'])) {
     echo '<div class="notice notice-success"><p>Special fee saved!</p></div>';
 }
 
-if (isset($_GET['delete'])) {
+if (isset($_GET['delete']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'delete_special_fee_' . intval($_GET['delete']))) {
     $wpdb->delete($tbl, array('id' => intval($_GET['delete'])));
     echo '<div class="notice notice-success"><p>Special fee deleted!</p></div>';
 }
 
 $editing = isset($_GET['edit']) ? $wpdb->get_row($wpdb->prepare("SELECT * FROM $tbl WHERE id = %d", intval($_GET['edit'])), ARRAY_A) : null;
-$fees = $wpdb->get_results("SELECT * FROM $tbl ORDER BY fee_date DESC", ARRAY_A);
+$fees = $wpdb->get_results("SELECT * FROM $tbl ORDER BY event_date DESC", ARRAY_A);
 
 ?>
 <div class="wrap">
@@ -39,6 +39,7 @@ $fees = $wpdb->get_results("SELECT * FROM $tbl ORDER BY fee_date DESC", ARRAY_A)
         <div>
             <h2><?php echo $editing ? 'Edit Fee' : 'Add Special Fee'; ?></h2>
             <form method="post">
+                <?php wp_nonce_field('mmgr_save_fee', 'fee_nonce'); ?>
                 <?php if ($editing): ?>
                     <input type="hidden" name="fee_id" value="<?php echo $editing['id']; ?>">
                 <?php endif; ?>
@@ -46,7 +47,7 @@ $fees = $wpdb->get_results("SELECT * FROM $tbl ORDER BY fee_date DESC", ARRAY_A)
                 <table class="form-table">
                     <tr>
                         <th><label>Date</label></th>
-                        <td><input type="date" name="fee_date" value="<?php echo esc_attr($editing['fee_date'] ?? ''); ?>" required></td>
+                        <td><input type="date" name="fee_date" value="<?php echo esc_attr($editing['event_date'] ?? ''); ?>" required></td>
                     </tr>
                     <tr>
                         <th><label>Fee Amount</label></th>
@@ -88,12 +89,12 @@ $fees = $wpdb->get_results("SELECT * FROM $tbl ORDER BY fee_date DESC", ARRAY_A)
                     <?php else: ?>
                         <?php foreach ($fees as $fee): ?>
                             <tr>
-                                <td><?php echo date('M d, Y', strtotime($fee['fee_date'])); ?></td>
+                                <td><?php echo date('M d, Y', strtotime($fee['event_date'])); ?></td>
                                 <td><strong><?php echo esc_html($fee['event_name']); ?></strong></td>
                                 <td>$<?php echo number_format($fee['fee_amount'], 2); ?></td>
                                 <td>
                                     <a href="?page=membership_special_fees&edit=<?php echo $fee['id']; ?>" class="button button-small">Edit</a>
-                                    <a href="?page=membership_special_fees&delete=<?php echo $fee['id']; ?>" class="button button-small button-link-delete" onclick="return confirm('Delete?');">Delete</a>
+                                    <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=membership_special_fees&delete=' . $fee['id']), 'delete_special_fee_' . $fee['id']); ?>" class="button button-small button-link-delete" onclick="return confirm('Delete?');">Delete</a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

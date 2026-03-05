@@ -1,49 +1,6 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
-
-/**
- * Create necessary database tables on plugin activation
- */
-function mmgr_create_database_tables() {
-    global $wpdb;
-    $charset_collate = $wpdb->get_charset_collate();
-    
-    // Contact Manager Table
-    $table_contacts = $wpdb->prefix . 'membership_contacts';
-    if ($wpdb->get_var("SHOW TABLES LIKE '$table_contacts'") != $table_contacts) {
-        $sql = "CREATE TABLE $table_contacts (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            member_id INT NOT NULL,
-            contact_id INT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY unique_contact (member_id, contact_id),
-            FOREIGN KEY (member_id) REFERENCES {$wpdb->prefix}memberships(id) ON DELETE CASCADE,
-            FOREIGN KEY (contact_id) REFERENCES {$wpdb->prefix}memberships(id) ON DELETE CASCADE
-        ) $charset_collate;";
-        
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-        dbDelta($sql);
-    }
-    
-    // Block List Table
-    $table_blocks = $wpdb->prefix . 'membership_blocks';
-    if ($wpdb->get_var("SHOW TABLES LIKE '$table_blocks'") != $table_blocks) {
-        $sql = "CREATE TABLE $table_blocks (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            member_id INT NOT NULL,
-            blocked_member_id INT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY unique_block (member_id, blocked_member_id),
-            FOREIGN KEY (member_id) REFERENCES {$wpdb->prefix}memberships(id) ON DELETE CASCADE,
-            FOREIGN KEY (blocked_member_id) REFERENCES {$wpdb->prefix}memberships(id) ON DELETE CASCADE
-        ) $charset_collate;";
-        
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-        dbDelta($sql);
-    }
-}
- 
 function mmgr_create_tables() {
     global $wpdb;
     
@@ -180,7 +137,7 @@ function mmgr_create_tables() {
     // ===========================
     // CARD REQUESTS TABLE
     // ===========================
-    $card_requests_table = $wpdb->prefix . 'membership_card_requests';
+    $card_requests_table = $wpdb->prefix . 'mmgr_card_requests';
     $wpdb->query("CREATE TABLE IF NOT EXISTS `$card_requests_table` (
         id INT AUTO_INCREMENT PRIMARY KEY,
         member_id INT NOT NULL,
@@ -362,10 +319,5 @@ function mmgr_check_database() {
     }
 }
 
-add_action('wp_loaded', 'mmgr_create_database_tables');
-
 // Hook to check database on admin init
 add_action('admin_init', 'mmgr_check_database');
-
-// Also create tables on plugin activation
-register_activation_hook(MMGR_PLUGIN_FILE, 'mmgr_create_tables');
