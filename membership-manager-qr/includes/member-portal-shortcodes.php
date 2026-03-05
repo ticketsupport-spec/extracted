@@ -950,11 +950,10 @@ add_shortcode('mmgr_member_profile', function() {
         <?php endif; ?>
         
         <!-- Profile Info -->
+        <form method="POST" enctype="multipart/form-data">
+        <?php wp_nonce_field('mmgr_update_profile', 'profile_nonce'); ?>
         <div class="mmgr-portal-card">
             <h3>📋 Personal Information</h3>
-            
-             <form method="POST" enctype="multipart/form-data">
-                <?php wp_nonce_field('mmgr_update_profile', 'profile_nonce'); ?>
 				
                 <div class="mmgr-field" style="margin-bottom:20px;">
                     <label style="display:block;font-weight:bold;margin-bottom:5px;">Name</label>
@@ -978,6 +977,16 @@ add_shortcode('mmgr_member_profile', function() {
                     <label style="display:block;font-weight:bold;margin-bottom:5px;">Phone *</label>
                     <input type="tel" name="phone" value="<?php echo esc_attr($member['phone']); ?>" required style="width:100%;padding:12px;border:2px solid #ddd;border-radius:6px;font-size:16px;">
                 </div>
+                <div class="mmgr-field" style="margin-bottom:20px;">
+                    <label style="display:block;font-weight:bold;margin-bottom:5px;">Membership Type</label>
+                    <input type="text" value="<?php echo esc_attr($member['level']); ?>" disabled style="width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:6px;background:#f5f5f5;color:#666;">
+                </div>
+            </div>
+
+        <!-- Your Online Profile -->
+        <div class="mmgr-portal-card" style="margin-top:30px;">
+            <h3>🌐 Your Online Profile</h3>
+
                 <div class="mmgr-field" style="margin-bottom:20px;">
                     <label style="display:block;font-weight:bold;margin-bottom:5px;">Community Alias</label>
                     <input type="text" name="community_alias" value="<?php echo esc_attr($member['community_alias'] ?? ''); ?>" placeholder="Name for community posts (optional)" style="width:100%;padding:12px;border:2px solid #ddd;border-radius:6px;font-size:16px;">
@@ -1013,17 +1022,61 @@ add_shortcode('mmgr_member_profile', function() {
                     <input type="file" name="community_photo" accept="image/*" id="community-photo-input" style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;" onchange="previewCommunityPhoto(this)">
                     <p style="margin:5px 0 0 0;font-size:13px;color:#999;">Profile picture for community posts (optional)</p>
                 </div>
-                <div class="mmgr-field" style="margin-bottom:20px;">
-                    <label style="display:block;font-weight:bold;margin-bottom:5px;">Membership Type</label>
-                    <input type="text" value="<?php echo esc_attr($member['level']); ?>" disabled style="width:100%;padding:12px;border:2px solid #e0e0e0;border-radius:6px;background:#f5f5f5;color:#666;">
-                </div>
                 
                 <button type="submit" name="update_profile" class="mmgr-btn-primary" style="background:#0073aa;color:white;padding:12px 30px;border:none;border-radius:6px;font-size:16px;font-weight:bold;cursor:pointer;">
                     💾 Save Changes
                 </button>
-            </form>
-        </div>
+            </div>
+        </form>
         
+        <!-- Bio Photos Gallery (up to 50) -->
+        <?php
+        global $wpdb;
+        $bio_photos_tbl = $wpdb->prefix . 'membership_bio_photos';
+        $bio_photos = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, photo_url FROM $bio_photos_tbl WHERE member_id = %d ORDER BY sort_order ASC, id ASC",
+            $member['id']
+        ), ARRAY_A);
+        $photo_count = count($bio_photos);
+        ?>
+        <div class="mmgr-portal-card" style="margin-top:30px;">
+            <h3>📸 My Bio Photos <span style="font-size:13px;font-weight:normal;color:#888;">(<?php echo $photo_count; ?>/50)</span></h3>
+            <p style="color:#666;font-size:14px;margin-top:0;">These photos are shown on your community profile page. You can add up to 50 photos.</p>
+
+            <?php if (!empty($bio_photos)): ?>
+            <div id="bio-photos-grid" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+                <?php foreach ($bio_photos as $bp): ?>
+                <div id="bio-photo-<?php echo intval($bp['id']); ?>" style="position:relative;display:inline-block;">
+                    <img src="<?php echo esc_url($bp['photo_url']); ?>"
+                         style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #ddd;display:block;">
+                    <button type="button"
+                            onclick="deleteBioPhoto(<?php echo intval($bp['id']); ?>)"
+                            style="position:absolute;top:4px;right:4px;background:rgba(200,0,0,0.85);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;"
+                            title="Delete photo">✕</button>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <div id="bio-photos-grid" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;"></div>
+            <?php endif; ?>
+
+            <?php if ($photo_count < 50): ?>
+            <div id="bio-photo-upload-area">
+                <label style="display:block;font-weight:bold;margin-bottom:8px;">Add Photo</label>
+                <input type="file" id="bio-photo-input" accept="image/*" style="margin-bottom:8px;">
+                <br>
+                <button type="button" onclick="uploadBioPhoto()" style="background:#0073aa;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;font-size:15px;font-weight:bold;">
+                    📷 Upload Photo
+                </button>
+                <span id="bio-photo-status" style="margin-left:12px;font-size:14px;"></span>
+            </div>
+            <?php else: ?>
+            <div id="bio-photo-upload-area">
+                <p style="color:#d63638;font-weight:bold;">Maximum of 50 photos reached. Delete a photo to add a new one.</p>
+            </div>
+            <?php endif; ?>
+        </div>
+
         <!-- Change Password -->
         <div class="mmgr-portal-card" style="margin-top:30px;">
             <h3>🔒 Change Password</h3>
@@ -1072,53 +1125,6 @@ add_shortcode('mmgr_member_profile', function() {
             </table>
         </div>
 
-        <!-- Bio Photos Gallery (up to 50) -->
-        <?php
-        global $wpdb;
-        $bio_photos_tbl = $wpdb->prefix . 'membership_bio_photos';
-        $bio_photos = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, photo_url FROM $bio_photos_tbl WHERE member_id = %d ORDER BY sort_order ASC, id ASC",
-            $member['id']
-        ), ARRAY_A);
-        $photo_count = count($bio_photos);
-        ?>
-        <div class="mmgr-portal-card" style="margin-top:30px;">
-            <h3>📸 My Bio Photos <span style="font-size:13px;font-weight:normal;color:#888;">(<?php echo $photo_count; ?>/50)</span></h3>
-            <p style="color:#666;font-size:14px;margin-top:0;">These photos are shown on your community profile page. You can add up to 50 photos.</p>
-
-            <?php if (!empty($bio_photos)): ?>
-            <div id="bio-photos-grid" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
-                <?php foreach ($bio_photos as $bp): ?>
-                <div id="bio-photo-<?php echo intval($bp['id']); ?>" style="position:relative;display:inline-block;">
-                    <img src="<?php echo esc_url($bp['photo_url']); ?>"
-                         style="width:120px;height:120px;object-fit:cover;border-radius:8px;border:2px solid #ddd;display:block;">
-                    <button type="button"
-                            onclick="deleteBioPhoto(<?php echo intval($bp['id']); ?>)"
-                            style="position:absolute;top:4px;right:4px;background:rgba(200,0,0,0.85);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;"
-                            title="Delete photo">✕</button>
-                </div>
-                <?php endforeach; ?>
-            </div>
-            <?php else: ?>
-            <div id="bio-photos-grid" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;"></div>
-            <?php endif; ?>
-
-            <?php if ($photo_count < 50): ?>
-            <div id="bio-photo-upload-area">
-                <label style="display:block;font-weight:bold;margin-bottom:8px;">Add Photo</label>
-                <input type="file" id="bio-photo-input" accept="image/*" style="margin-bottom:8px;">
-                <br>
-                <button type="button" onclick="uploadBioPhoto()" style="background:#0073aa;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;font-size:15px;font-weight:bold;">
-                    📷 Upload Photo
-                </button>
-                <span id="bio-photo-status" style="margin-left:12px;font-size:14px;"></span>
-            </div>
-            <?php else: ?>
-            <div id="bio-photo-upload-area">
-                <p style="color:#d63638;font-weight:bold;">Maximum of 50 photos reached. Delete a photo to add a new one.</p>
-            </div>
-            <?php endif; ?>
-        </div>
     </div>
     <script>
     function uploadBioPhoto() {
@@ -1258,7 +1264,12 @@ add_action('wp_ajax_mmgr_upload_bio_photo', function() {
         wp_send_json_error(array('message' => 'Only image files (JPEG, PNG, GIF, WebP) are allowed.'));
     }
 
-    $upload = wp_handle_upload($_FILES['photo'], array('test_form' => false, 'mimes' => array_fill_keys(array('jpg|jpeg|jpe', 'png', 'gif', 'webp'), true)));
+    $upload = wp_handle_upload($_FILES['photo'], array('test_form' => false, 'mimes' => array(
+        'jpg|jpeg|jpe' => 'image/jpeg',
+        'png'          => 'image/png',
+        'gif'          => 'image/gif',
+        'webp'         => 'image/webp',
+    )));
     if (isset($upload['error'])) {
         wp_send_json_error(array('message' => 'Upload failed: ' . $upload['error']));
     }
