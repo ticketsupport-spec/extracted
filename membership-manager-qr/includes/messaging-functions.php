@@ -54,7 +54,8 @@ function mmgr_send_message($from_member_id, $to_member_id, $message, $image_url 
             mmgr_pwa_send_push_to_member(
                 intval($to_member_id),
                 'New message from ' . $sender_name,
-                $body
+                $body,
+                home_url('/member-messages/?chat=' . intval($from_member_id))
             );
         }
         return array('success' => true, 'message' => 'Message sent!');
@@ -171,15 +172,24 @@ function mmgr_get_conversations_list($member_id) {
                 "SELECT id, name, community_alias, photo_url FROM $members_table WHERE id = %d",
                 $conv['other_member_id']
             ), ARRAY_A);
+
+            // If the member no longer exists, use a placeholder so unread
+            // messages from that conversation can still be marked as read.
+            if (!$other_member) {
+                $other_member = array(
+                    'id'             => intval($conv['other_member_id']),
+                    'name'           => 'Deleted Member',
+                    'community_alias' => '',
+                    'photo_url'      => null
+                );
+            }
         }
         
-        if ($other_member) {
-            $result[] = array(
-                'member' => $other_member,
-                'last_message_time' => $conv['last_message_time'],
-                'unread_count' => $conv['unread_count']
-            );
-        }
+        $result[] = array(
+            'member' => $other_member,
+            'last_message_time' => $conv['last_message_time'],
+            'unread_count' => $conv['unread_count']
+        );
     }
     
     return $result;
