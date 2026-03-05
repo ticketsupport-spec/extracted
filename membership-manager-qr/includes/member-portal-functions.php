@@ -278,6 +278,21 @@ function mmgr_create_portal_tables() {
             $wpdb->query("ALTER TABLE `$sessions_tbl` ADD COLUMN `login_email` VARCHAR(255) DEFAULT NULL");
         }
     }
+
+    // Friends table
+    $friends_tbl = $wpdb->prefix . 'membership_friends';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$friends_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        requester_id INT NOT NULL,
+        requestee_id INT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL,
+        UNIQUE KEY unique_friendship (requester_id, requestee_id),
+        INDEX idx_requester_id (requester_id),
+        INDEX idx_requestee_id (requestee_id),
+        INDEX idx_status (status)
+    ) $charset_collate");
 }
 
 // Run on plugin activation
@@ -972,3 +987,124 @@ add_action( 'wp_ajax_mmgr_load_sent_likes', function() {
         'next_offset' => $offset + $per_page,
     ) );
 } );
+// =============================================================================
+// FRIENDS SYSTEM HELPERS
+// =============================================================================
+
+/**
+ * Get the friendship status between two members.
+ *
+ * Returns one of:
+ *   'none'             – no relationship
+ *   'pending_sent'     – $viewer_id sent a request, awaiting response
+ *   'pending_received' – $profile_id sent a request to $viewer_id, awaiting response
+ *   'accepted'         – confirmed friends
+ */
+function mmgr_get_friendship_status( $viewer_id, $profile_id ) {
+    if ( $viewer_id === $profile_id ) {
+        return 'self';
+    }
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'membership_friends';
+
+    $row = $wpdb->get_row( $wpdb->prepare(
+        "SELECT requester_id, status FROM $tbl
+         WHERE (requester_id = %d AND requestee_id = %d)
+            OR (requester_id = %d AND requestee_id = %d)
+         LIMIT 1",
+        $viewer_id, $profile_id,
+        $profile_id, $viewer_id
+    ), ARRAY_A );
+
+    if ( ! $row ) {
+        return 'none';
+    }
+
+    if ( $row['status'] === 'accepted' ) {
+        return 'accepted';
+    }
+
+    if ( $row['status'] === 'pending' ) {
+        return ( (int) $row['requester_id'] === (int) $viewer_id )
+            ? 'pending_sent'
+            : 'pending_received';
+    }
+
+    return 'none';
+}
+
+/**
+ * Return all confirmed friends of a member as an array of member rows
+ * (id, community_alias, name, community_photo_url).
+ */
+function mmgr_get_friends( $member_id ) {
+    global $wpdb;
+    $friends_tbl  = $wpdb->prefix . 'membership_friends';
+    $members_tbl  = $wpdb->prefix . 'memberships';
+
+    return $wpdb->get_results( $wpdb->prepare(
+        "SELECT m.id, m.name, m.community_alias, m.community_photo_url
+         FROM $friends_tbl f
+         JOIN $members_tbl m
+           ON m.id = CASE WHEN f.requester_id = %d THEN f.requestee_id ELSE f.requester_id END
+         WHERE (f.requester_id = %d OR f.requestee_id = %d)
+           AND f.status = 'accepted'
+           AND m.active = 1
+         ORDER BY m.community_alias, m.name",
+        $member_id, $member_id, $member_id
+    ), ARRAY_A );
+}
+
+/**
+ * Return confirmed friends that are shared between two members.
+ */
+function mmgr_get_mutual_friends( $member_id_a, $member_id_b ) {
+    global $wpdb;
+    $friends_tbl = $wpdb->prefix . 'membership_friends';
+    $members_tbl = $wpdb->prefix . 'memberships';
+
+    // friends of A
+    $a_ids = $wpdb->get_col( $wpdb->prepare(
+        "SELECT CASE WHEN requester_id = %d THEN requestee_id ELSE requester_id END AS friend_id
+         FROM $friends_tbl
+         WHERE (requester_id = %d OR requestee_id = %d) AND status = 'accepted'",
+        $member_id_a, $member_id_a, $member_id_a
+    ) );
+
+    // friends of B
+    $b_ids = $wpdb->get_col( $wpdb->prepare(
+        "SELECT CASE WHEN requester_id = %d THEN requestee_id ELSE requester_id END AS friend_id
+         FROM $friends_tbl
+         WHERE (requester_id = %d OR requestee_id = %d) AND status = 'accepted'",
+        $member_id_b, $member_id_b, $member_id_b
+    ) );
+
+    $mutual_ids = array_intersect( $a_ids, $b_ids );
+    if ( empty( $mutual_ids ) ) {
+        return array();
+    }
+
+    $placeholders = implode( ',', array_fill( 0, count( $mutual_ids ), '%d' ) );
+    return $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT id, name, community_alias, community_photo_url
+             FROM $members_tbl
+             WHERE id IN ($placeholders) AND active = 1
+             ORDER BY community_alias, name",
+            ...$mutual_ids
+        ),
+        ARRAY_A
+    );
+}
+
+/**
+ * Count pending friend requests addressed TO $member_id.
+ */
+function mmgr_get_pending_friend_request_count( $member_id ) {
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'membership_friends';
+    return (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM $tbl WHERE requestee_id = %d AND status = 'pending'",
+        $member_id
+    ) );
+}
