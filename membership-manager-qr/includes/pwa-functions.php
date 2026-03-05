@@ -49,14 +49,15 @@ function mmgr_pwa_on_activate() {
     flush_rewrite_rules();
 }
 
-// Ensure rewrite rules are flushed once after (re-)activation or plugin updates.
-// Without this, /mmgr-sw.js returns 404 and the service worker never registers.
+// Ensure rewrite rules are flushed whenever the plugin version changes (or on first
+// activation). Using the version as the stored value means any plugin update
+// automatically re-flushes the rules, preventing the /mmgr-sw.js 404.
 add_action('admin_init', 'mmgr_pwa_maybe_flush_rewrites');
 function mmgr_pwa_maybe_flush_rewrites() {
-    if (!get_option('mmgr_pwa_rewrites_flushed')) {
+    if (get_option('mmgr_pwa_rewrites_flushed') !== MMGR_VERSION) {
         mmgr_pwa_add_rewrite_rules();
         flush_rewrite_rules();
-        update_option('mmgr_pwa_rewrites_flushed', 1);
+        update_option('mmgr_pwa_rewrites_flushed', MMGR_VERSION);
     }
 }
 
