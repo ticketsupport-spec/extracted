@@ -9,13 +9,13 @@ function mmgr_get_portal_navigation($active_page = '') {
     
     <div class="mmgr-portal-nav-wrapper">
         <button class="mmgr-nav-toggle-btn" onclick="document.getElementById('mmgr-nav-items').classList.toggle('active');">
-            <span>☰ MENU</span>
+            ☰ MENU <span id="mmgr-nav-unread-badge" class="mmgr-nav-unread-badge" style="display:none;"></span>
         </button>
         
         <div id="mmgr-nav-items" class="mmgr-nav-items-container">
             <a href="<?php echo home_url('/member-dashboard/'); ?>" class="<?php echo $active_page === 'dashboard' ? 'active' : ''; ?>">🏠 Dashboard</a>
             <a href="<?php echo home_url('/member-activity/'); ?>" class="<?php echo $active_page === 'activity' ? 'active' : ''; ?>">📊 Activity</a>
-            <a href="<?php echo home_url('/member-messages/'); ?>" class="<?php echo $active_page === 'messages' ? 'active' : ''; ?>">💬 Messages</a>
+            <a href="<?php echo home_url('/member-messages/'); ?>" class="<?php echo $active_page === 'messages' ? 'active' : ''; ?>">💬 Messages <span id="mmgr-messages-unread-badge" class="mmgr-nav-unread-badge" style="display:none;"></span></a>
             <a href="<?php echo home_url('/member-profile/'); ?>" class="<?php echo $active_page === 'profile' ? 'active' : ''; ?>">👤 Profile</a>
             <a href="<?php echo home_url('/member-community/'); ?>" class="<?php echo $active_page === 'community' ? 'active' : ''; ?>">👥 Community</a>
 			<a href="<?php echo home_url('/members-directory/'); ?>" class="<?php echo $active_page === 'directory' ? 'active' : ''; ?>">📋 Directory</a>
