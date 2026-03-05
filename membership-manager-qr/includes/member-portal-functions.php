@@ -255,6 +255,14 @@ if (!function_exists('mmgr_create_member_session')) {
         global $wpdb;
         $sessions_tbl = $wpdb->prefix . 'mmgr_member_sessions';
         
+        // Invalidate any existing session in the current browser before creating a new one.
+        // This prevents a stale session belonging to a different member from remaining
+        // active in the database when a new user logs in on the same device/browser.
+        if (!empty($_COOKIE['mmgr_session'])) {
+            $old_token = sanitize_text_field($_COOKIE['mmgr_session']);
+            $wpdb->delete($sessions_tbl, array('session_token' => $old_token));
+        }
+        
         // Generate secure token
         $token = bin2hex(random_bytes(32));
         
@@ -271,8 +279,21 @@ if (!function_exists('mmgr_create_member_session')) {
             'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? ''
         ));
         
-        // Set cookie
-        setcookie('mmgr_session', $token, time() + (30 * 24 * 60 * 60), '/', '', true, true);
+        // Set cookie with Secure, HttpOnly, and SameSite=Strict to prevent CSRF and
+        // to ensure the cookie is only sent over HTTPS and not accessible via JavaScript.
+        if (PHP_VERSION_ID >= 70300) {
+            setcookie('mmgr_session', $token, array(
+                'expires'  => time() + (30 * 24 * 60 * 60),
+                'path'     => '/',
+                'secure'   => true,
+                'httponly' => true,
+                'samesite' => 'Strict',
+            ));
+        } else {
+            // PHP < 7.3: use header() directly to set SameSite reliably.
+            $max_age = 30 * 24 * 60 * 60;
+            header('Set-Cookie: mmgr_session=' . rawurlencode($token) . '; Max-Age=' . $max_age . '; Path=/; Secure; HttpOnly; SameSite=Strict', false);
+        }
         
         return $token;
     }
@@ -324,7 +345,24 @@ if (!function_exists('mmgr_logout_member')) {
             $token = sanitize_text_field($_COOKIE['mmgr_session']);
             
             $wpdb->delete($sessions_tbl, array('session_token' => $token));
-            setcookie('mmgr_session', '', time() - 3600, '/');
+            // Clear the cookie using the same flags (Secure, HttpOnly, SameSite=Strict)
+            // that were used when setting it, so browsers properly remove it.
+            if (PHP_VERSION_ID >= 70300) {
+                setcookie('mmgr_session', '', array(
+                    'expires'  => time() - 3600,
+                    'path'     => '/',
+                    'secure'   => true,
+                    'httponly' => true,
+                    'samesite' => 'Strict',
+                ));
+            } else {
+                // PHP < 7.3: use header() directly to set SameSite reliably.
+                header('Set-Cookie: mmgr_session=deleted; Expires=' . gmdate('D, d M Y H:i:s T', time() - 3600) . '; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Strict', false);
+            }
+            // Unset from the current request's superglobal so that subsequent calls
+            // to mmgr_get_current_member() within this same PHP execution do not
+            // mistakenly read the now-invalidated token.
+            unset($_COOKIE['mmgr_session']);
         }
     }
 }
