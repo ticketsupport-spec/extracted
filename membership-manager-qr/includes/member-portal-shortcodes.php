@@ -127,6 +127,7 @@ add_shortcode('mmgr_portal_footer', function($atts) {
  * Password Setup Page
  */
 add_shortcode('mmgr_password_setup', function() {
+    nocache_headers();
     $success = $error = '';
     
     // Get token from URL
@@ -246,11 +247,13 @@ add_shortcode('mmgr_password_setup', function() {
  * Member Login Page
  */
 add_shortcode('mmgr_member_login', function() {
-    // Redirect if already logged in
-    if (mmgr_is_member_logged_in()) {
-        wp_redirect(home_url('/member-dashboard/'));
-        exit;
-    }
+    nocache_headers();
+    // Do NOT auto-redirect if a session cookie already exists.
+    // Automatically redirecting to the dashboard when any valid session is present
+    // causes a security issue on shared devices: person B visiting the login page
+    // would be silently forwarded to person A's dashboard without ever entering
+    // their own credentials.  Always show the login form so whoever submits it
+    // gets their own, fresh session.
     
     $error = '';
     
@@ -342,6 +345,11 @@ add_shortcode('mmgr_member_login', function() {
  * Member Dashboard
  */
 add_shortcode('mmgr_member_dashboard', function() {
+    // Prevent this page from being cached by page-caching plugins or CDNs.
+    // Caching a member's personalised dashboard and then serving it to a
+    // different visitor would expose private account information.
+    nocache_headers();
+    
     // ADMIN BYPASS: Allow admins to view as any member
     if (current_user_can('manage_options') && isset($_GET['view_member'])) {
         global $wpdb;
@@ -593,6 +601,7 @@ add_action('wp_ajax_nopriv_mmgr_request_card', function() {
  * Member Activity Page - Visit History
  */
 add_shortcode('mmgr_member_activity', function() {
+    nocache_headers();
     // Check if member is logged in
     $member = mmgr_get_current_member();
     
@@ -816,6 +825,7 @@ add_shortcode('mmgr_member_activity', function() {
  * Member Profile Page - Update Info
  */
 add_shortcode('mmgr_member_profile', function() {
+    nocache_headers();
     // Check if member is logged in
     $member = mmgr_get_current_member();
     
@@ -1305,6 +1315,7 @@ add_action('wp_ajax_mmgr_delete_bio_photo', function() {
 });
 
 add_shortcode('mmgr_member_community', function() {
+    nocache_headers();
     // Check if member is logged in
     $member = mmgr_get_current_member();
     
@@ -2043,6 +2054,7 @@ add_shortcode('mmgr_member_community', function() {
  * Member Messages Page
  */
 add_shortcode('mmgr_member_messages', function() {
+    nocache_headers();
     // Check if member is logged in
     $member = mmgr_get_current_member();
     
@@ -2830,6 +2842,7 @@ add_action('wp_ajax_mmgr_toggle_block', function() {
  * Members Directory - List all members with aliases in table format
  */
 add_shortcode('mmgr_members_directory', function() {
+    nocache_headers();
     // Check if member is logged in
     $member = mmgr_get_current_member();
     
@@ -3203,6 +3216,7 @@ add_action('wp_ajax_mmgr_who_is_online', function() {
  * Community Profile Page - Shows member activity and stats
  */
 add_shortcode('mmgr_member_community_profile', function() {
+    nocache_headers();
     // Check if member is logged in
     $current_member = mmgr_get_current_member();
     
