@@ -115,8 +115,8 @@ function mmgr_settings_admin() {
     // Handle "Log Everyone Out" – clear all member session tokens
     if (isset($_POST['mmgr_logout_everyone']) && isset($_POST['mmgr_logout_everyone_nonce']) && wp_verify_nonce($_POST['mmgr_logout_everyone_nonce'], 'mmgr_logout_everyone') && current_user_can('manage_options')) {
         global $wpdb;
-        $table = esc_sql($wpdb->prefix . 'memberships');
-        $result = $wpdb->query("UPDATE $table SET session_token = NULL, session_expires = NULL WHERE session_token IS NOT NULL");
+        $sessions_tbl = $wpdb->prefix . 'mmgr_member_sessions';
+        $result = $wpdb->query("DELETE FROM $sessions_tbl");
         if ($result !== false) {
             echo '<div class="notice notice-success"><p>✓ All members have been logged out and their session cookies invalidated.</p></div>';
         } else {
