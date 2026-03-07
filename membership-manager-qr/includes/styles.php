@@ -66,7 +66,7 @@ add_action('wp_head', function() {
     }
     
     .mmgr-nav-items-container a {
-        padding: 15px 20px;
+        padding: 11px 10px;
         text-align: center;
         color: white;
         text-decoration: none;
@@ -1677,10 +1677,9 @@ add_action('wp_footer', function() {
     (function() {
         var navBadge = document.getElementById('mmgr-nav-unread-badge');
         var msgBadge = document.getElementById('mmgr-messages-unread-badge');
-        var friendBadge = document.getElementById('mmgr-friend-req-badge');
 
         // Only run on pages with the portal navigation
-        if (!navBadge && !msgBadge && !friendBadge) return;
+        if (!navBadge && !msgBadge) return;
 
         var ajaxUrl = '<?php echo esc_url(admin_url('admin-ajax.php')); ?>';
 
@@ -1712,28 +1711,9 @@ add_action('wp_footer', function() {
                 .catch(function() { /* Network error – will retry on next interval. */ });
         }
 
-        function mmgrFetchFriendRequestCount() {
-            if (!friendBadge) return;
-            var formData = new FormData();
-            formData.append('action', 'mmgr_get_friend_request_count');
-
-            fetch(ajaxUrl, { method: 'POST', body: formData })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (data && data.success && typeof data.data.count !== 'undefined') {
-                        var count = parseInt(data.data.count, 10);
-                        friendBadge.textContent = count > 0 ? '(' + count + ')' : '';
-                        friendBadge.style.display = count > 0 ? 'inline-block' : 'none';
-                    }
-                })
-                .catch(function() { /* Network error – will retry on next interval. */ });
-        }
-
         // Initial check and then every 30 seconds
         mmgrFetchUnreadCount();
-        mmgrFetchFriendRequestCount();
         setInterval(mmgrFetchUnreadCount, 30000);
-        setInterval(mmgrFetchFriendRequestCount, 30000);
     })();
     </script>
     <?php
