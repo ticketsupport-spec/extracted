@@ -2,7 +2,20 @@
 if (!defined('ABSPATH')) exit;
 
 
-function mmgr_get_portal_navigation($active_page = '') {
+function mmgr_get_portal_navigation($active_page = '', $member = null) {
+    // Build a member-specific query suffix so that each member's URLs are unique.
+    // This prevents NGINX from serving a page cached for one member to another.
+    $uc = ($member && !empty($member['member_code'])) ? rawurlencode($member['member_code']) : '';
+
+    $dashboard_url  = $uc ? home_url('/member-dashboard/?usercod=' . $uc)  : home_url('/member-dashboard/');
+    $activity_url   = $uc ? home_url('/member-activity/?usercod=' . $uc)   : home_url('/member-activity/');
+    $messages_url   = $uc ? home_url('/member-messages/?usercod=' . $uc)   : home_url('/member-messages/');
+    $profile_url    = $uc ? home_url('/member-profile/?usercod=' . $uc)    : home_url('/member-profile/');
+    $community_url  = $uc ? home_url('/member-community/?usercod=' . $uc)  : home_url('/member-community/');
+    $directory_url  = $uc ? home_url('/members-directory/?usercod=' . $uc) : home_url('/members-directory/');
+    $coc_url        = $uc ? home_url('/member-code-of-conduct/?usercod=' . $uc) : home_url('/member-code-of-conduct/');
+    $logout_url     = $uc ? home_url('/member-dashboard/?usercod=' . $uc . '&action=logout') : home_url('/member-dashboard/?action=logout');
+
     ob_start();
     ?>
 
@@ -13,14 +26,14 @@ function mmgr_get_portal_navigation($active_page = '') {
         </button>
         
         <div id="mmgr-nav-items" class="mmgr-nav-items-container">
-            <a href="<?php echo home_url('/member-dashboard/'); ?>" class="<?php echo $active_page === 'dashboard' ? 'active' : ''; ?>">🏠 Dashboard</a>
-            <a href="<?php echo home_url('/member-activity/'); ?>" class="<?php echo $active_page === 'activity' ? 'active' : ''; ?>">📊 Activity</a>
-            <a href="<?php echo home_url('/member-messages/'); ?>" class="<?php echo $active_page === 'messages' ? 'active' : ''; ?>">💬 Messages <span id="mmgr-messages-unread-badge" class="mmgr-nav-unread-badge" style="display:none;"></span></a>
-            <a href="<?php echo home_url('/member-profile/'); ?>" class="<?php echo $active_page === 'profile' ? 'active' : ''; ?>">👤 Profile</a>
-            <a href="<?php echo home_url('/member-community/'); ?>" class="<?php echo $active_page === 'community' ? 'active' : ''; ?>">👥 Community</a>
-			<a href="<?php echo home_url('/members-directory/'); ?>" class="<?php echo $active_page === 'directory' ? 'active' : ''; ?>">📋 Directory</a>
-			<a href="<?php echo home_url('/member-code-of-conduct/'); ?>" class="<?php echo $active_page === 'coc' ? 'active' : ''; ?>">📜 Code of Conduct</a>
-			<a href="<?php echo home_url('/member-dashboard/?action=logout'); ?>" class="logout">🚪 Logout</a>
+            <a href="<?php echo esc_url($dashboard_url); ?>" class="<?php echo $active_page === 'dashboard' ? 'active' : ''; ?>">🏠 Dashboard</a>
+            <a href="<?php echo esc_url($activity_url); ?>" class="<?php echo $active_page === 'activity' ? 'active' : ''; ?>">📊 Activity</a>
+            <a href="<?php echo esc_url($messages_url); ?>" class="<?php echo $active_page === 'messages' ? 'active' : ''; ?>">💬 Messages <span id="mmgr-messages-unread-badge" class="mmgr-nav-unread-badge" style="display:none;"></span></a>
+            <a href="<?php echo esc_url($profile_url); ?>" class="<?php echo $active_page === 'profile' ? 'active' : ''; ?>">👤 Profile</a>
+            <a href="<?php echo esc_url($community_url); ?>" class="<?php echo $active_page === 'community' ? 'active' : ''; ?>">👥 Community</a>
+			<a href="<?php echo esc_url($directory_url); ?>" class="<?php echo $active_page === 'directory' ? 'active' : ''; ?>">📋 Directory</a>
+			<a href="<?php echo esc_url($coc_url); ?>" class="<?php echo $active_page === 'coc' ? 'active' : ''; ?>">📜 Code of Conduct</a>
+			<a href="<?php echo esc_url($logout_url); ?>" class="logout">🚪 Logout</a>
         </div>
     </div>
     <?php
@@ -269,8 +282,8 @@ add_shortcode('mmgr_member_login', function() {
             if (is_array($result) && isset($result['error']) && $result['error'] === 'no_password') {
                 $error = 'You haven\'t set up your password yet. Please check your email for the setup link.';
             } elseif ($result) {
-                mmgr_create_member_session($result['id']);
-                wp_redirect(home_url('/member-dashboard/'));
+                mmgr_create_member_session($result['id'], $email);
+                wp_redirect(add_query_arg('usercod', $result['member_code'], home_url('/member-dashboard/')));
                 exit;
             } else {
                 $error = 'Invalid email or password.';
@@ -375,6 +388,11 @@ add_shortcode('mmgr_member_dashboard', function() {
         
         $admin_mode = false;
     }
+
+    // Enforce ?usercod= parameter for NGINX cache isolation (skip for admin view-as-member).
+    if (!($admin_mode ?? false)) {
+        mmgr_enforce_usercod($member);
+    }
     
     // Handle logout
     if (isset($_GET['action']) && $_GET['action'] === 'logout') {
@@ -431,14 +449,14 @@ add_shortcode('mmgr_member_dashboard', function() {
         <?php endif; ?>
         
 <!-- Navigation -->
-<?php echo mmgr_get_portal_navigation('dashboard'); ?>
+<?php echo mmgr_get_portal_navigation('dashboard', $member); ?>
         
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
             <h1>Welcome back, <?php echo esc_html($member['first_name']); ?>! 👋</h1>
-            <p>You have <a href="<?php echo esc_url(home_url('/member-messages/')); ?>" aria-label="View your unread messages"><?php echo esc_html($unread_messages); ?> unread <?php echo $unread_messages === 1 ? 'message' : 'messages'; ?></a> and <a href="<?php echo esc_url(home_url('/members-directory/')); ?>" aria-label="View members who liked your content"><?php echo esc_html($total_likes); ?> <?php echo $total_likes === 1 ? 'like' : 'likes'; ?></a></p>
+            <p>You have <a href="<?php echo esc_url(add_query_arg('usercod', $member['member_code'], home_url('/member-messages/'))); ?>" aria-label="View your unread messages"><?php echo esc_html($unread_messages); ?> unread <?php echo $unread_messages === 1 ? 'message' : 'messages'; ?></a> and <a href="<?php echo esc_url(add_query_arg('usercod', $member['member_code'], home_url('/members-directory/'))); ?>" aria-label="View members who liked your content"><?php echo esc_html($total_likes); ?> <?php echo $total_likes === 1 ? 'like' : 'likes'; ?></a></p>
             <?php if (empty($member['community_alias']) || empty($member['community_bio']) || empty($member['community_photo_url'])): ?>
-            <p>Set up your community profile. Add a Photo, Bio and an Alias - <a href="<?php echo esc_url(home_url('/member-profile/')); ?>">Click Here</a></p>
+            <p>Set up your community profile. Add a Photo, Bio and an Alias - <a href="<?php echo esc_url(add_query_arg('usercod', $member['member_code'], home_url('/member-profile/'))); ?>">Click Here</a></p>
             <?php endif; ?>
         </div>
         
@@ -609,6 +627,8 @@ add_shortcode('mmgr_member_activity', function() {
         wp_redirect(home_url('/member-login/'));
         exit;
     }
+
+    mmgr_enforce_usercod($member);
     
     // Get visit history
     global $wpdb;
@@ -653,7 +673,7 @@ add_shortcode('mmgr_member_activity', function() {
     ?>
     <div class="mmgr-portal-container">
         <!-- Navigation -->
-        <?php echo mmgr_get_portal_navigation('activity'); ?>
+        <?php echo mmgr_get_portal_navigation('activity', $member); ?>
         
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
@@ -736,7 +756,7 @@ add_shortcode('mmgr_member_activity', function() {
                         <div style="display: flex; flex-direction: column; gap: 12px;">
                             <?php foreach ($posts as $post): ?>
                                 <div style="padding: 10px; background: #f9f9f9; border-radius: 6px; border-left: 3px solid #9b51e0; cursor: pointer; transition: all 0.3s;" 
-                                     onclick="window.location.href='<?php echo home_url('/member-community/'); ?>?topic=<?php echo $post['topic_id']; ?>'">
+                                     onclick="window.location.href='<?php echo home_url('/member-community/'); ?>?topic=<?php echo intval($post['topic_id']); ?>&usercod=<?php echo rawurlencode($member['member_code']); ?>'">
                                     <div style="font-weight: bold; color: #0073aa; font-size: 14px;">
                                         📝 <?php echo esc_html($post['topic_name'] ?: 'Forum Post'); ?>
                                     </div>
@@ -892,6 +912,8 @@ add_shortcode('mmgr_member_profile', function() {
         wp_redirect(home_url('/member-login/'));
         exit;
     }
+
+    mmgr_enforce_usercod($member);
     
     $success = $error = '';
 
@@ -989,7 +1011,7 @@ add_shortcode('mmgr_member_profile', function() {
     ?>
     <div class="mmgr-portal-container">
 <!-- Navigation -->
-<?php echo mmgr_get_portal_navigation('profile'); ?>
+<?php echo mmgr_get_portal_navigation('profile', $member); ?>
         
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
@@ -1393,6 +1415,8 @@ add_shortcode('mmgr_member_community', function() {
         wp_redirect(home_url('/member-login/'));
         exit;
     }
+
+    mmgr_enforce_usercod($member);
     
     global $wpdb;
     $posts_tbl       = $wpdb->prefix . 'membership_forum_posts';
@@ -1545,7 +1569,7 @@ add_shortcode('mmgr_member_community', function() {
     ?>
     <div class="mmgr-portal-container">
         <!-- Navigation -->
-        <?php echo mmgr_get_portal_navigation('community'); ?>
+        <?php echo mmgr_get_portal_navigation('community', $member); ?>
         
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
@@ -2209,6 +2233,8 @@ add_shortcode('mmgr_member_messages', function() {
         wp_redirect(home_url('/member-login/'));
         exit;
     }
+
+    mmgr_enforce_usercod($member);
     
     $success = $error = '';
     $active_conversation = isset($_GET['chat']) ? intval($_GET['chat']) : null;
@@ -2241,7 +2267,7 @@ add_shortcode('mmgr_member_messages', function() {
             if (empty($error) && (!empty($message) || !empty($image_url))) {
                 $result = mmgr_send_message($member['id'], $to_member_id, $message, $image_url);
                 if ($result['success']) {
-                    wp_redirect(add_query_arg('chat', $to_member_id, get_permalink()));
+                    wp_redirect(esc_url_raw(add_query_arg(array('chat' => $to_member_id, 'usercod' => $member['member_code']), home_url('/member-messages/'))));
                     exit;
                 } else {
                     $error = $result['message'];
@@ -2297,7 +2323,7 @@ add_shortcode('mmgr_member_messages', function() {
     <div class="mmgr-portal-container mmgr-messages-container">
         <!-- Navigation -->
 <!-- Navigation -->
-<?php echo mmgr_get_portal_navigation('messages'); ?>
+<?php echo mmgr_get_portal_navigation('messages', $member); ?>
 
          <div class="mmgr-portal-titlecc">
             <h1>💬 Messages</h1>
@@ -2691,7 +2717,7 @@ add_shortcode('mmgr_member_messages', function() {
         .then(d => {
             if (d.success) {
                 alert('✓ ' + d.data.message);
-                window.location.href = '<?php echo home_url('/member-messages/'); ?>';
+                window.location.href = '<?php echo home_url('/member-messages/'); ?>?usercod=<?php echo rawurlencode($member['member_code']); ?>';
             } else {
                 alert('✕ ' + d.data.message);
             }
@@ -2710,7 +2736,7 @@ add_shortcode('mmgr_member_messages', function() {
         .then(d => {
             if (d.success) {
                 alert('✓ ' + d.data.message);
-                window.location.href = '<?php echo home_url('/member-messages/'); ?>';
+                window.location.href = '<?php echo home_url('/member-messages/'); ?>?usercod=<?php echo rawurlencode($member['member_code']); ?>';
             } else {
                 alert('✕ ' + d.data.message);
             }
@@ -2997,6 +3023,8 @@ add_shortcode('mmgr_members_directory', function() {
         wp_redirect(home_url('/member-login/'));
         exit;
     }
+
+    mmgr_enforce_usercod($member);
     
     global $wpdb;
 
@@ -3036,7 +3064,7 @@ add_shortcode('mmgr_members_directory', function() {
     ?>
     <div class="mmgr-portal-container">
         <!-- Navigation -->
-        <?php echo mmgr_get_portal_navigation('directory'); ?>
+        <?php echo mmgr_get_portal_navigation('directory', $member); ?>
         
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
@@ -3150,7 +3178,7 @@ add_shortcode('mmgr_members_directory', function() {
     
     <script>
         function viewCommunityProfile(memberId) {
-            window.location.href = '<?php echo home_url('/member-community-profile/'); ?>?id=' + memberId;
+            window.location.href = '<?php echo home_url('/member-community-profile/'); ?>?id=' + encodeURIComponent(memberId) + '&usercod=<?php echo rawurlencode($member['member_code']); ?>';
         }
 
         function openPMModalDynamic(memberId) {
@@ -3371,6 +3399,8 @@ add_shortcode('mmgr_member_community_profile', function() {
         wp_redirect(home_url('/member-login/'));
         exit;
     }
+
+    mmgr_enforce_usercod($current_member);
     
     // Get profile member ID from URL
     $profile_member_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
@@ -3458,7 +3488,7 @@ add_shortcode('mmgr_member_community_profile', function() {
     ?>
     <div class="mmgr-portal-container">
         <!-- Navigation -->
-        <?php echo mmgr_get_portal_navigation('directory'); ?>
+        <?php echo mmgr_get_portal_navigation('directory', $current_member); ?>
         
         <!-- Profile Header -->
         <div class="mmgr-portal-card" style="text-align:center;margin-bottom:30px;">

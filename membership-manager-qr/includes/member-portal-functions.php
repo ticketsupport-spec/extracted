@@ -508,6 +508,42 @@ if (!function_exists('mmgr_is_member_logged_in')) {
 }
 
 /**
+ * Enforce the ?usercod= URL parameter for NGINX cache isolation.
+ *
+ * NGINX may cache pages by URL. Adding a member-specific ?usercod=<member_code>
+ * makes every member's portal URLs unique, preventing NGINX from serving a
+ * cached page belonging to one member to a different member.
+ *
+ * If the ?usercod parameter is absent or does not match the logged-in member's
+ * member_code, the visitor is redirected to the same URL with the correct value.
+ * All other existing query parameters are preserved in the redirect.
+ */
+if (!function_exists('mmgr_enforce_usercod')) {
+    function mmgr_enforce_usercod($member) {
+        if (empty($member['member_code'])) {
+            return;
+        }
+
+        $expected = $member['member_code'];
+        $provided = isset($_GET['usercod']) ? wp_unslash($_GET['usercod']) : '';
+
+        if ($provided !== $expected) {
+            // Preserve all current query args (e.g. ?chat=, ?topic=, ?profile_updated=)
+            // and replace/add the correct usercod value.
+            $redirect_url = esc_url_raw(add_query_arg('usercod', $expected));
+            wp_redirect($redirect_url);
+            exit;
+        }
+
+        // Send X-Accel-Expires: 0 so that NGINX proxy/FastCGI caches also treat
+        // this response as non-cacheable, complementing WordPress's nocache_headers().
+        if (!headers_sent()) {
+            header('X-Accel-Expires: 0');
+        }
+    }
+}
+
+/**
  * Get member's visit history
  */
 function mmgr_get_member_visits($member_id, $limit = 20) {
