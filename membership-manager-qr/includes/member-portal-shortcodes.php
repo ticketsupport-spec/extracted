@@ -431,7 +431,10 @@ add_shortcode('mmgr_member_dashboard', function() {
         $member['id']
     ));
     $total_likes = $profile_likes + $post_likes_count;
-    
+
+    // Get pending friend request count
+    $pending_friend_request_count = mmgr_get_pending_friend_request_count( $member['id'] );
+
     // Calculate days until expiration (only if paid and has expiry date)
     $is_expired = false;
     $days_left = 0;
@@ -460,7 +463,23 @@ add_shortcode('mmgr_member_dashboard', function() {
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
             <h1>Welcome back, <?php echo esc_html($member['first_name']); ?>! 👋</h1>
-            <p>You have <a href="<?php echo esc_url(add_query_arg('usercod', $member['member_code'], home_url('/member-messages/'))); ?>" aria-label="View your unread messages"><?php echo esc_html($unread_messages); ?> unread <?php echo $unread_messages === 1 ? 'message' : 'messages'; ?></a> and <a href="<?php echo esc_url(add_query_arg('usercod', $member['member_code'], home_url('/members-directory/'))); ?>" aria-label="View members who liked your content"><?php echo esc_html($total_likes); ?> <?php echo $total_likes === 1 ? 'like' : 'likes'; ?></a></p>
+            <?php
+            $msgs_url     = esc_url(add_query_arg('usercod', $member['member_code'], home_url('/member-messages/')));
+            $dir_url      = esc_url(add_query_arg('usercod', $member['member_code'], home_url('/members-directory/')));
+            $activity_url = esc_url(add_query_arg('usercod', $member['member_code'], home_url('/member-activity/')));
+            $msg_label    = $unread_messages === 1 ? 'message' : 'messages';
+            $like_label   = $total_likes === 1 ? 'like' : 'likes';
+            echo '<p>You have <a href="' . $msgs_url . '" aria-label="View your unread messages">'
+                . esc_html($unread_messages) . ' unread ' . $msg_label . '</a>'
+                . ' and <a href="' . $dir_url . '" aria-label="View members who liked your content">'
+                . esc_html($total_likes) . ' ' . $like_label . '</a>';
+            if ($pending_friend_request_count > 0) {
+                $req_label = $pending_friend_request_count === 1 ? 'request' : 'requests';
+                echo ' and <a href="' . $activity_url . '" aria-label="View your pending friend requests">'
+                    . esc_html($pending_friend_request_count) . ' pending friend ' . $req_label . '</a>';
+            }
+            echo '</p>';
+            ?>
             <?php if (empty($member['community_alias']) || empty($member['community_bio']) || empty($member['community_photo_url'])): ?>
             <p>Set up your community profile. Add a Photo, Bio and an Alias - <a href="<?php echo esc_url(add_query_arg('usercod', $member['member_code'], home_url('/member-profile/'))); ?>">Click Here</a></p>
             <?php endif; ?>
@@ -685,6 +704,15 @@ add_shortcode('mmgr_member_activity', function() {
         $member['id']
     ), ARRAY_A);
 
+    $pending_sent_requests = $wpdb->get_results($wpdb->prepare(
+        "SELECT f.id as request_id, f.requestee_id, m.community_alias, m.community_photo_url, f.created_at
+         FROM {$wpdb->prefix}membership_friends f
+         JOIN {$wpdb->prefix}memberships m ON m.id = f.requestee_id
+         WHERE f.requester_id = %d AND f.status = 'pending'
+         ORDER BY f.created_at DESC",
+        $member['id']
+    ), ARRAY_A);
+
     $my_friends   = mmgr_get_friends((int) $member['id']);
     $friend_feed  = mmgr_get_friend_activity_feed((int) $member['id'], 0, 15);
     
@@ -794,54 +822,92 @@ add_shortcode('mmgr_member_activity', function() {
         <!-- FRIENDS SECTION                                              -->
         <!-- ============================================================ -->
 
-        <!-- Pending Friend Requests -->
-        <?php if (!empty($pending_requests)): ?>
-        <div class="mmgr-portal-card" style="border-left:4px solid #0073aa;margin-bottom:20px;">
-            <h3 style="color:#0073aa;">🔔 Friend Requests (<?php echo count($pending_requests); ?>)</h3>
-            <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px;">
-                <?php foreach ($pending_requests as $req):
-                    $req_alias   = esc_html(mmgr_unescape_alias($req['community_alias'] ?: 'Member'));
-                    $req_id      = (int) $req['requester_id'];
-                    $req_photo   = $req['community_photo_url'];
-                    $profile_url = esc_url(home_url('/member-community-profile/?id=' . $req_id));
-                    $nonce_res   = wp_create_nonce('mmgr_friend_respond');
-                    $nonce_unf   = wp_create_nonce('mmgr_unfriend');
-                ?>
-                <div id="req-row-<?php echo $req_id; ?>" style="display:flex;align-items:center;gap:12px;padding:10px;background:#f0f8ff;border-radius:8px;">
-                    <a href="<?php echo $profile_url; ?>">
-                        <?php if ($req_photo): ?>
-                            <img src="<?php echo esc_url($req_photo); ?>" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid #0073aa;" alt="">
-                        <?php else: ?>
-                            <div style="width:44px;height:44px;border-radius:50%;background:#e0e0e0;display:flex;align-items:center;justify-content:center;font-size:22px;">👤</div>
-                        <?php endif; ?>
-                    </a>
-                    <div style="flex:1;">
-                        <strong><a href="<?php echo $profile_url; ?>" style="color:#0073aa;text-decoration:none;"><?php echo $req_alias; ?></a></strong>
-                        <div style="font-size:12px;color:#888;"><?php echo human_time_diff(strtotime($req['created_at']), current_time('timestamp')); ?> ago</div>
-                    </div>
-                    <div style="display:flex;gap:8px;">
-                        <button onclick="activityFriendRespond(<?php echo $req_id; ?>,this,'accept','<?php echo esc_attr($nonce_res); ?>')"
-                                style="background:#00a32a;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">
-                            ✅ Accept
-                        </button>
-                        <button onclick="activityFriendRespond(<?php echo $req_id; ?>,this,'decline','<?php echo esc_attr($nonce_unf); ?>')"
-                                style="background:#aaa;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;">
-                            ✕ Decline
-                        </button>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-        <?php endif; ?>
-
-        <!-- My Friends List -->
+        <!-- My Friends List (includes pending requests) -->
         <div class="mmgr-portal-card" style="margin-bottom:20px;">
             <h3>👥 My Friends (<?php echo count($my_friends); ?>)</h3>
-            <?php if (empty($my_friends)): ?>
+
+            <?php if (!empty($pending_requests)): ?>
+            <!-- Incoming pending friend requests -->
+            <div style="margin-bottom:20px;">
+                <h4 style="color:#0073aa;margin:0 0 10px 0;font-size:15px;">🔔 Pending Friend Requests (<?php echo count($pending_requests); ?>)</h4>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    <?php foreach ($pending_requests as $req):
+                        $req_alias   = esc_html(mmgr_unescape_alias($req['community_alias'] ?: 'Member'));
+                        $req_id      = (int) $req['requester_id'];
+                        $req_photo   = $req['community_photo_url'];
+                        $profile_url = esc_url(home_url('/member-community-profile/?id=' . $req_id));
+                        $nonce_res   = wp_create_nonce('mmgr_friend_respond');
+                        $nonce_unf   = wp_create_nonce('mmgr_unfriend');
+                    ?>
+                    <div id="req-row-<?php echo $req_id; ?>" style="display:flex;align-items:center;gap:12px;padding:10px;background:#f0f8ff;border-radius:8px;border-left:4px solid #0073aa;">
+                        <a href="<?php echo $profile_url; ?>">
+                            <?php if ($req_photo): ?>
+                                <img src="<?php echo esc_url($req_photo); ?>" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid #0073aa;" alt="">
+                            <?php else: ?>
+                                <div style="width:44px;height:44px;border-radius:50%;background:#e0e0e0;display:flex;align-items:center;justify-content:center;font-size:22px;">👤</div>
+                            <?php endif; ?>
+                        </a>
+                        <div style="flex:1;">
+                            <strong><a href="<?php echo $profile_url; ?>" style="color:#0073aa;text-decoration:none;"><?php echo $req_alias; ?></a></strong>
+                            <div style="font-size:12px;color:#888;"><?php echo human_time_diff(strtotime($req['created_at']), current_time('timestamp')); ?> ago</div>
+                        </div>
+                        <div style="display:flex;gap:8px;">
+                            <button onclick="activityFriendRespond(<?php echo $req_id; ?>,this,'accept','<?php echo esc_attr($nonce_res); ?>')"
+                                    style="background:#00a32a;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">
+                                ✅ Accept
+                            </button>
+                            <button onclick="activityFriendRespond(<?php echo $req_id; ?>,this,'decline','<?php echo esc_attr($nonce_unf); ?>')"
+                                    style="background:#aaa;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;">
+                                ✕ Decline
+                            </button>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if (!empty($pending_sent_requests)): ?>
+            <!-- Outgoing pending friend requests -->
+            <div style="margin-bottom:20px;">
+                <h4 style="color:#888;margin:0 0 10px 0;font-size:15px;">⏳ Sent Requests (<?php echo count($pending_sent_requests); ?>)</h4>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    <?php foreach ($pending_sent_requests as $sreq):
+                        $sreq_alias   = esc_html(mmgr_unescape_alias($sreq['community_alias'] ?: 'Member'));
+                        $sreq_id      = (int) $sreq['requestee_id'];
+                        $sreq_photo   = $sreq['community_photo_url'];
+                        $sreq_url     = esc_url(home_url('/member-community-profile/?id=' . $sreq_id));
+                        $nonce_unf    = wp_create_nonce('mmgr_unfriend');
+                    ?>
+                    <div id="sreq-row-<?php echo $sreq_id; ?>" style="display:flex;align-items:center;gap:12px;padding:10px;background:#f9f9f9;border-radius:8px;border-left:4px solid #aaa;">
+                        <a href="<?php echo $sreq_url; ?>">
+                            <?php if ($sreq_photo): ?>
+                                <img src="<?php echo esc_url($sreq_photo); ?>" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid #aaa;" alt="">
+                            <?php else: ?>
+                                <div style="width:44px;height:44px;border-radius:50%;background:#e0e0e0;display:flex;align-items:center;justify-content:center;font-size:22px;">👤</div>
+                            <?php endif; ?>
+                        </a>
+                        <div style="flex:1;">
+                            <strong><a href="<?php echo $sreq_url; ?>" style="color:#555;text-decoration:none;"><?php echo $sreq_alias; ?></a></strong>
+                            <div style="font-size:12px;color:#888;">Request sent <?php echo human_time_diff(strtotime($sreq['created_at']), current_time('timestamp')); ?> ago</div>
+                        </div>
+                        <button onclick="activityFriendCancel(<?php echo $sreq_id; ?>,this,'<?php echo esc_attr($nonce_unf); ?>')"
+                                style="background:#e74c3c;color:white;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;">
+                            ✕ Cancel
+                        </button>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if (empty($my_friends) && empty($pending_requests) && empty($pending_sent_requests)): ?>
                 <p style="color:#999;font-size:14px;">You haven't connected with any friends yet. Visit the <a href="<?php echo esc_url(home_url('/members-directory/?usercod=' . rawurlencode($member['member_code']))); ?>" style="color:#FF2197;">Members Directory</a> to find people to friend!</p>
-            <?php else: ?>
-                <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;">
+            <?php elseif (!empty($my_friends)): ?>
+                <?php if (!empty($pending_requests) || !empty($pending_sent_requests)): ?>
+                <h4 style="color:#333;margin:0 0 10px 0;font-size:15px;">✅ Friends</h4>
+                <?php endif; ?>
+                <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:4px;">
                     <?php foreach ($my_friends as $f):
                         $f_alias       = esc_html(mmgr_unescape_alias($f['community_alias'] ?: $f['name']));
                         $f_profile_url = esc_url(home_url('/member-community-profile/?id=' . $f['id'] . '&usercod=' . rawurlencode($member['member_code'])));
@@ -1026,6 +1092,34 @@ add_shortcode('mmgr_member_activity', function() {
                     row.innerHTML = '<div style="padding:8px;color:#888;font-style:italic;">'
                         + (actionType === 'accept' ? '✅ Friend request accepted!' : '✕ Request declined.')
                         + '</div>';
+                    setTimeout(function() { if (row) row.remove(); }, 2000);
+                }
+            } else {
+                btn.disabled = false;
+                alert('❌ ' + (data.data.message || data.data));
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            alert('❌ Connection error');
+        });
+    }
+
+    function activityFriendCancel(requesteeId, btn, nonce) {
+        btn.disabled = true;
+        var row = document.getElementById('sreq-row-' + requesteeId);
+        var body = 'action=mmgr_unfriend&profile_id=' + requesteeId + '&nonce=' + encodeURIComponent(nonce);
+
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: body
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (row) {
+                    row.innerHTML = '<div style="padding:8px;color:#888;font-style:italic;">✕ Request cancelled.</div>';
                     setTimeout(function() { if (row) row.remove(); }, 2000);
                 }
             } else {
