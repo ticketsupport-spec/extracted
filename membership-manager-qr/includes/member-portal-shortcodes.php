@@ -3143,6 +3143,9 @@ add_shortcode('mmgr_members_directory', function() {
                                     <div class="mmgr-directory-alias" onclick="viewCommunityProfile(<?php echo $m['id']; ?>)">
                                         <?php echo esc_html(mmgr_unescape_alias($m['community_alias'])); ?>
                                     </div>
+                                    <?php $award_html = mmgr_render_member_award_badges($m['id']); if ($award_html): ?>
+                                        <div class="mmgr-directory-awards" style="margin:4px 0;"><?php echo $award_html; ?></div>
+                                    <?php endif; ?>
                                     <div class="mmgr-directory-actions">
                                         <!-- Message Button -->
                                         <button onclick="openPMModalDynamic(<?php echo $m['id']; ?>)" 
@@ -3509,6 +3512,13 @@ add_shortcode('mmgr_member_community_profile', function() {
             <?php endif; ?>
             
             <h1 style="margin:0 0 10px 0;"><?php echo esc_html(mmgr_unescape_alias($profile_member['community_alias'])); ?></h1>
+
+            <!-- Community Award Badges -->
+            <?php $profile_awards = mmgr_render_member_award_badges($profile_member_id, true); if ($profile_awards): ?>
+                <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px;margin-bottom:12px;">
+                    <?php echo $profile_awards; ?>
+                </div>
+            <?php endif; ?>
 
             <!-- Like count display -->
             <p style="margin:0 0 15px 0;color:#888;font-size:15px;">❤️ <span id="profile-like-count"><?php echo $total_likes; ?></span> <?php echo $total_likes === 1 ? 'like' : 'likes'; ?></p>
