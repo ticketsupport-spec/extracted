@@ -1206,6 +1206,17 @@ add_action( 'wp_ajax_mmgr_friend_request', function() {
         'updated_at'   => current_time( 'mysql' ),
     ) );
 
+    // Send push notification to the recipient
+    if ( function_exists( 'mmgr_pwa_send_push_to_member' ) ) {
+        $sender_alias = mmgr_unescape_alias( $member['community_alias'] ?: $member['name'] );
+        mmgr_pwa_send_push_to_member(
+            $profile_id,
+            '🤝 New Friend Request',
+            $sender_alias . ' sent you a friend request!',
+            home_url( '/member-activity/' )
+        );
+    }
+
     wp_send_json_success( array( 'status' => 'pending_sent', 'message' => 'Friend request sent!' ) );
 } );
 
