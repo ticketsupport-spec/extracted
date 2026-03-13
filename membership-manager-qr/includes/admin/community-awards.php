@@ -76,6 +76,7 @@ $criteria_labels = array(
 ?>
 <div class="wrap">
     <h1 class="wp-heading-inline">🏅 Community Awards</h1>
+    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_community_awards')); ?>" class="page-title-action">+ Add New Award</a>
     <hr class="wp-header-end">
 
     <p style="margin-bottom:20px;color:#555;">
