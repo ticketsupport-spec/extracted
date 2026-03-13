@@ -83,6 +83,12 @@ function mmgr_create_plugin_pages() {
             'slug' => 'member-messages',
             'content' => '[mmgr_member_messages]',
             'option' => 'mmgr_page_messages'
+        ),
+        array(
+            'title' => 'Member Events',
+            'slug' => 'member-events',
+            'content' => '[mmgr_member_events]',
+            'option' => 'mmgr_page_events'
         )
     );
     
