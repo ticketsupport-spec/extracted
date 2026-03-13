@@ -13,6 +13,7 @@ function mmgr_get_portal_navigation($active_page = '', $member = null) {
     $profile_url    = $uc ? home_url('/member-profile/?usercod=' . $uc)    : home_url('/member-profile/');
     $community_url  = $uc ? home_url('/member-community/?usercod=' . $uc)  : home_url('/member-community/');
     $directory_url  = $uc ? home_url('/members-directory/?usercod=' . $uc) : home_url('/members-directory/');
+    $events_url     = $uc ? home_url('/member-events/?usercod=' . $uc)     : home_url('/member-events/');
     $coc_url        = $uc ? home_url('/member-code-of-conduct/?usercod=' . $uc) : home_url('/member-code-of-conduct/');
     $logout_url     = $uc ? home_url('/member-dashboard/?usercod=' . $uc . '&action=logout') : home_url('/member-dashboard/?action=logout');
 
@@ -38,6 +39,7 @@ function mmgr_get_portal_navigation($active_page = '', $member = null) {
             <a href="<?php echo esc_url($profile_url); ?>" class="<?php echo $active_page === 'profile' ? 'active' : ''; ?>">👤 Profile</a>
             <a href="<?php echo esc_url($community_url); ?>" class="<?php echo $active_page === 'community' ? 'active' : ''; ?>">👥 Community</a>
 			<a href="<?php echo esc_url($directory_url); ?>" class="<?php echo $active_page === 'directory' ? 'active' : ''; ?>">📋 Directory</a>
+			<a href="<?php echo esc_url($events_url); ?>" class="<?php echo $active_page === 'events' ? 'active' : ''; ?>">📅 Events</a>
 			<a href="<?php echo esc_url($coc_url); ?>" class="<?php echo $active_page === 'coc' ? 'active' : ''; ?>">📜 Code of Conduct</a>
 			<a href="<?php echo esc_url($logout_url); ?>" class="logout">🚪 Logout</a>
         </div>
@@ -305,6 +307,198 @@ add_action('wp_ajax_mmgr_toggle_event_rsvp', function() {
         'count'          => count($rsvp_rows),
         'attendees_html' => $attendees_html,
     ));
+});
+
+/**
+ * Member Events Portal Page
+ */
+add_shortcode('mmgr_member_events', function() {
+    nocache_headers();
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_redirect(home_url('/member-login/'));
+        exit;
+    }
+
+    mmgr_enforce_usercod($member);
+
+    global $wpdb;
+    $events_table = $wpdb->prefix . 'membership_events';
+    $rsvps_table  = $wpdb->prefix . 'membership_event_rsvps';
+
+    // Get only upcoming events
+    $events = $wpdb->get_results(
+        "SELECT * FROM $events_table
+         WHERE active = 1 AND event_date >= CURDATE()
+         ORDER BY event_date ASC, sort_order ASC",
+        ARRAY_A
+    );
+
+    // Build attendee map
+    $attendees_by_event = array();
+    $my_rsvps = array();
+    if (!empty($events)) {
+        $event_ids    = array_column($events, 'id');
+        $placeholders = implode(',', array_fill(0, count($event_ids), '%d'));
+
+        $rsvp_rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT r.event_id, r.member_id, m.community_alias, m.level, m.sex, m.community_photo_url
+                 FROM $rsvps_table r
+                 INNER JOIN {$wpdb->prefix}memberships m ON m.id = r.member_id
+                 WHERE r.event_id IN ($placeholders)
+                 ORDER BY r.created_at ASC",
+                ...$event_ids
+            ),
+            ARRAY_A
+        );
+
+        foreach ($rsvp_rows as $row) {
+            $attendees_by_event[ $row['event_id'] ][] = $row;
+        }
+
+        $member_rsvps = $wpdb->get_col($wpdb->prepare(
+            "SELECT event_id FROM $rsvps_table WHERE member_id = %d AND event_id IN ($placeholders)",
+            array_merge(array($member['id']), $event_ids)
+        ));
+        $my_rsvps = array_map('intval', $member_rsvps);
+    }
+
+    $ajax_url  = admin_url('admin-ajax.php');
+    $rsvp_nonce = wp_create_nonce('mmgr_toggle_event_rsvp');
+
+    ob_start();
+    ?>
+    <div class="mmgr-portal-container">
+        <?php echo mmgr_get_portal_navigation('events', $member); ?>
+
+        <div class="mmgr-portal-titlecc">
+            <h1>📅 Upcoming Events</h1>
+        </div>
+
+        <?php if (empty($events)): ?>
+            <div class="mmgr-portal-card">
+                <p style="text-align:center;color:#666;">No upcoming events scheduled.</p>
+            </div>
+        <?php else: ?>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:20px;margin-top:20px;">
+                <?php foreach ($events as $event):
+                    $event_id  = (int) $event['id'];
+                    $is_going  = in_array($event_id, $my_rsvps, true);
+                    $attendees = $attendees_by_event[$event_id] ?? array();
+                ?>
+                    <div style="background:#fff;border:2px solid #9b51e0;border-radius:8px;overflow:hidden;">
+                        <?php if (!empty($event['image_url'])): ?>
+                            <img src="<?php echo esc_url($event['image_url']); ?>" style="width:100%;height:180px;object-fit:cover;" alt="">
+                        <?php else: ?>
+                            <div style="width:100%;height:180px;background:linear-gradient(135deg,#9b51e0,#ce00ff);display:flex;align-items:center;justify-content:center;color:white;font-size:48px;">
+                                📅
+                            </div>
+                        <?php endif; ?>
+
+                        <div style="padding:15px;">
+                            <h4 style="margin:0 0 8px 0;color:#0073aa;">
+                                <?php echo esc_html($event['event_name']); ?>
+                            </h4>
+
+                            <p style="margin:0 0 8px 0;color:#666;font-size:14px;">
+                                📆 <?php echo esc_html(date('M d, Y', strtotime($event['event_date']))); ?>
+                            </p>
+
+                            <?php if (!empty($event['start_time'])): ?>
+                                <p style="margin:0 0 8px 0;color:#666;font-size:14px;">
+                                    🕐 <?php echo esc_html(date('g:i A', strtotime($event['start_time'])));
+                                    if (!empty($event['end_time'])) {
+                                        echo ' - ' . esc_html(date('g:i A', strtotime($event['end_time'])));
+                                    }
+                                    ?>
+                                </p>
+                            <?php endif; ?>
+
+                            <?php if (!empty($event['location'])): ?>
+                                <p style="margin:0 0 8px 0;color:#666;font-size:14px;">
+                                    📍 <?php echo esc_html($event['location']); ?>
+                                </p>
+                            <?php endif; ?>
+
+                            <?php if (!empty($event['description'])): ?>
+                                <div style="margin:0 0 12px 0;color:#333;font-size:13px;line-height:1.5;">
+                                    <?php echo wp_kses_post(wpautop($event['description'])); ?>
+                                </div>
+                            <?php endif; ?>
+
+                            <button
+                                id="rsvp-btn-<?php echo $event_id; ?>"
+                                onclick="mmgrToggleRsvpPage(<?php echo $event_id; ?>, this)"
+                                style="margin-bottom:12px;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;
+                                       background:<?php echo $is_going ? '#28a745' : '#9b51e0'; ?>;color:white;">
+                                <?php echo $is_going ? '✅ Going – Remove Me' : '📌 Mark as Going'; ?>
+                            </button>
+
+                            <?php if (!empty($attendees)): ?>
+                                <div id="rsvp-list-<?php echo $event_id; ?>" style="border-top:1px solid #ddd;padding-top:10px;margin-top:4px;">
+                                    <p style="margin:0 0 6px 0;font-size:12px;font-weight:bold;color:#555;">
+                                        👥 Going (<?php echo count($attendees); ?>):
+                                    </p>
+                                    <div style="margin:0;font-size:12px;color:#666;line-height:1.6;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;">
+                                        <?php foreach ($attendees as $att):
+                                            $att_name  = esc_html(mmgr_event_attendee_display_name($att));
+                                            $att_photo = !empty($att['community_photo_url']) ? esc_url($att['community_photo_url']) : '';
+                                        ?>
+                                            <span style="display:inline-flex;align-items:center;gap:3px;">
+                                                <?php if ($att_photo): ?>
+                                                    <img src="<?php echo $att_photo; ?>" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">
+                                                <?php else: ?>
+                                                    <span style="width:20px;height:20px;border-radius:50%;background:#ddd;display:inline-flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">👤</span>
+                                                <?php endif; ?>
+                                                <?php echo $att_name; ?>
+                                            </span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <div id="rsvp-list-<?php echo $event_id; ?>" style="border-top:1px solid #ddd;padding-top:10px;margin-top:4px;display:none;">
+                                    <p style="margin:0 0 6px 0;font-size:12px;font-weight:bold;color:#555;">👥 Going (0):</p>
+                                    <div style="margin:0;font-size:12px;color:#666;line-height:1.6;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;"></div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <script>
+    function mmgrToggleRsvpPage(eventId, btn) {
+        btn.disabled = true;
+        fetch('<?php echo esc_url($ajax_url); ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=mmgr_toggle_event_rsvp&event_id=' + eventId + '&nonce=<?php echo esc_js($rsvp_nonce); ?>'
+        })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            if (!data.success) { alert(data.data || 'Error'); return; }
+            var going = data.data.going;
+            btn.textContent = going ? '✅ Going – Remove Me' : '📌 Mark as Going';
+            btn.style.background = going ? '#28a745' : '#9b51e0';
+            var listDiv = document.getElementById('rsvp-list-' + eventId);
+            if (listDiv) {
+                var countEl = listDiv.querySelector('p:first-child');
+                var namesEl = listDiv.querySelector('div:last-child');
+                if (countEl) countEl.textContent = '👥 Going (' + data.data.count + '):';
+                if (namesEl) namesEl.innerHTML = data.data.attendees_html;
+                listDiv.style.display = data.data.count > 0 ? '' : 'none';
+            }
+        })
+        .catch(() => { btn.disabled = false; alert('Network error.'); });
+    }
+    </script>
+    <?php
+    return ob_get_clean();
 });
 
 /**
@@ -620,6 +814,16 @@ add_shortcode('mmgr_member_dashboard', function() {
     // Get pending friend request count
     $pending_friend_request_count = mmgr_get_pending_friend_request_count( $member['id'] );
 
+    // Get count of upcoming events the member has marked as going
+    $events_table = $wpdb->prefix . 'membership_events';
+    $rsvps_table  = $wpdb->prefix . 'membership_event_rsvps';
+    $upcoming_rsvp_count = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $rsvps_table r
+         INNER JOIN $events_table e ON e.id = r.event_id
+         WHERE r.member_id = %d AND e.active = 1 AND e.event_date >= CURDATE()",
+        $member['id']
+    ));
+
     // Calculate days until expiration (only if paid and has expiry date)
     $is_expired = false;
     $days_left = 0;
@@ -652,6 +856,7 @@ add_shortcode('mmgr_member_dashboard', function() {
             $msgs_url     = esc_url(add_query_arg('usercod', $member['member_code'], home_url('/member-messages/')));
             $dir_url      = esc_url(add_query_arg('usercod', $member['member_code'], home_url('/members-directory/')));
             $activity_url = esc_url(add_query_arg('usercod', $member['member_code'], home_url('/member-activity/')));
+            $events_pg_url = esc_url(add_query_arg('usercod', $member['member_code'], home_url('/member-events/')));
             $msg_label    = $unread_messages === 1 ? 'message' : 'messages';
             $like_label   = $total_likes === 1 ? 'like' : 'likes';
             echo '<p>You have <a href="' . $msgs_url . '" aria-label="View your unread messages">'
@@ -662,6 +867,11 @@ add_shortcode('mmgr_member_dashboard', function() {
                 $req_label = $pending_friend_request_count === 1 ? 'request' : 'requests';
                 echo ' and <a href="' . $activity_url . '" aria-label="View your pending friend requests">'
                     . esc_html($pending_friend_request_count) . ' pending friend ' . $req_label . '</a>';
+            }
+            if ($upcoming_rsvp_count > 0) {
+                $event_label = $upcoming_rsvp_count === 1 ? 'upcoming event' : 'upcoming events';
+                echo ' and <a href="' . $events_pg_url . '" aria-label="View your upcoming events">'
+                    . esc_html($upcoming_rsvp_count) . ' ' . $event_label . ' you\'re going to</a>';
             }
             echo '</p>';
             ?>
