@@ -488,10 +488,9 @@ add_action('wp_head', function() {
     }
     
     .mmgr-directory-actions {
-        text-align: center;
         display: flex;
-        gap: 12px;
-        justify-content: center;
+        gap: 8px;
+        margin-top: 8px;
         flex-wrap: wrap;
     }
     

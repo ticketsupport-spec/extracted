@@ -3111,7 +3111,6 @@ add_shortcode('mmgr_members_directory', function() {
                         <tr>
                             <th style="width:80px;">Photo</th>
                             <th>Alias</th>
-                            <th style="width:200px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -3139,15 +3138,11 @@ add_shortcode('mmgr_members_directory', function() {
                                     <?php endif; ?>
                                 </td>
                                 
-                                <!-- Alias -->
+                                <!-- Alias + Actions -->
                                 <td>
                                     <div class="mmgr-directory-alias" onclick="viewCommunityProfile(<?php echo $m['id']; ?>)">
                                         <?php echo esc_html($m['community_alias']); ?>
                                     </div>
-                                </td>
-                                
-                                <!-- Actions -->
-                                <td>
                                     <div class="mmgr-directory-actions">
                                         <!-- Message Button -->
                                         <button onclick="openPMModalDynamic(<?php echo $m['id']; ?>)" 
@@ -3158,7 +3153,7 @@ add_shortcode('mmgr_members_directory', function() {
                                         
                                         <!-- Like Button -->
                                         <button onclick="toggleLike(<?php echo $m['id']; ?>, this)" 
-                                                class="mmgr-directory-btn mmgr-directory-btn-like <?php echo $is_liked ? '❤' : 'LOVE?'; ?>"
+                                                class="mmgr-directory-btn mmgr-directory-btn-like <?php echo $is_liked ? 'liked' : ''; ?>"
                                                 title="<?php echo $is_liked ? 'Click to UNLOVE' : 'Click if you Love this?'; ?>">
                                             <?php echo $is_liked ? '❤' : 'LOVE?'; ?>
                                         </button>
