@@ -16,6 +16,12 @@ function mmgr_get_portal_navigation($active_page = '', $member = null) {
     $coc_url        = $uc ? home_url('/member-code-of-conduct/?usercod=' . $uc) : home_url('/member-code-of-conduct/');
     $logout_url     = $uc ? home_url('/member-dashboard/?usercod=' . $uc . '&action=logout') : home_url('/member-dashboard/?action=logout');
 
+    // Pending friend request count for nav badge
+    $pending_fr_count = 0;
+    if ( $member && ! empty( $member['id'] ) ) {
+        $pending_fr_count = mmgr_get_pending_friend_request_count( (int) $member['id'] );
+    }
+
     ob_start();
     ?>
 
@@ -27,7 +33,7 @@ function mmgr_get_portal_navigation($active_page = '', $member = null) {
         
         <div id="mmgr-nav-items" class="mmgr-nav-items-container">
             <a href="<?php echo esc_url($dashboard_url); ?>" class="<?php echo $active_page === 'dashboard' ? 'active' : ''; ?>">🏠 Dashboard</a>
-            <a href="<?php echo esc_url($activity_url); ?>" class="<?php echo $active_page === 'activity' ? 'active' : ''; ?>">📊 Activity</a>
+            <a href="<?php echo esc_url($activity_url); ?>" class="<?php echo $active_page === 'activity' ? 'active' : ''; ?>">📊 Activity<?php if ($pending_fr_count > 0): ?> <span class="mmgr-nav-unread-badge" style="display:inline-block;"><?php echo $pending_fr_count; ?></span><?php endif; ?></a>
             <a href="<?php echo esc_url($messages_url); ?>" class="<?php echo $active_page === 'messages' ? 'active' : ''; ?>">💬 Messages <span id="mmgr-messages-unread-badge" class="mmgr-nav-unread-badge" style="display:none;"></span></a>
             <a href="<?php echo esc_url($profile_url); ?>" class="<?php echo $active_page === 'profile' ? 'active' : ''; ?>">👤 Profile</a>
             <a href="<?php echo esc_url($community_url); ?>" class="<?php echo $active_page === 'community' ? 'active' : ''; ?>">👥 Community</a>
@@ -668,6 +674,19 @@ add_shortcode('mmgr_member_activity', function() {
 
     // Total sent-like count (for Load More logic)
     $total_sent_likes = mmgr_count_sent_likes($member['id']);
+
+    // Friends data
+    $pending_requests = $wpdb->get_results($wpdb->prepare(
+        "SELECT f.id as request_id, f.requester_id, m.community_alias, m.community_photo_url, f.created_at
+         FROM {$wpdb->prefix}membership_friends f
+         JOIN {$wpdb->prefix}memberships m ON m.id = f.requester_id
+         WHERE f.requestee_id = %d AND f.status = 'pending'
+         ORDER BY f.created_at DESC",
+        $member['id']
+    ), ARRAY_A);
+
+    $my_friends   = mmgr_get_friends((int) $member['id']);
+    $friend_feed  = mmgr_get_friend_activity_feed((int) $member['id'], 0, 15);
     
     ob_start();
     ?>
@@ -771,6 +790,89 @@ add_shortcode('mmgr_member_activity', function() {
             </div>
         </div>
         
+        <!-- ============================================================ -->
+        <!-- FRIENDS SECTION                                              -->
+        <!-- ============================================================ -->
+
+        <!-- Pending Friend Requests -->
+        <?php if (!empty($pending_requests)): ?>
+        <div class="mmgr-portal-card" style="border-left:4px solid #0073aa;margin-bottom:20px;">
+            <h3 style="color:#0073aa;">🔔 Friend Requests (<?php echo count($pending_requests); ?>)</h3>
+            <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px;">
+                <?php foreach ($pending_requests as $req):
+                    $req_alias   = esc_html(mmgr_unescape_alias($req['community_alias'] ?: 'Member'));
+                    $req_id      = (int) $req['requester_id'];
+                    $req_photo   = $req['community_photo_url'];
+                    $profile_url = esc_url(home_url('/member-community-profile/?id=' . $req_id));
+                    $nonce_res   = wp_create_nonce('mmgr_friend_respond');
+                    $nonce_unf   = wp_create_nonce('mmgr_unfriend');
+                ?>
+                <div id="req-row-<?php echo $req_id; ?>" style="display:flex;align-items:center;gap:12px;padding:10px;background:#f0f8ff;border-radius:8px;">
+                    <a href="<?php echo $profile_url; ?>">
+                        <?php if ($req_photo): ?>
+                            <img src="<?php echo esc_url($req_photo); ?>" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid #0073aa;" alt="">
+                        <?php else: ?>
+                            <div style="width:44px;height:44px;border-radius:50%;background:#e0e0e0;display:flex;align-items:center;justify-content:center;font-size:22px;">👤</div>
+                        <?php endif; ?>
+                    </a>
+                    <div style="flex:1;">
+                        <strong><a href="<?php echo $profile_url; ?>" style="color:#0073aa;text-decoration:none;"><?php echo $req_alias; ?></a></strong>
+                        <div style="font-size:12px;color:#888;"><?php echo human_time_diff(strtotime($req['created_at']), current_time('timestamp')); ?> ago</div>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button onclick="activityFriendRespond(<?php echo $req_id; ?>,this,'accept','<?php echo esc_attr($nonce_res); ?>')"
+                                style="background:#00a32a;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:13px;">
+                            ✅ Accept
+                        </button>
+                        <button onclick="activityFriendRespond(<?php echo $req_id; ?>,this,'decline','<?php echo esc_attr($nonce_unf); ?>')"
+                                style="background:#aaa;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;">
+                            ✕ Decline
+                        </button>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- My Friends List -->
+        <div class="mmgr-portal-card" style="margin-bottom:20px;">
+            <h3>👥 My Friends (<?php echo count($my_friends); ?>)</h3>
+            <?php if (empty($my_friends)): ?>
+                <p style="color:#999;font-size:14px;">You haven't connected with any friends yet. Visit the <a href="<?php echo esc_url(home_url('/members-directory/?usercod=' . rawurlencode($member['member_code']))); ?>" style="color:#FF2197;">Members Directory</a> to find people to friend!</p>
+            <?php else: ?>
+                <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;">
+                    <?php foreach ($my_friends as $f):
+                        $f_alias       = esc_html(mmgr_unescape_alias($f['community_alias'] ?: $f['name']));
+                        $f_profile_url = esc_url(home_url('/member-community-profile/?id=' . $f['id'] . '&usercod=' . rawurlencode($member['member_code'])));
+                    ?>
+                    <a href="<?php echo $f_profile_url; ?>" style="display:flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:#333;max-width:72px;">
+                        <?php if (!empty($f['community_photo_url'])): ?>
+                            <img src="<?php echo esc_url($f['community_photo_url']); ?>"
+                                 style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:3px solid #28a745;" alt="">
+                        <?php else: ?>
+                            <div style="width:52px;height:52px;border-radius:50%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:24px;border:3px solid #28a745;">👤</div>
+                        <?php endif; ?>
+                        <span style="font-size:12px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;"><?php echo $f_alias; ?></span>
+                    </a>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Friends Activity Feed -->
+        <?php if (!empty($friend_feed)): ?>
+        <div class="mmgr-portal-card" style="margin-bottom:20px;">
+            <h3>📡 Friends Activity</h3>
+            <p style="font-size:13px;color:#888;margin-top:0;">Recent things your friends have been doing in the community.</p>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
+                <?php foreach ($friend_feed as $fitem): ?>
+                    <?php echo mmgr_render_friend_activity_item($fitem); ?>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Recent Visits Table -->
         <div class="mmgr-portal-card">
             <h3>📅 Recent Visits</h3>
@@ -893,6 +995,47 @@ add_shortcode('mmgr_member_activity', function() {
         .catch(function() {
             button.disabled = false;
             button.textContent = 'Load More';
+        });
+    }
+
+    /**
+     * Accept or decline a friend request from the activity page.
+     * For 'decline' we call mmgr_unfriend (which also deletes pending rows).
+     */
+    function activityFriendRespond(requesterId, btn, actionType, nonce) {
+        btn.disabled = true;
+        var row = document.getElementById('req-row-' + requesterId);
+
+        var ajaxAction = (actionType === 'accept') ? 'mmgr_friend_respond' : 'mmgr_unfriend';
+        var body;
+        if (actionType === 'accept') {
+            body = 'action=' + ajaxAction + '&profile_id=' + requesterId + '&action_type=accept&nonce=' + encodeURIComponent(nonce);
+        } else {
+            body = 'action=' + ajaxAction + '&profile_id=' + requesterId + '&nonce=' + encodeURIComponent(nonce);
+        }
+
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: body
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (row) {
+                    row.innerHTML = '<div style="padding:8px;color:#888;font-style:italic;">'
+                        + (actionType === 'accept' ? '✅ Friend request accepted!' : '✕ Request declined.')
+                        + '</div>';
+                    setTimeout(function() { if (row) row.remove(); }, 2000);
+                }
+            } else {
+                btn.disabled = false;
+                alert('❌ ' + (data.data.message || data.data));
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            alert('❌ Connection error');
         });
     }
     </script>
@@ -2446,7 +2589,45 @@ add_shortcode('mmgr_member_messages', function() {
                                 <button onclick="toggleDropdown()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:8px 12px;border-radius:6px;cursor:pointer;">
                                     ⋮
                                 </button>
-                                <div id="chat-dropdown" style="display:none;position:absolute;right:0;top:100%;background:white;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.2);min-width:150px;margin-top:5px;z-index:100;">
+                                <div id="chat-dropdown" style="display:none;position:absolute;right:0;top:100%;background:white;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.2);min-width:180px;margin-top:5px;z-index:100;">
+                                    <?php
+                                    $chat_friend_status = mmgr_get_friendship_status((int)$member['id'], (int)$other_member['id']);
+                                    $chat_friend_nonce_req = wp_create_nonce('mmgr_friend_request');
+                                    $chat_friend_nonce_res = wp_create_nonce('mmgr_friend_respond');
+                                    $chat_friend_nonce_unf = wp_create_nonce('mmgr_unfriend');
+                                    switch ($chat_friend_status) {
+                                        case 'none':
+                                            $cff_label  = '🤝 Add Friend';
+                                            $cff_action = 'request';
+                                            break;
+                                        case 'pending_sent':
+                                            $cff_label  = '⏳ Cancel Request';
+                                            $cff_action = 'cancel';
+                                            break;
+                                        case 'pending_received':
+                                            $cff_label  = '✅ Accept Friend';
+                                            $cff_action = 'accept';
+                                            break;
+                                        case 'accepted':
+                                            $cff_label  = '👥 Unfriend';
+                                            $cff_action = 'unfriend';
+                                            break;
+                                        default:
+                                            $cff_label  = '';
+                                            $cff_action = '';
+                                    }
+                                    if ($cff_label):
+                                    ?>
+                                    <button id="chat-friend-btn"
+                                            onclick="chatFriendAction(<?php echo intval($other_member['id']); ?>,'<?php echo esc_attr($cff_action); ?>')"
+                                            data-status="<?php echo esc_attr($chat_friend_status); ?>"
+                                            data-nonce-request="<?php echo esc_attr($chat_friend_nonce_req); ?>"
+                                            data-nonce-respond="<?php echo esc_attr($chat_friend_nonce_res); ?>"
+                                            data-nonce-unfriend="<?php echo esc_attr($chat_friend_nonce_unf); ?>"
+                                            style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#0073aa;">
+                                        <?php echo esc_html($cff_label); ?>
+                                    </button>
+                                    <?php endif; ?>
                                     <button onclick="blockMember(<?php echo $other_member['id']; ?>)" style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#d00;">
                                         🚫 Block Member
                                     </button>
@@ -2745,6 +2926,64 @@ add_shortcode('mmgr_member_messages', function() {
     
     function showAddContact() {
         alert('Contact management coming soon!');
+    }
+
+    /**
+     * Friend action handler for the messages page.
+     */
+    function chatFriendAction(memberId, actionType) {
+        const btn = document.getElementById('chat-friend-btn');
+        if (!btn) return;
+        const origText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '…';
+
+        let ajaxAction, nonce, body;
+
+        if (actionType === 'request') {
+            ajaxAction = 'mmgr_friend_request';
+            nonce = btn.dataset.nonceRequest;
+            body = 'action=' + ajaxAction + '&profile_id=' + memberId + '&nonce=' + encodeURIComponent(nonce);
+        } else if (actionType === 'cancel' || actionType === 'unfriend') {
+            ajaxAction = 'mmgr_unfriend';
+            nonce = btn.dataset.nonceUnfriend;
+            body = 'action=' + ajaxAction + '&profile_id=' + memberId + '&nonce=' + encodeURIComponent(nonce);
+        } else if (actionType === 'accept') {
+            ajaxAction = 'mmgr_friend_respond';
+            nonce = btn.dataset.nonceRespond;
+            body = 'action=' + ajaxAction + '&profile_id=' + memberId + '&action_type=accept&nonce=' + encodeURIComponent(nonce);
+        }
+
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: body
+        })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            if (data.success) {
+                const newStatus = data.data.status;
+                if (newStatus === 'pending_sent') {
+                    btn.textContent = '⏳ Cancel Request';
+                    btn.setAttribute('onclick', 'chatFriendAction(' + memberId + ",'cancel')");
+                } else if (newStatus === 'accepted') {
+                    btn.textContent = '👥 Unfriend';
+                    btn.setAttribute('onclick', 'chatFriendAction(' + memberId + ",'unfriend')");
+                } else {
+                    btn.textContent = '🤝 Add Friend';
+                    btn.setAttribute('onclick', 'chatFriendAction(' + memberId + ",'request')");
+                }
+            } else {
+                btn.textContent = origText;
+                alert('❌ ' + (data.data.message || data.data));
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.textContent = origText;
+            alert('❌ Connection error');
+        });
     }
     </script>
     <?php
@@ -3121,6 +3360,8 @@ add_shortcode('mmgr_members_directory', function() {
                                 $member['id'],
                                 $m['id']
                             ));
+                            // Friendship status (skip self)
+                            $dir_friend_status = ($m['id'] === $member['id']) ? 'self' : mmgr_get_friendship_status((int)$member['id'], (int)$m['id']);
                         ?>
                             <tr>
                                 <!-- Photo -->
@@ -3160,6 +3401,50 @@ add_shortcode('mmgr_members_directory', function() {
                                                 title="<?php echo $is_liked ? 'Click to UNLOVE' : 'Click if you Love this?'; ?>">
                                             <?php echo $is_liked ? '❤' : 'LOVE?'; ?>
                                         </button>
+
+                                        <!-- Friend Button (hidden for self) -->
+                                        <?php if ($dir_friend_status !== 'self'):
+                                            $dir_fb_id   = 'dir-friend-' . $m['id'];
+                                            $dir_fb_nonce_req = wp_create_nonce('mmgr_friend_request');
+                                            $dir_fb_nonce_res = wp_create_nonce('mmgr_friend_respond');
+                                            $dir_fb_nonce_unf = wp_create_nonce('mmgr_unfriend');
+                                            switch ($dir_friend_status) {
+                                                case 'accepted':
+                                                    $dir_fb_label   = '👥';
+                                                    $dir_fb_title   = 'Friends – click to unfriend';
+                                                    $dir_fb_action  = 'unfriend';
+                                                    $dir_fb_class   = 'mmgr-directory-btn-friend accepted';
+                                                    break;
+                                                case 'pending_sent':
+                                                    $dir_fb_label   = '⏳';
+                                                    $dir_fb_title   = 'Request sent – click to cancel';
+                                                    $dir_fb_action  = 'cancel';
+                                                    $dir_fb_class   = 'mmgr-directory-btn-friend pending';
+                                                    break;
+                                                case 'pending_received':
+                                                    $dir_fb_label   = '✅';
+                                                    $dir_fb_title   = 'Accept friend request';
+                                                    $dir_fb_action  = 'accept';
+                                                    $dir_fb_class   = 'mmgr-directory-btn-friend incoming';
+                                                    break;
+                                                default:
+                                                    $dir_fb_label   = '🤝';
+                                                    $dir_fb_title   = 'Add Friend';
+                                                    $dir_fb_action  = 'request';
+                                                    $dir_fb_class   = 'mmgr-directory-btn-friend';
+                                                    break;
+                                            }
+                                        ?>
+                                        <button id="<?php echo esc_attr($dir_fb_id); ?>"
+                                                onclick="dirFriendAction(<?php echo $m['id']; ?>,'<?php echo esc_attr($dir_fb_id); ?>','<?php echo esc_attr($dir_fb_action); ?>')"
+                                                class="mmgr-directory-btn <?php echo esc_attr($dir_fb_class); ?>"
+                                                data-nonce-request="<?php echo esc_attr($dir_fb_nonce_req); ?>"
+                                                data-nonce-respond="<?php echo esc_attr($dir_fb_nonce_res); ?>"
+                                                data-nonce-unfriend="<?php echo esc_attr($dir_fb_nonce_unf); ?>"
+                                                title="<?php echo esc_attr($dir_fb_title); ?>">
+                                            <?php echo $dir_fb_label; ?>
+                                        </button>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>
@@ -3306,6 +3591,72 @@ add_shortcode('mmgr_members_directory', function() {
             });
         }
         setInterval(mmgrRefreshOnline, MMGR_ONLINE_REFRESH_MS);
+
+        /**
+         * Directory page friend action handler.
+         */
+        function dirFriendAction(memberId, btnId, actionType) {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '…';
+
+            let ajaxAction, nonce, body;
+
+            if (actionType === 'request') {
+                ajaxAction = 'mmgr_friend_request';
+                nonce = btn.dataset.nonceRequest;
+                body = 'action=' + ajaxAction + '&profile_id=' + memberId + '&nonce=' + encodeURIComponent(nonce);
+            } else if (actionType === 'cancel' || actionType === 'unfriend') {
+                ajaxAction = 'mmgr_unfriend';
+                nonce = btn.dataset.nonceUnfriend;
+                body = 'action=' + ajaxAction + '&profile_id=' + memberId + '&nonce=' + encodeURIComponent(nonce);
+            } else if (actionType === 'accept') {
+                ajaxAction = 'mmgr_friend_respond';
+                nonce = btn.dataset.nonceRespond;
+                body = 'action=' + ajaxAction + '&profile_id=' + memberId + '&action_type=accept&nonce=' + encodeURIComponent(nonce);
+            }
+
+            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: body
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                if (data.success) {
+                    const newStatus = data.data.status;
+                    if (newStatus === 'pending_sent') {
+                        btn.textContent = '⏳';
+                        btn.title = 'Request sent – click to cancel';
+                        btn.classList.remove('accepted', 'incoming');
+                        btn.classList.add('pending');
+                        btn.setAttribute('onclick', "dirFriendAction(" + memberId + ",'" + btnId + "','cancel')");
+                    } else if (newStatus === 'accepted') {
+                        btn.textContent = '👥';
+                        btn.title = 'Friends – click to unfriend';
+                        btn.classList.remove('pending', 'incoming');
+                        btn.classList.add('accepted');
+                        btn.setAttribute('onclick', "dirFriendAction(" + memberId + ",'" + btnId + "','unfriend')");
+                    } else {
+                        btn.textContent = '🤝';
+                        btn.title = 'Add Friend';
+                        btn.classList.remove('pending', 'accepted', 'incoming');
+                        btn.setAttribute('onclick', "dirFriendAction(" + memberId + ",'" + btnId + "','request')");
+                    }
+                } else {
+                    btn.textContent = origText;
+                    alert('❌ ' + (data.data.message || data.data));
+                }
+            })
+            .catch(() => {
+                btn.disabled = false;
+                btn.textContent = origText;
+                alert('❌ Connection error');
+            });
+        }
     </script>
     <?php
     return ob_get_clean();
@@ -3454,7 +3805,9 @@ add_shortcode('mmgr_member_community_profile', function() {
     $is_liked = false;
     $is_blocked = false;
     $private_note = '';
-    if ($profile_member_id != $current_member['id']) {
+    $friendship_status = 'self';
+    $mutual_friends = [];
+    if ($profile_member_id !== (int) $current_member['id']) {
         $is_liked = (bool) $wpdb->get_var($wpdb->prepare(
             "SELECT id FROM {$wpdb->prefix}membership_likes WHERE member_id = %d AND liked_member_id = %d",
             $current_member['id'],
@@ -3473,6 +3826,10 @@ add_shortcode('mmgr_member_community_profile', function() {
             $current_member['id'],
             $profile_member_id
         ));
+
+        // Friendship status
+        $friendship_status = mmgr_get_friendship_status( (int) $current_member['id'], $profile_member_id );
+        $mutual_friends    = mmgr_get_mutual_friends( (int) $current_member['id'], $profile_member_id );
     }
 
     // Get total likes this profile has received (all sources)
@@ -3542,11 +3899,66 @@ add_shortcode('mmgr_member_community_profile', function() {
                             style="background:<?php echo $is_liked ? '#FF2197' : 'white'; ?>;color:<?php echo $is_liked ? 'white' : '#FF2197'; ?>;border:2px solid #FF2197;padding:12px 30px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:16px;">
                         ❤️ <?php echo $is_liked ? 'Unlike' : 'Like'; ?>
                     </button>
+
+                    <!-- Friend Button -->
+                    <?php
+                    $friend_btn_id    = 'friend-btn-' . $profile_member_id;
+                    $friend_nonce_req = wp_create_nonce('mmgr_friend_request');
+                    $friend_nonce_res = wp_create_nonce('mmgr_friend_respond');
+                    $friend_nonce_unf = wp_create_nonce('mmgr_unfriend');
+                    switch ($friendship_status) {
+                        case 'none':
+                            $fb_label = '🤝 Add Friend';
+                            $fb_bg    = '#0073aa'; $fb_color = 'white';
+                            $fb_onclick = "friendAction({$profile_member_id},'{$friend_btn_id}','request')";
+                            break;
+                        case 'pending_sent':
+                            $fb_label = '⏳ Request Sent';
+                            $fb_bg    = '#aaa'; $fb_color = 'white';
+                            $fb_onclick = "friendAction({$profile_member_id},'{$friend_btn_id}','cancel')";
+                            break;
+                        case 'pending_received':
+                            $fb_label = '✅ Accept Friend';
+                            $fb_bg    = '#00a32a'; $fb_color = 'white';
+                            $fb_onclick = "friendAction({$profile_member_id},'{$friend_btn_id}','accept')";
+                            break;
+                        case 'accepted':
+                            $fb_label = '👥 Friends';
+                            $fb_bg    = '#28a745'; $fb_color = 'white';
+                            $fb_onclick = "friendAction({$profile_member_id},'{$friend_btn_id}','unfriend')";
+                            break;
+                        default:
+                            $fb_label = '';
+                            $fb_onclick = '';
+                            $fb_bg = ''; $fb_color = '';
+                    }
+                    if ($friendship_status !== 'self'):
+                    ?>
+                    <button id="<?php echo esc_attr($friend_btn_id); ?>"
+                            onclick="<?php echo $fb_onclick; ?>"
+                            data-status="<?php echo esc_attr($friendship_status); ?>"
+                            data-nonce-request="<?php echo esc_attr($friend_nonce_req); ?>"
+                            data-nonce-respond="<?php echo esc_attr($friend_nonce_res); ?>"
+                            data-nonce-unfriend="<?php echo esc_attr($friend_nonce_unf); ?>"
+                            style="background:<?php echo esc_attr($fb_bg); ?>;color:<?php echo esc_attr($fb_color); ?>;border:2px solid <?php echo esc_attr($fb_bg); ?>;padding:12px 30px;border-radius:6px;cursor:pointer;font-weight:bold;font-size:16px;">
+                        <?php echo esc_html($fb_label); ?>
+                    </button>
+                    <?php endif; ?>
                     
                     <button onclick="toggleBlock(<?php echo $profile_member_id; ?>, this)" 
                             style="background:<?php echo $is_blocked ? '#d00' : '#999'; ?>;color:white;padding:12px 30px;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:16px;">
                         <?php echo $is_blocked ? '🚫 Unblock' : '⊘ Block'; ?>
                     </button>
+                </div>
+            <?php endif; ?>
+
+            <!-- Mutual Friends -->
+            <?php if (!empty($mutual_friends) && $profile_member_id != $current_member['id']): ?>
+                <div style="margin-bottom:16px;">
+                    <p style="font-size:14px;color:#666;margin:0 0 8px 0;">
+                        👥 <?php echo count($mutual_friends); ?> mutual friend<?php echo count($mutual_friends) !== 1 ? 's' : ''; ?>:
+                        <?php $mf_names = array_map(function($mf) { return esc_html(mmgr_unescape_alias($mf['community_alias'] ?: $mf['name'])); }, $mutual_friends); echo implode(', ', $mf_names); ?>
+                    </p>
                 </div>
             <?php endif; ?>
         </div>
@@ -3811,6 +4223,72 @@ add_shortcode('mmgr_member_community_profile', function() {
             })
             .catch(error => {
                 alert('❌ Error: ' + error);
+            });
+        }
+
+        /**
+         * Friend action handler for community profile page.
+         * actionType: 'request' | 'cancel' | 'accept' | 'decline' | 'unfriend'
+         */
+        function friendAction(profileId, btnId, actionType) {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '…';
+
+            let ajaxAction, nonce, body;
+
+            if (actionType === 'request') {
+                ajaxAction = 'mmgr_friend_request';
+                nonce = btn.dataset.nonceRequest;
+                body = 'action=' + ajaxAction + '&profile_id=' + profileId + '&nonce=' + encodeURIComponent(nonce);
+            } else if (actionType === 'cancel' || actionType === 'unfriend') {
+                ajaxAction = 'mmgr_unfriend';
+                nonce = btn.dataset.nonceUnfriend;
+                body = 'action=' + ajaxAction + '&profile_id=' + profileId + '&nonce=' + encodeURIComponent(nonce);
+            } else if (actionType === 'accept' || actionType === 'decline') {
+                ajaxAction = 'mmgr_friend_respond';
+                nonce = btn.dataset.nonceRespond;
+                body = 'action=' + ajaxAction + '&profile_id=' + profileId + '&action_type=' + actionType + '&nonce=' + encodeURIComponent(nonce);
+            }
+
+            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: body
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                if (data.success) {
+                    const newStatus = data.data.status;
+                    btn.dataset.status = newStatus;
+                    if (newStatus === 'pending_sent') {
+                        btn.textContent = '⏳ Request Sent';
+                        btn.style.background = '#aaa';
+                        btn.style.borderColor = '#aaa';
+                        btn.setAttribute('onclick', "friendAction(" + profileId + ",'" + btnId + "','cancel')");
+                    } else if (newStatus === 'accepted') {
+                        btn.textContent = '👥 Friends';
+                        btn.style.background = '#28a745';
+                        btn.style.borderColor = '#28a745';
+                        btn.setAttribute('onclick', "friendAction(" + profileId + ",'" + btnId + "','unfriend')");
+                    } else {
+                        btn.textContent = '🤝 Add Friend';
+                        btn.style.background = '#0073aa';
+                        btn.style.borderColor = '#0073aa';
+                        btn.setAttribute('onclick', "friendAction(" + profileId + ",'" + btnId + "','request')");
+                    }
+                } else {
+                    btn.textContent = origText;
+                    alert('❌ ' + (data.data.message || data.data));
+                }
+            })
+            .catch(() => {
+                btn.disabled = false;
+                btn.textContent = origText;
+                alert('❌ Connection error');
             });
         }
     </script>

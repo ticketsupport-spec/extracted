@@ -1160,6 +1160,279 @@ function mmgr_get_pending_friend_request_count( $member_id ) {
 }
 
 // =============================================================================
+// FRIENDS SYSTEM AJAX HANDLERS
+// =============================================================================
+
+/**
+ * AJAX: Send a friend request.
+ * POST params: profile_id, nonce
+ */
+add_action( 'wp_ajax_nopriv_mmgr_friend_request', function() { do_action( 'wp_ajax_mmgr_friend_request' ); } );
+add_action( 'wp_ajax_mmgr_friend_request', function() {
+    check_ajax_referer( 'mmgr_friend_request', 'nonce' );
+
+    $member = mmgr_get_current_member();
+    if ( ! $member ) {
+        wp_send_json_error( 'Not logged in' );
+    }
+
+    $profile_id = absint( $_POST['profile_id'] );
+    if ( ! $profile_id || $profile_id === (int) $member['id'] ) {
+        wp_send_json_error( 'Invalid member' );
+    }
+
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'membership_friends';
+
+    // Ensure target member exists and is active
+    $exists = $wpdb->get_var( $wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}memberships WHERE id = %d AND active = 1",
+        $profile_id
+    ) );
+    if ( ! $exists ) {
+        wp_send_json_error( 'Member not found' );
+    }
+
+    $current_status = mmgr_get_friendship_status( (int) $member['id'], $profile_id );
+    if ( $current_status !== 'none' ) {
+        wp_send_json_error( 'Request already exists or already friends' );
+    }
+
+    $wpdb->insert( $tbl, array(
+        'requester_id' => (int) $member['id'],
+        'requestee_id' => $profile_id,
+        'status'       => 'pending',
+        'created_at'   => current_time( 'mysql' ),
+        'updated_at'   => current_time( 'mysql' ),
+    ) );
+
+    wp_send_json_success( array( 'status' => 'pending_sent', 'message' => 'Friend request sent!' ) );
+} );
+
+/**
+ * AJAX: Accept or decline an incoming friend request.
+ * POST params: profile_id, action_type (accept|decline), nonce
+ */
+add_action( 'wp_ajax_nopriv_mmgr_friend_respond', function() { do_action( 'wp_ajax_mmgr_friend_respond' ); } );
+add_action( 'wp_ajax_mmgr_friend_respond', function() {
+    check_ajax_referer( 'mmgr_friend_respond', 'nonce' );
+
+    $member = mmgr_get_current_member();
+    if ( ! $member ) {
+        wp_send_json_error( 'Not logged in' );
+    }
+
+    $profile_id  = absint( $_POST['profile_id'] );
+    $action_type = isset( $_POST['action_type'] ) ? sanitize_key( $_POST['action_type'] ) : '';
+
+    if ( ! $profile_id || ! in_array( $action_type, array( 'accept', 'decline' ), true ) ) {
+        wp_send_json_error( 'Invalid request' );
+    }
+
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'membership_friends';
+
+    // Make sure there is a pending request FROM $profile_id TO current member
+    $row = $wpdb->get_row( $wpdb->prepare(
+        "SELECT id FROM $tbl WHERE requester_id = %d AND requestee_id = %d AND status = 'pending'",
+        $profile_id,
+        (int) $member['id']
+    ) );
+
+    if ( ! $row ) {
+        wp_send_json_error( 'No pending request found' );
+    }
+
+    if ( $action_type === 'accept' ) {
+        $wpdb->update(
+            $tbl,
+            array( 'status' => 'accepted', 'updated_at' => current_time( 'mysql' ) ),
+            array( 'id' => $row->id )
+        );
+        wp_send_json_success( array( 'status' => 'accepted', 'message' => 'Friend request accepted!' ) );
+    } else {
+        $wpdb->delete( $tbl, array( 'id' => $row->id ) );
+        wp_send_json_success( array( 'status' => 'none', 'message' => 'Friend request declined.' ) );
+    }
+} );
+
+/**
+ * AJAX: Unfriend (remove an accepted friendship) or cancel a pending sent request.
+ * POST params: profile_id, nonce
+ */
+add_action( 'wp_ajax_nopriv_mmgr_unfriend', function() { do_action( 'wp_ajax_mmgr_unfriend' ); } );
+add_action( 'wp_ajax_mmgr_unfriend', function() {
+    check_ajax_referer( 'mmgr_unfriend', 'nonce' );
+
+    $member = mmgr_get_current_member();
+    if ( ! $member ) {
+        wp_send_json_error( 'Not logged in' );
+    }
+
+    $profile_id = absint( $_POST['profile_id'] );
+    if ( ! $profile_id ) {
+        wp_send_json_error( 'Invalid member' );
+    }
+
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'membership_friends';
+
+    $wpdb->query( $wpdb->prepare(
+        "DELETE FROM $tbl
+         WHERE (requester_id = %d AND requestee_id = %d)
+            OR (requester_id = %d AND requestee_id = %d)",
+        (int) $member['id'], $profile_id,
+        $profile_id, (int) $member['id']
+    ) );
+
+    wp_send_json_success( array( 'status' => 'none', 'message' => 'Removed.' ) );
+} );
+
+/**
+ * AJAX: Return the friend activity feed (recent posts, likes, etc.) of a member's friends.
+ * POST params: nonce
+ */
+add_action( 'wp_ajax_nopriv_mmgr_friend_activity', function() { do_action( 'wp_ajax_mmgr_friend_activity' ); } );
+add_action( 'wp_ajax_mmgr_friend_activity', function() {
+    check_ajax_referer( 'mmgr_friend_activity', 'nonce' );
+
+    $member = mmgr_get_current_member();
+    if ( ! $member ) {
+        wp_send_json_error( 'Not logged in' );
+    }
+
+    $items = mmgr_get_friend_activity_feed( (int) $member['id'], 0, 20 );
+
+    ob_start();
+    foreach ( $items as $item ) {
+        echo mmgr_render_friend_activity_item( $item );
+    }
+    $html = ob_get_clean();
+
+    wp_send_json_success( array( 'html' => $html, 'count' => count( $items ) ) );
+} );
+
+/**
+ * Return a merged activity feed of all confirmed friends' recent actions.
+ * Each item has: type, friend_id, friend_alias, friend_photo, time, link, description.
+ *
+ * @param int $member_id  The viewing member's ID.
+ * @param int $offset
+ * @param int $limit
+ * @return array
+ */
+function mmgr_get_friend_activity_feed( $member_id, $offset = 0, $limit = 20 ) {
+    global $wpdb;
+
+    $friends_tbl = $wpdb->prefix . 'membership_friends';
+    $members_tbl = $wpdb->prefix . 'memberships';
+
+    // Get all confirmed friend IDs
+    $friend_ids = $wpdb->get_col( $wpdb->prepare(
+        "SELECT CASE WHEN requester_id = %d THEN requestee_id ELSE requester_id END AS fid
+         FROM $friends_tbl
+         WHERE (requester_id = %d OR requestee_id = %d) AND status = 'accepted'",
+        $member_id, $member_id, $member_id
+    ) );
+
+    if ( empty( $friend_ids ) ) {
+        return [];
+    }
+
+    $id_list = implode( ',', array_map( 'intval', $friend_ids ) );
+
+    $items = [];
+
+    // Forum posts by friends
+    $posts_tbl  = $wpdb->prefix . 'membership_forum_posts';
+    $topics_tbl = $wpdb->prefix . 'membership_forum_topics';
+    $posts = $wpdb->get_results(
+        "SELECT p.id, p.member_id, p.posted_at, p.topic_id, t.topic_name,
+                m.community_alias, m.community_photo_url
+         FROM $posts_tbl p
+         LEFT JOIN $topics_tbl t ON t.id = p.topic_id
+         JOIN $members_tbl m ON m.id = p.member_id
+         WHERE p.member_id IN ($id_list) AND p.hidden = 0
+         ORDER BY p.posted_at DESC
+         LIMIT 30",
+        ARRAY_A
+    );
+    foreach ( $posts as $p ) {
+        $items[] = array(
+            'type'         => 'post',
+            'friend_id'    => (int) $p['member_id'],
+            'friend_alias' => $p['community_alias'],
+            'friend_photo' => $p['community_photo_url'],
+            'time'         => $p['posted_at'],
+            'link'         => home_url( '/member-community/?topic=' . (int) $p['topic_id'] ),
+            'description'  => 'posted in ' . ( $p['topic_name'] ?: 'Forum' ),
+        );
+    }
+
+    // Profile likes sent by friends
+    $likes_tbl = $wpdb->prefix . 'membership_likes';
+    $likes = $wpdb->get_results(
+        "SELECT l.member_id, l.liked_member_id, l.liked_at,
+                m.community_alias, m.community_photo_url,
+                lm.community_alias AS liked_alias
+         FROM $likes_tbl l
+         JOIN $members_tbl m ON m.id = l.member_id
+         JOIN $members_tbl lm ON lm.id = l.liked_member_id
+         WHERE l.member_id IN ($id_list)
+         ORDER BY l.liked_at DESC
+         LIMIT 30",
+        ARRAY_A
+    );
+    foreach ( $likes as $l ) {
+        $items[] = array(
+            'type'         => 'like',
+            'friend_id'    => (int) $l['member_id'],
+            'friend_alias' => $l['community_alias'],
+            'friend_photo' => $l['community_photo_url'],
+            'time'         => $l['liked_at'],
+            'link'         => home_url( '/member-community-profile/?id=' . (int) $l['liked_member_id'] ),
+            'description'  => 'liked ' . ( $l['liked_alias'] ?: 'a member' ) . '\'s profile',
+        );
+    }
+
+    // Sort all items by time descending
+    usort( $items, function( $a, $b ) {
+        return strtotime( $b['time'] ) - strtotime( $a['time'] );
+    } );
+
+    return array_slice( $items, $offset, $limit );
+}
+
+/**
+ * Render a single friend activity item as HTML.
+ *
+ * @param array $item
+ * @return string
+ */
+function mmgr_render_friend_activity_item( $item ) {
+    $alias     = esc_html( mmgr_unescape_alias( $item['friend_alias'] ?: 'Member' ) );
+    $photo     = esc_url( $item['friend_photo'] );
+    $time_ago  = human_time_diff( strtotime( $item['time'] ), current_time( 'timestamp' ) ) . ' ago';
+    $link      = esc_url( $item['link'] );
+    $desc      = esc_html( $item['description'] );
+    $icon      = $item['type'] === 'post' ? '💬' : '❤️';
+    $profile_url = esc_url( home_url( '/member-community-profile/?id=' . $item['friend_id'] ) );
+
+    $avatar = $photo
+        ? '<img src="' . $photo . '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid #FF2197;" alt="">'
+        : '<div style="width:36px;height:36px;border-radius:50%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:18px;border:2px solid #ccc;">👤</div>';
+
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px;background:#f9f9f9;border-radius:8px;">'
+        . '<a href="' . $profile_url . '" style="flex-shrink:0;">' . $avatar . '</a>'
+        . '<div style="flex:1;min-width:0;">'
+        . '<span style="font-weight:bold;"><a href="' . $profile_url . '" style="color:#FF2197;text-decoration:none;">' . $alias . '</a></span> '
+        . $icon . ' <a href="' . $link . '" style="color:#0073aa;">' . $desc . '</a>'
+        . '<div style="font-size:12px;color:#888;margin-top:2px;">' . $time_ago . '</div>'
+        . '</div>'
+        . '</div>';
+}
+
+// =============================================================================
 // COMMUNITY AWARDS HELPERS
 // =============================================================================
 
