@@ -1250,10 +1250,46 @@ function mmgr_get_member_awards( $member_id ) {
         ) );
     }
 
+    // --- Count messages sent ---
+    $messages_tbl  = $wpdb->prefix . 'membership_messages';
+    $message_count = 0;
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$messages_tbl'" ) === $messages_tbl ) {
+        $message_count = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $messages_tbl WHERE from_member_id = %d",
+            $member_id
+        ) );
+    }
+
+    // --- Count bio photos uploaded ---
+    $bio_photos_tbl = $wpdb->prefix . 'membership_bio_photos';
+    $photo_count    = 0;
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$bio_photos_tbl'" ) === $bio_photos_tbl ) {
+        $photo_count = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $bio_photos_tbl WHERE member_id = %d",
+            $member_id
+        ) );
+    }
+
+    // --- Count accepted friends ---
+    $friends_tbl  = $wpdb->prefix . 'membership_friends';
+    $friend_count = 0;
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$friends_tbl'" ) === $friends_tbl ) {
+        $friend_count = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $friends_tbl
+             WHERE status = 'accepted'
+               AND (requester_id = %d OR requestee_id = %d)",
+            $member_id,
+            $member_id
+        ) );
+    }
+
     $counts = array(
-        'visits' => $visit_count,
-        'likes'  => $like_count,
-        'posts'  => $post_count,
+        'visits'   => $visit_count,
+        'likes'    => $like_count,
+        'posts'    => $post_count,
+        'messages' => $message_count,
+        'photos'   => $photo_count,
+        'friends'  => $friend_count,
     );
 
     $earned = array();
