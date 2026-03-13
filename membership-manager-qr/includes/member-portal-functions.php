@@ -293,10 +293,49 @@ function mmgr_create_portal_tables() {
         INDEX idx_requestee_id (requestee_id),
         INDEX idx_status (status)
     ) $charset_collate");
+
+    // Event RSVPs table ("Mark as Going")
+    $event_rsvps_tbl = $wpdb->prefix . 'membership_event_rsvps';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$event_rsvps_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        event_id INT NOT NULL,
+        member_id INT NOT NULL,
+        created_at DATETIME NOT NULL,
+        UNIQUE KEY unique_rsvp (event_id, member_id),
+        INDEX idx_event_id (event_id),
+        INDEX idx_member_id (member_id)
+    ) $charset_collate");
 }
 
 // Run on plugin activation
 add_action('init', 'mmgr_create_portal_tables');
+
+/**
+ * Return the display name for an event attendee row.
+ *
+ * Returns the member's community alias when set, otherwise falls back to an
+ * anonymous label based on their membership level and sex.
+ *
+ * @param array $row  Row with keys: community_alias, level, sex.
+ * @return string     Plain (unescaped) display name.
+ */
+if (!function_exists('mmgr_event_attendee_display_name')) {
+    function mmgr_event_attendee_display_name($row) {
+        if (!empty($row['community_alias'])) {
+            return mmgr_unescape_alias($row['community_alias']);
+        }
+        if (stripos($row['level'], 'couple') !== false) {
+            return 'Anonymous Couple';
+        }
+        if (strtolower($row['sex']) === 'male') {
+            return 'Anonymous Male';
+        }
+        if (strtolower($row['sex']) === 'female') {
+            return 'Anonymous Female';
+        }
+        return 'Anonymous';
+    }
+}
 
 /**
  * Log a login attempt to the audit log.

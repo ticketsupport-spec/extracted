@@ -176,7 +176,21 @@ if (isset($_GET['edit'])) {
                     
                     <tr>
                         <th><label for="description">Description</label></th>
-                        <td><textarea name="description" id="description" class="large-text" rows="3"><?php echo esc_textarea($editing_event['description'] ?? ''); ?></textarea></td>
+                        <td>
+                            <?php
+                            wp_editor(
+                                $editing_event['description'] ?? '',
+                                'description',
+                                array(
+                                    'textarea_name' => 'description',
+                                    'textarea_rows' => 8,
+                                    'media_buttons' => false,
+                                    'teeny'         => false,
+                                    'quicktags'     => true,
+                                )
+                            );
+                            ?>
+                        </td>
                     </tr>
                     
                     <tr>
