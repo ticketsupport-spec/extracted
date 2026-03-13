@@ -782,13 +782,27 @@ function mmgr_count_received_likes( $member_id ) {
 }
 
 /**
+ * Strip unnecessary backslash escapes from a community alias before display.
+ *
+ * Aliases stored in the database may contain backslash-escaped characters
+ * (e.g. "we\'re"). This function removes them so the alias renders cleanly
+ * for users (e.g. "we're").
+ *
+ * @param string $alias Raw alias string from the database.
+ * @return string Unescaped alias string.
+ */
+function mmgr_unescape_alias( $alias ) {
+    return stripslashes( (string) $alias );
+}
+
+/**
  * Render a single "like received" list item as an HTML string.
  *
  * @param array $like  Row from mmgr_get_received_likes().
  * @return string
  */
 function mmgr_render_received_like_item( $like ) {
-    $alias      = esc_html( $like['from_alias'] ?: 'Member' );
+    $alias      = esc_html( mmgr_unescape_alias( $like['from_alias'] ?: 'Member' ) );
     $from_id    = (int) $like['from_id'];
     $time_ago   = human_time_diff( strtotime( $like['liked_at'] ), current_time( 'timestamp' ) ) . ' ago';
     $profile_url = esc_url( home_url( '/member-community-profile/' ) . '?id=' . $from_id );

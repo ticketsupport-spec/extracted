@@ -1603,7 +1603,7 @@ add_shortcode('mmgr_member_community', function() {
                 <div style="margin-top:12px;font-size:13px;color:#666;">
                     🛡️ <strong>Moderator<?php echo count($topic_moderators) > 1 ? 's' : ''; ?>:</strong>
                     <?php foreach ($topic_moderators as $i => $tm): ?>
-                        <?php $mod_display = !empty($tm['community_alias']) ? $tm['community_alias'] : $tm['name']; ?>
+                        <?php $mod_display = !empty($tm['community_alias']) ? mmgr_unescape_alias($tm['community_alias']) : $tm['name']; ?>
                         <?php echo esc_html($mod_display); ?><?php echo $i < count($topic_moderators) - 1 ? ', ' : ''; ?>
                     <?php endforeach; ?>
                 </div>
@@ -1648,7 +1648,7 @@ add_shortcode('mmgr_member_community', function() {
                     <div style="display:flex;flex-direction:column;gap:20px;">
                         <?php foreach ($posts as $post): ?>
                             <?php
-                            $display_name = !empty($post['community_alias']) ? $post['community_alias'] : $post['member_name'];
+                            $display_name = !empty($post['community_alias']) ? mmgr_unescape_alias($post['community_alias']) : $post['member_name'];
                             $is_own_post  = ($post['member_id'] == $member['id']);
                             $is_mod_target = $is_moderator && !$is_own_post; // can act on other members' posts
                             $is_hidden    = !empty($post['hidden']);
@@ -1800,7 +1800,7 @@ add_shortcode('mmgr_member_community', function() {
                                                 <p id="no-comments-<?php echo $post['id']; ?>" style="color:#999;font-size:13px;margin:0;">No comments yet. Be the first!</p>
                                             <?php else: ?>
                                                 <?php foreach ($post_comments as $cmt): ?>
-                                                    <?php $cmt_author = !empty($cmt['community_alias']) ? $cmt['community_alias'] : $cmt['member_name']; ?>
+                                                    <?php $cmt_author = !empty($cmt['community_alias']) ? mmgr_unescape_alias($cmt['community_alias']) : $cmt['member_name']; ?>
                                                     <div style="background:#f0f0f0;border-left:3px solid #FF2197;padding:10px 12px;border-radius:0 6px 6px 0;font-size:14px;">
                                                         <strong><?php echo esc_html($cmt_author); ?></strong>
                                                         <span style="color:#999;font-size:12px;margin-left:8px;"><?php echo date_i18n('M j, Y @ g:i A', strtotime($cmt['posted_at'])); ?></span>
@@ -2435,7 +2435,7 @@ add_shortcode('mmgr_member_messages', function() {
 						<div style="flex:1;">
 							<h3 style="margin:0;color:white;">
 								<?php 
-								$display_name = !empty($other_member['community_alias']) ? $other_member['community_alias'] : $other_member['name'];
+								$display_name = !empty($other_member['community_alias']) ? mmgr_unescape_alias($other_member['community_alias']) : $other_member['name'];
 								echo esc_html($display_name); 
 								?>
 							</h3>
@@ -3086,12 +3086,12 @@ add_shortcode('mmgr_members_directory', function() {
                     <div style="display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;" onclick="viewCommunityProfile(<?php echo intval($om['id']); ?>)">
                         <?php if (!empty($om['community_photo_url'])): ?>
                             <img src="<?php echo esc_url($om['community_photo_url']); ?>"
-                                 alt="<?php echo esc_attr($om['community_alias']); ?>"
+                                 alt="<?php echo esc_attr(mmgr_unescape_alias($om['community_alias'])); ?>"
                                  style="width:54px;height:54px;border-radius:50%;object-fit:cover;border:3px solid #28a745;">
                         <?php else: ?>
                             <div style="width:54px;height:54px;border-radius:50%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:26px;border:3px solid #28a745;">👤</div>
                         <?php endif; ?>
-                        <span style="font-size:12px;color:#333;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo esc_html($om['community_alias']); ?></span>
+                        <span style="font-size:12px;color:#333;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo esc_html(mmgr_unescape_alias($om['community_alias'])); ?></span>
                     </div>
                 <?php endforeach; ?>
                 </div>
@@ -3129,7 +3129,7 @@ add_shortcode('mmgr_members_directory', function() {
                                         <img src="<?php echo esc_url($m['community_photo_url']); ?>" 
                                              class="mmgr-directory-photo"
                                              onclick="viewCommunityProfile(<?php echo $m['id']; ?>)"
-                                             alt="<?php echo esc_attr($m['community_alias']); ?>">
+                                             alt="<?php echo esc_attr(mmgr_unescape_alias($m['community_alias'])); ?>">
                                     <?php else: ?>
                                         <div style="width:60px;height:60px;border-radius:50%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:30px;border:3px solid #ccc;cursor:pointer;" 
                                              onclick="viewCommunityProfile(<?php echo $m['id']; ?>)">
@@ -3141,7 +3141,7 @@ add_shortcode('mmgr_members_directory', function() {
                                 <!-- Alias + Actions -->
                                 <td>
                                     <div class="mmgr-directory-alias" onclick="viewCommunityProfile(<?php echo $m['id']; ?>)">
-                                        <?php echo esc_html($m['community_alias']); ?>
+                                        <?php echo esc_html(mmgr_unescape_alias($m['community_alias'])); ?>
                                     </div>
                                     <div class="mmgr-directory-actions">
                                         <!-- Message Button -->
@@ -3172,6 +3172,18 @@ add_shortcode('mmgr_members_directory', function() {
     </div>
     
     <script>
+        /**
+         * Remove backslash escape sequences from a community alias string.
+         * Aliases stored in the database may contain unnecessary backslashes
+         * (e.g. "we\'re"). This ensures they render cleanly (e.g. "we're").
+         *
+         * @param {string} str - The alias string to unescape.
+         * @returns {string} The unescaped alias string.
+         */
+        function mmgrUnescapeAlias(str) {
+            return String(str).replace(/\\([\\'"])/g, '$1');
+        }
+
         function viewCommunityProfile(memberId) {
             window.location.href = '<?php echo home_url('/member-community-profile/'); ?>?id=' + encodeURIComponent(memberId) + '&usercod=<?php echo rawurlencode($member['member_code']); ?>';
         }
@@ -3185,7 +3197,7 @@ add_shortcode('mmgr_members_directory', function() {
             .then(r => r.json())
             .then(d => {
                 if (d.success) {
-                    const memberName = d.data.alias;
+                    const memberName = mmgrUnescapeAlias(d.data.alias);
                     const message = prompt('Send message to ' + memberName + ':', '');
                     if (message !== null && message.trim() !== '') {
                         sendPrivateMessage(memberId, message);
@@ -3243,7 +3255,7 @@ add_shortcode('mmgr_members_directory', function() {
             if (m.photo) {
                 var img = document.createElement('img');
                 img.src = m.photo;
-                img.alt = m.alias;
+                img.alt = mmgrUnescapeAlias(m.alias);
                 img.style.cssText = 'width:54px;height:54px;border-radius:50%;object-fit:cover;border:3px solid #28a745;';
                 wrapper.appendChild(img);
             } else {
@@ -3255,7 +3267,7 @@ add_shortcode('mmgr_members_directory', function() {
 
             var label = document.createElement('span');
             label.style.cssText = 'font-size:12px;color:#333;max-width:64px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-            label.textContent = m.alias;
+            label.textContent = mmgrUnescapeAlias(m.alias);
             wrapper.appendChild(label);
 
             return wrapper;
@@ -3374,7 +3386,7 @@ add_action('wp_ajax_mmgr_who_is_online', function() {
     $result = array_map(function($m) {
         return [
             'id'    => intval($m['id']),
-            'alias' => esc_html($m['community_alias']),
+            'alias' => esc_html(mmgr_unescape_alias($m['community_alias'])),
             'photo' => !empty($m['community_photo_url']) ? esc_url($m['community_photo_url']) : '',
         ];
     }, $online);
@@ -3496,7 +3508,7 @@ add_shortcode('mmgr_member_community_profile', function() {
                 </div>
             <?php endif; ?>
             
-            <h1 style="margin:0 0 10px 0;"><?php echo esc_html($profile_member['community_alias']); ?></h1>
+            <h1 style="margin:0 0 10px 0;"><?php echo esc_html(mmgr_unescape_alias($profile_member['community_alias'])); ?></h1>
 
             <!-- Like count display -->
             <p style="margin:0 0 15px 0;color:#888;font-size:15px;">❤️ <span id="profile-like-count"><?php echo $total_likes; ?></span> <?php echo $total_likes === 1 ? 'like' : 'likes'; ?></p>
@@ -3511,7 +3523,7 @@ add_shortcode('mmgr_member_community_profile', function() {
             <!-- Action Buttons -->
             <?php if ($profile_member_id != $current_member['id']): ?>
                 <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;">
-                    <button onclick="openPMModal(<?php echo $profile_member_id; ?>, '<?php echo esc_attr($profile_member['community_alias']); ?>')" 
+                    <button onclick="openPMModal(<?php echo $profile_member_id; ?>, '<?php echo esc_attr(mmgr_unescape_alias($profile_member['community_alias'])); ?>')" 
                             style="background:#FF2197;color:white;padding:12px 30px;border:none;border-radius:6px;cursor:pointer;font-weight:bold;font-size:16px;">
                         ✉️ Send Message
                     </button>
@@ -3936,7 +3948,7 @@ add_action('wp_ajax_mmgr_get_member_alias', function() {
         $member_id
     ));
     
-    wp_send_json_success(array('alias' => $alias ?: 'Member'));
+    wp_send_json_success(array('alias' => mmgr_unescape_alias($alias ?: 'Member')));
 });
 
 
@@ -4386,7 +4398,7 @@ add_action('wp_ajax_mmgr_add_post_comment', function() {
     ));
 
     $comment_id = $wpdb->insert_id;
-    $display_name = !empty($member['community_alias']) ? $member['community_alias'] : $member['name'];
+    $display_name = !empty($member['community_alias']) ? mmgr_unescape_alias($member['community_alias']) : $member['name'];
 
     wp_send_json_success(array(
         'comment_id' => $comment_id,
