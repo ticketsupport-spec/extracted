@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_award'])) {
         $active        = isset($_POST['active']) ? 1 : 0;
 
         // Validate criteria type
-        $allowed_types = array('visits', 'likes', 'posts');
+        $allowed_types = array('visits', 'likes', 'posts', 'messages', 'photos', 'friends');
         if (!in_array($criteria_type, $allowed_types, true)) {
             $criteria_type = 'visits';
         }
@@ -65,9 +65,12 @@ if (isset($_GET['edit'])) {
 }
 
 $criteria_labels = array(
-    'visits' => '🎟️ Live Event Visits',
-    'likes'  => '❤️ Likes Received',
-    'posts'  => '💬 Forum Posts & Comments',
+    'visits'   => '🎟️ Live Event Visits',
+    'likes'    => '❤️ Likes Received',
+    'posts'    => '💬 Forum Posts & Comments',
+    'messages' => '✉️ Messages Sent',
+    'photos'   => '📷 Bio Photos Uploaded',
+    'friends'  => '🤝 Friends Made',
 );
 
 ?>
@@ -252,6 +255,9 @@ $criteria_labels = array(
                     <li><strong>🎟️ Live Event Visits</strong> – Total number of times the member has checked in to a live event.</li>
                     <li><strong>❤️ Likes Received</strong> – Total number of likes (profile, photo, and post likes) the member has received from others.</li>
                     <li><strong>💬 Forum Posts &amp; Comments</strong> – Total number of forum posts and comments the member has made.</li>
+                    <li><strong>✉️ Messages Sent</strong> – Total number of private messages the member has sent to other members.</li>
+                    <li><strong>📷 Bio Photos Uploaded</strong> – Total number of bio photos the member has uploaded to their profile.</li>
+                    <li><strong>🤝 Friends Made</strong> – Total number of accepted friend connections the member has.</li>
                 </ul>
                 <p style="margin-bottom:0;">A member earns an award when their count falls within the configured range. Awards are displayed as icons in the member directory and on their profile page.</p>
             </div>
