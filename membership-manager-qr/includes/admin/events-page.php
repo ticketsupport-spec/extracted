@@ -71,7 +71,7 @@ if (isset($_POST['save_event']) && isset($_POST['event_nonce'])) {
         $start_time = sanitize_text_field($_POST['start_time'] ?? '');
         $end_time = sanitize_text_field($_POST['end_time'] ?? '');
         $location = sanitize_text_field($_POST['location'] ?? '');
-        $description = wp_kses_post($_POST['description']);
+        $description = wp_kses_post(wp_unslash($_POST['description']));
         $active = isset($_POST['active']) ? 1 : 0;
         $sort_order = intval($_POST['sort_order'] ?? 0);
         
