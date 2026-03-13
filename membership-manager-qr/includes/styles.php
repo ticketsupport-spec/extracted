@@ -533,6 +533,36 @@ add_action('wp_head', function() {
         color: white;
         box-shadow: 0 2px 8px rgba(255, 33, 151, 0.4);
     }
+
+    .mmgr-directory-btn-friend {
+        border: 2px solid #0073aa;
+        color: #0073aa;
+        background: white;
+        box-shadow: 0 1px 4px rgba(0, 115, 170, 0.2);
+    }
+
+    .mmgr-directory-btn-friend:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(0, 115, 170, 0.3);
+    }
+
+    .mmgr-directory-btn-friend.accepted {
+        background: #28a745;
+        border-color: #28a745;
+        color: white;
+    }
+
+    .mmgr-directory-btn-friend.pending {
+        background: #aaa;
+        border-color: #aaa;
+        color: white;
+    }
+
+    .mmgr-directory-btn-friend.incoming {
+        background: #00a32a;
+        border-color: #00a32a;
+        color: white;
+    }
     
     .mmgr-directory-count {
         text-align: center;
