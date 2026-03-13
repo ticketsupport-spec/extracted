@@ -166,6 +166,18 @@ add_action('admin_menu', function() {
 			require_once MMGR_PLUGIN_DIR . 'includes/admin/login-logs.php';
 		}
 	);
+
+	// Community Awards
+	add_submenu_page(
+		'membership_manager',
+		'Community Awards',
+		'Community Awards',
+		'manage_options',
+		'membership_community_awards',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/community-awards.php';
+		}
+	);
     
     add_submenu_page(
         'membership_manager',

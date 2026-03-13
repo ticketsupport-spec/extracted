@@ -1158,3 +1158,152 @@ function mmgr_get_pending_friend_request_count( $member_id ) {
         $member_id
     ) );
 }
+
+// =============================================================================
+// COMMUNITY AWARDS HELPERS
+// =============================================================================
+
+/**
+ * Returns true when $url is a safe absolute http(s) URL suitable for use
+ * as an award icon src attribute.  Rejects javascript:, data:, and other
+ * potentially-dangerous schemes.
+ *
+ * @param string $url
+ * @return bool
+ */
+function mmgr_award_icon_is_safe_url( $url ) {
+    if ( ! filter_var( $url, FILTER_VALIDATE_URL ) ) {
+        return false;
+    }
+    $scheme = strtolower( (string) parse_url( $url, PHP_URL_SCHEME ) );
+    return in_array( $scheme, array( 'http', 'https' ), true );
+}
+
+/**
+ * Return all active community awards that a member has earned.
+ *
+ * @param int $member_id
+ * @return array[] Array of award rows (id, award_name, award_icon, criteria_type, …)
+ */
+function mmgr_get_member_awards( $member_id ) {
+    global $wpdb;
+
+    $awards_tbl = $wpdb->prefix . 'membership_community_awards';
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$awards_tbl'" ) !== $awards_tbl ) {
+        return array();
+    }
+
+    $awards = $wpdb->get_results(
+        "SELECT * FROM $awards_tbl WHERE active = 1 ORDER BY sort_order, criteria_type, min_threshold",
+        ARRAY_A
+    );
+    if ( empty( $awards ) ) {
+        return array();
+    }
+
+    // --- Count visits ---
+    $visit_count = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}membership_visits WHERE member_id = %d",
+        $member_id
+    ) );
+
+    // --- Count total likes received (profile + bio photo + forum post) ---
+    $like_count =
+        (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->prefix}membership_likes WHERE liked_member_id = %d",
+            $member_id
+        ) );
+
+    $bio_photo_likes_tbl = $wpdb->prefix . 'membership_bio_photo_likes';
+    $bio_photos_tbl      = $wpdb->prefix . 'membership_bio_photos';
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$bio_photo_likes_tbl'" ) === $bio_photo_likes_tbl ) {
+        $like_count += (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $bio_photo_likes_tbl bpl
+             JOIN $bio_photos_tbl bp ON bpl.photo_id = bp.id
+             WHERE bp.member_id = %d",
+            $member_id
+        ) );
+    }
+
+    $forum_post_likes_tbl = $wpdb->prefix . 'membership_forum_post_likes';
+    $forum_posts_tbl      = $wpdb->prefix . 'membership_forum_posts';
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$forum_post_likes_tbl'" ) === $forum_post_likes_tbl ) {
+        $like_count += (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $forum_post_likes_tbl fpl
+             JOIN $forum_posts_tbl fp ON fpl.post_id = fp.id
+             WHERE fp.member_id = %d",
+            $member_id
+        ) );
+    }
+
+    // --- Count forum posts + comments ---
+    $post_count = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}membership_forum_posts WHERE member_id = %d",
+        $member_id
+    ) );
+
+    $comments_tbl = $wpdb->prefix . 'membership_forum_post_comments';
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$comments_tbl'" ) === $comments_tbl ) {
+        $post_count += (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $comments_tbl WHERE member_id = %d",
+            $member_id
+        ) );
+    }
+
+    $counts = array(
+        'visits' => $visit_count,
+        'likes'  => $like_count,
+        'posts'  => $post_count,
+    );
+
+    $earned = array();
+    foreach ( $awards as $award ) {
+        $type  = $award['criteria_type'];
+        $count = isset( $counts[ $type ] ) ? $counts[ $type ] : 0;
+        $min   = (int) $award['min_threshold'];
+        $max   = ( $award['max_threshold'] !== null ) ? (int) $award['max_threshold'] : null;
+
+        if ( $count >= $min && ( $max === null || $count <= $max ) ) {
+            $earned[] = $award;
+        }
+    }
+
+    return $earned;
+}
+
+/**
+ * Render award badge HTML for a member.
+ *
+ * @param int  $member_id
+ * @param bool $show_name  Whether to include the award name text next to the icon.
+ * @return string HTML string (empty string if no awards)
+ */
+function mmgr_render_member_award_badges( $member_id, $show_name = false ) {
+    $awards = mmgr_get_member_awards( $member_id );
+    if ( empty( $awards ) ) {
+        return '';
+    }
+
+    $html = '<span class="mmgr-award-badges">';
+    foreach ( $awards as $award ) {
+        $icon = $award['award_icon'];
+        $name = $award['award_name'];
+        $title = esc_attr( $name );
+
+        if ( mmgr_award_icon_is_safe_url( $icon ) ) {
+            $icon_html = '<img src="' . esc_url( $icon ) . '" alt="' . $title . '" class="mmgr-award-icon-img" style="width:20px;height:20px;object-fit:contain;vertical-align:middle;">';
+        } else {
+            $icon_html = '<span class="mmgr-award-icon-emoji" style="font-size:18px;line-height:1;">' . esc_html( $icon ) . '</span>';
+        }
+
+        $html .= '<span class="mmgr-award-badge" title="' . $title . '" style="display:inline-flex;align-items:center;gap:3px;background:rgba(255,33,151,0.08);border:1px solid rgba(255,33,151,0.3);border-radius:12px;padding:2px 7px;margin:1px 2px;font-size:12px;white-space:nowrap;">';
+        $html .= $icon_html;
+        if ( $show_name ) {
+            $html .= ' <span style="font-weight:600;color:#d4006e;">' . esc_html( $name ) . '</span>';
+        }
+        $html .= '</span>';
+    }
+    $html .= '</span>';
+
+    return $html;
+}

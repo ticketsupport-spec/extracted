@@ -300,6 +300,54 @@ function mmgr_create_tables() {
         INDEX idx_member_id (member_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    // ===========================
+    // COMMUNITY AWARDS TABLE
+    // ===========================
+    $awards_table = $wpdb->prefix . 'membership_community_awards';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$awards_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        award_name VARCHAR(100) NOT NULL,
+        award_icon VARCHAR(255) NOT NULL DEFAULT '🏅',
+        criteria_type VARCHAR(20) NOT NULL DEFAULT 'visits',
+        min_threshold INT NOT NULL DEFAULT 0,
+        max_threshold INT DEFAULT NULL,
+        sort_order INT DEFAULT 0,
+        active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_criteria_type (criteria_type),
+        INDEX idx_active (active),
+        INDEX idx_sort (sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // Insert default awards if none exist
+    $award_count = $wpdb->get_var("SELECT COUNT(*) FROM $awards_table");
+    if ($award_count == 0) {
+        $wpdb->insert($awards_table, array(
+            'award_name'    => 'Newbie',
+            'award_icon'    => '🌱',
+            'criteria_type' => 'visits',
+            'min_threshold' => 1,
+            'max_threshold' => 2,
+            'sort_order'    => 1,
+        ));
+        $wpdb->insert($awards_table, array(
+            'award_name'    => 'Regular',
+            'award_icon'    => '⭐',
+            'criteria_type' => 'visits',
+            'min_threshold' => 3,
+            'max_threshold' => 9,
+            'sort_order'    => 2,
+        ));
+        $wpdb->insert($awards_table, array(
+            'award_name'    => 'Veteran',
+            'award_icon'    => '🏆',
+            'criteria_type' => 'visits',
+            'min_threshold' => 10,
+            'max_threshold' => null,
+            'sort_order'    => 3,
+        ));
+    }
+
     // Update plugin version
     update_option('mmgr_db_version', '1.0.0');
     
@@ -340,15 +388,70 @@ function mmgr_migrate_columns() {
 }
 
 /**
+ * Create the community awards table if it doesn't exist yet.
+ * Called as part of the 1.2.0 migration.
+ */
+function mmgr_migrate_community_awards() {
+    global $wpdb;
+    $awards_table = $wpdb->prefix . 'membership_community_awards';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$awards_table'") === $awards_table) {
+        return; // Already exists
+    }
+    $charset_collate = $wpdb->get_charset_collate();
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$awards_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        award_name VARCHAR(100) NOT NULL,
+        award_icon VARCHAR(255) NOT NULL DEFAULT '🏅',
+        criteria_type VARCHAR(20) NOT NULL DEFAULT 'visits',
+        min_threshold INT NOT NULL DEFAULT 0,
+        max_threshold INT DEFAULT NULL,
+        sort_order INT DEFAULT 0,
+        active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_criteria_type (criteria_type),
+        INDEX idx_active (active),
+        INDEX idx_sort (sort_order)
+    ) ENGINE=InnoDB $charset_collate");
+
+    $wpdb->insert($awards_table, array(
+        'award_name'    => 'Newbie',
+        'award_icon'    => '🌱',
+        'criteria_type' => 'visits',
+        'min_threshold' => 1,
+        'max_threshold' => 2,
+        'sort_order'    => 1,
+    ));
+    $wpdb->insert($awards_table, array(
+        'award_name'    => 'Regular',
+        'award_icon'    => '⭐',
+        'criteria_type' => 'visits',
+        'min_threshold' => 3,
+        'max_threshold' => 9,
+        'sort_order'    => 2,
+    ));
+    $wpdb->insert($awards_table, array(
+        'award_name'    => 'Veteran',
+        'award_icon'    => '🏆',
+        'criteria_type' => 'visits',
+        'min_threshold' => 10,
+        'max_threshold' => null,
+        'sort_order'    => 3,
+    ));
+
+    update_option('mmgr_db_version', '1.2.0');
+}
+
+/**
  * Check and update database schema on plugin load
  */
 function mmgr_check_database() {
     $current_version = get_option('mmgr_db_version', '0.0.0');
-    $required_version = '1.1.0';
+    $required_version = '1.2.0';
     
     if (version_compare($current_version, $required_version, '<')) {
         mmgr_create_tables();
         mmgr_migrate_columns();
+        mmgr_migrate_community_awards();
     }
 }
 
