@@ -53,7 +53,11 @@ function mmgr_get_portal_navigation($active_page = '', $member = null) {
 add_shortcode('mmgr_upcoming_events', function($atts) {
     global $wpdb;
     $events_table = $wpdb->prefix . 'membership_events';
-    
+    $rsvps_table  = $wpdb->prefix . 'membership_event_rsvps';
+
+    // Get current member (may be null for non-logged-in visitors)
+    $current_member = mmgr_get_current_member();
+
     // Get only future events
     $events = $wpdb->get_results(
         "SELECT * FROM $events_table 
@@ -66,14 +70,52 @@ add_shortcode('mmgr_upcoming_events', function($atts) {
     if (empty($events)) {
         return '<div class="mmgr-events-widget"><p style="text-align:center;color:#666;">No upcoming events scheduled.</p></div>';
     }
-    
+
+    // Build a map of event_id => array of display names for attendees
+    $event_ids      = array_column($events, 'id');
+    $placeholders   = implode(',', array_fill(0, count($event_ids), '%d'));
+    $rsvp_rows      = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT r.event_id, r.member_id, m.community_alias, m.level, m.sex
+             FROM $rsvps_table r
+             INNER JOIN {$wpdb->prefix}memberships m ON m.id = r.member_id
+             WHERE r.event_id IN ($placeholders)
+             ORDER BY r.created_at ASC",
+            ...$event_ids
+        ),
+        ARRAY_A
+    );
+
+    // Group attendees by event_id
+    $attendees_by_event = array();
+    foreach ($rsvp_rows as $row) {
+        $attendees_by_event[ $row['event_id'] ][] = $row;
+    }
+
+    // Determine which events the current member has RSVP'd to (single query)
+    $my_rsvps = array();
+    if ($current_member) {
+        $member_rsvps = $wpdb->get_col($wpdb->prepare(
+            "SELECT event_id FROM $rsvps_table WHERE member_id = %d AND event_id IN ($placeholders)",
+            array_merge(array($current_member['id']), $event_ids)
+        ));
+        $my_rsvps = array_map('intval', $member_rsvps);
+    }
+
+    $ajax_url  = admin_url('admin-ajax.php');
+    $rsvp_nonce = $current_member ? wp_create_nonce('mmgr_toggle_event_rsvp') : '';
+
     ob_start();
     ?>
     <div class="mmgr-events-widget" style="margin-top:20px;">
         <h3 style="color:#ce00ff;border-bottom:2px solid #ce00ff;padding-bottom:10px;margin-bottom:15px;">📅 Upcoming Events</h3>
         
         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(250px, 1fr));gap:15px;">
-            <?php foreach ($events as $event): ?>
+            <?php foreach ($events as $event):
+                $event_id    = (int) $event['id'];
+                $is_going    = in_array($event_id, $my_rsvps, true);
+                $attendees   = $attendees_by_event[$event_id] ?? array();
+            ?>
                 <div style="background:#f9f9f9;border:2px solid #9b51e0;border-radius:8px;overflow:hidden;transition:transform 0.2s;">
                     <?php if (!empty($event['image_url'])): ?>
                         <img src="<?php echo esc_url($event['image_url']); ?>" style="width:100%;height:180px;object-fit:cover;">
@@ -109,17 +151,149 @@ add_shortcode('mmgr_upcoming_events', function($atts) {
                         <?php endif; ?>
                         
                         <?php if (!empty($event['description'])): ?>
-                            <p style="margin:0;color:#333;font-size:13px;line-height:1.4;">
+                            <div style="margin:0 0 12px 0;color:#333;font-size:13px;line-height:1.5;">
                                 <?php echo wp_kses_post($event['description']); ?>
-                            </p>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($current_member): ?>
+                            <button
+                                id="rsvp-btn-<?php echo $event_id; ?>"
+                                onclick="mmgrToggleRsvp(<?php echo $event_id; ?>, this)"
+                                style="margin-bottom:12px;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;
+                                       background:<?php echo $is_going ? '#28a745' : '#9b51e0'; ?>;color:white;">
+                                <?php echo $is_going ? '✅ Going – Remove Me' : '📌 Mark as Going'; ?>
+                            </button>
+                        <?php endif; ?>
+
+                        <?php if (!empty($attendees)): ?>
+                            <div id="rsvp-list-<?php echo $event_id; ?>" style="border-top:1px solid #ddd;padding-top:10px;margin-top:4px;">
+                                <p style="margin:0 0 6px 0;font-size:12px;font-weight:bold;color:#555;">
+                                    👥 Going (<?php echo count($attendees); ?>):
+                                </p>
+                                <p style="margin:0;font-size:12px;color:#666;line-height:1.6;">
+                                    <?php
+                                    $names = array();
+                                    foreach ($attendees as $att) {
+                                        $names[] = esc_html(mmgr_event_attendee_display_name($att));
+                                    }
+                                    echo implode(', ', $names);
+                                    ?>
+                                </p>
+                            </div>
+                        <?php else: ?>
+                            <div id="rsvp-list-<?php echo $event_id; ?>" style="border-top:1px solid #ddd;padding-top:10px;margin-top:4px;display:none;">
+                                <p style="margin:0 0 6px 0;font-size:12px;font-weight:bold;color:#555;">👥 Going (0):</p>
+                                <p style="margin:0;font-size:12px;color:#666;line-height:1.6;"></p>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>
             <?php endforeach; ?>
         </div>
     </div>
-    <?php
+
+    <?php if ($current_member): ?>
+    <script>
+    function mmgrToggleRsvp(eventId, btn) {
+        btn.disabled = true;
+        fetch('<?php echo esc_url($ajax_url); ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=mmgr_toggle_event_rsvp&event_id=' + eventId + '&nonce=<?php echo esc_js($rsvp_nonce); ?>'
+        })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            if (!data.success) { alert(data.data || 'Error'); return; }
+            var going = data.data.going;
+            btn.textContent = going ? '✅ Going – Remove Me' : '📌 Mark as Going';
+            btn.style.background = going ? '#28a745' : '#9b51e0';
+            var listDiv = document.getElementById('rsvp-list-' + eventId);
+            if (listDiv) {
+                var countEl  = listDiv.querySelector('p:first-child');
+                var namesEl  = listDiv.querySelector('p:last-child');
+                if (countEl)  countEl.textContent = '👥 Going (' + data.data.count + '):';
+                if (namesEl)  namesEl.textContent = data.data.names.join(', ');
+                listDiv.style.display = data.data.count > 0 ? '' : 'none';
+            }
+        })
+        .catch(() => { btn.disabled = false; alert('Network error.'); });
+    }
+    </script>
+    <?php endif;
+
     return ob_get_clean();
+});
+
+/**
+ * AJAX: Toggle event RSVP ("Mark as Going")
+ */
+add_action('wp_ajax_mmgr_toggle_event_rsvp', function() {
+    check_ajax_referer('mmgr_toggle_event_rsvp', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error('Not logged in');
+    }
+
+    $event_id = intval($_POST['event_id']);
+    if ($event_id <= 0) {
+        wp_send_json_error('Invalid event');
+    }
+
+    global $wpdb;
+    $events_table = $wpdb->prefix . 'membership_events';
+    $rsvps_table  = $wpdb->prefix . 'membership_event_rsvps';
+
+    // Verify the event exists and is active
+    $event_exists = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $events_table WHERE id = %d AND active = 1",
+        $event_id
+    ));
+    if (!$event_exists) {
+        wp_send_json_error('Event not found');
+    }
+
+    // Toggle RSVP
+    $existing = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $rsvps_table WHERE event_id = %d AND member_id = %d",
+        $event_id,
+        $member['id']
+    ));
+
+    if ($existing) {
+        $wpdb->delete($rsvps_table, array('event_id' => $event_id, 'member_id' => $member['id']));
+        $going = false;
+    } else {
+        $wpdb->insert($rsvps_table, array(
+            'event_id'   => $event_id,
+            'member_id'  => $member['id'],
+            'created_at' => current_time('mysql'),
+        ));
+        $going = true;
+    }
+
+    // Get updated attendee list for this event
+    $rsvp_rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT r.member_id, m.community_alias, m.level, m.sex
+         FROM $rsvps_table r
+         INNER JOIN {$wpdb->prefix}memberships m ON m.id = r.member_id
+         WHERE r.event_id = %d
+         ORDER BY r.created_at ASC",
+        $event_id
+    ), ARRAY_A);
+
+    $names = array();
+    foreach ($rsvp_rows as $row) {
+        $names[] = mmgr_event_attendee_display_name($row);
+    }
+
+    wp_send_json_success(array(
+        'going' => $going,
+        'count' => count($rsvp_rows),
+        'names' => $names,
+    ));
 });
 
 /**
