@@ -76,7 +76,7 @@ add_shortcode('mmgr_upcoming_events', function($atts) {
     $placeholders   = implode(',', array_fill(0, count($event_ids), '%d'));
     $rsvp_rows      = $wpdb->get_results(
         $wpdb->prepare(
-            "SELECT r.event_id, r.member_id, m.community_alias, m.level, m.sex
+            "SELECT r.event_id, r.member_id, m.community_alias, m.level, m.sex, m.community_photo_url
              FROM $rsvps_table r
              INNER JOIN {$wpdb->prefix}memberships m ON m.id = r.member_id
              WHERE r.event_id IN ($placeholders)
@@ -152,7 +152,7 @@ add_shortcode('mmgr_upcoming_events', function($atts) {
                         
                         <?php if (!empty($event['description'])): ?>
                             <div style="margin:0 0 12px 0;color:#333;font-size:13px;line-height:1.5;">
-                                <?php echo wp_kses_post($event['description']); ?>
+                                <?php echo wp_kses_post(wpautop($event['description'])); ?>
                             </div>
                         <?php endif; ?>
 
@@ -171,20 +171,26 @@ add_shortcode('mmgr_upcoming_events', function($atts) {
                                 <p style="margin:0 0 6px 0;font-size:12px;font-weight:bold;color:#555;">
                                     👥 Going (<?php echo count($attendees); ?>):
                                 </p>
-                                <p style="margin:0;font-size:12px;color:#666;line-height:1.6;">
-                                    <?php
-                                    $names = array();
-                                    foreach ($attendees as $att) {
-                                        $names[] = esc_html(mmgr_event_attendee_display_name($att));
-                                    }
-                                    echo implode(', ', $names);
+                                <div style="margin:0;font-size:12px;color:#666;line-height:1.6;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;">
+                                    <?php foreach ($attendees as $att):
+                                        $att_name = esc_html(mmgr_event_attendee_display_name($att));
+                                        $att_photo = !empty($att['community_photo_url']) ? esc_url($att['community_photo_url']) : '';
                                     ?>
-                                </p>
+                                        <span style="display:inline-flex;align-items:center;gap:3px;">
+                                            <?php if ($att_photo): ?>
+                                                <img src="<?php echo $att_photo; ?>" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">
+                                            <?php else: ?>
+                                                <span style="width:20px;height:20px;border-radius:50%;background:#ddd;display:inline-flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">👤</span>
+                                            <?php endif; ?>
+                                            <?php echo $att_name; ?>
+                                        </span>
+                                    <?php endforeach; ?>
+                                </div>
                             </div>
                         <?php else: ?>
                             <div id="rsvp-list-<?php echo $event_id; ?>" style="border-top:1px solid #ddd;padding-top:10px;margin-top:4px;display:none;">
                                 <p style="margin:0 0 6px 0;font-size:12px;font-weight:bold;color:#555;">👥 Going (0):</p>
-                                <p style="margin:0;font-size:12px;color:#666;line-height:1.6;"></p>
+                                <div style="margin:0;font-size:12px;color:#666;line-height:1.6;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;"></div>
                             </div>
                         <?php endif; ?>
                     </div>
@@ -212,9 +218,9 @@ add_shortcode('mmgr_upcoming_events', function($atts) {
             var listDiv = document.getElementById('rsvp-list-' + eventId);
             if (listDiv) {
                 var countEl  = listDiv.querySelector('p:first-child');
-                var namesEl  = listDiv.querySelector('p:last-child');
+                var namesEl  = listDiv.querySelector('div:last-child');
                 if (countEl)  countEl.textContent = '👥 Going (' + data.data.count + '):';
-                if (namesEl)  namesEl.textContent = data.data.names.join(', ');
+                if (namesEl)  namesEl.innerHTML = data.data.attendees_html;
                 listDiv.style.display = data.data.count > 0 ? '' : 'none';
             }
         })
@@ -276,7 +282,7 @@ add_action('wp_ajax_mmgr_toggle_event_rsvp', function() {
 
     // Get updated attendee list for this event
     $rsvp_rows = $wpdb->get_results($wpdb->prepare(
-        "SELECT r.member_id, m.community_alias, m.level, m.sex
+        "SELECT r.member_id, m.community_alias, m.level, m.sex, m.community_photo_url
          FROM $rsvps_table r
          INNER JOIN {$wpdb->prefix}memberships m ON m.id = r.member_id
          WHERE r.event_id = %d
@@ -284,15 +290,20 @@ add_action('wp_ajax_mmgr_toggle_event_rsvp', function() {
         $event_id
     ), ARRAY_A);
 
-    $names = array();
+    $attendees_html = '';
     foreach ($rsvp_rows as $row) {
-        $names[] = mmgr_event_attendee_display_name($row);
+        $name  = esc_html(mmgr_event_attendee_display_name($row));
+        $photo = !empty($row['community_photo_url']) ? esc_url($row['community_photo_url']) : '';
+        $avatar = $photo
+            ? '<img src="' . $photo . '" style="width:20px;height:20px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="">'
+            : '<span style="width:20px;height:20px;border-radius:50%;background:#ddd;display:inline-flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">👤</span>';
+        $attendees_html .= '<span style="display:inline-flex;align-items:center;gap:3px;">' . $avatar . ' ' . $name . '</span>';
     }
 
     wp_send_json_success(array(
-        'going' => $going,
-        'count' => count($rsvp_rows),
-        'names' => $names,
+        'going'          => $going,
+        'count'          => count($rsvp_rows),
+        'attendees_html' => $attendees_html,
     ));
 });
 
