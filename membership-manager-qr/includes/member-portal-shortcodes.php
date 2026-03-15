@@ -1603,6 +1603,69 @@ add_shortcode('mmgr_member_profile', function() {
                     array('id' => $member['id'])
                 );
 
+                // Save custom BIO field values
+                $bio_fields_tbl       = $wpdb->prefix . 'membership_bio_fields';
+                $bio_field_values_tbl = $wpdb->prefix . 'membership_bio_field_values';
+                if (
+                    $wpdb->get_var("SHOW TABLES LIKE '$bio_fields_tbl'") === $bio_fields_tbl &&
+                    $wpdb->get_var("SHOW TABLES LIKE '$bio_field_values_tbl'") === $bio_field_values_tbl
+                ) {
+                    $active_fields = $wpdb->get_results(
+                        "SELECT id, field_type FROM $bio_fields_tbl WHERE active = 1",
+                        ARRAY_A
+                    );
+                    foreach ($active_fields as $bf) {
+                        $post_key = 'bio_field_' . intval($bf['id']);
+                        if ($bf['field_type'] === 'image') {
+                            $file_key = 'bio_field_img_' . intval($bf['id']);
+                            if (!empty($_FILES[$file_key]['name'])) {
+                                $img_upload = wp_handle_upload($_FILES[$file_key], array('test_form' => false));
+                                if (isset($img_upload['url'])) {
+                                    $wpdb->replace(
+                                        $bio_field_values_tbl,
+                                        array(
+                                            'member_id'   => $member['id'],
+                                            'field_id'    => $bf['id'],
+                                            'field_value' => $img_upload['url'],
+                                        )
+                                    );
+                                }
+                            }
+                        } elseif ($bf['field_type'] === 'html') {
+                            $val = isset($_POST[$post_key]) ? wp_kses_post($_POST[$post_key]) : '';
+                            $wpdb->replace(
+                                $bio_field_values_tbl,
+                                array(
+                                    'member_id'   => $member['id'],
+                                    'field_id'    => $bf['id'],
+                                    'field_value' => $val,
+                                )
+                            );
+                        } elseif ($bf['field_type'] === 'textarea') {
+                            $val = isset($_POST[$post_key]) ? sanitize_textarea_field($_POST[$post_key]) : '';
+                            $wpdb->replace(
+                                $bio_field_values_tbl,
+                                array(
+                                    'member_id'   => $member['id'],
+                                    'field_id'    => $bf['id'],
+                                    'field_value' => $val,
+                                )
+                            );
+                        } else {
+                            // text or link
+                            $val = isset($_POST[$post_key]) ? sanitize_text_field($_POST[$post_key]) : '';
+                            $wpdb->replace(
+                                $bio_field_values_tbl,
+                                array(
+                                    'member_id'   => $member['id'],
+                                    'field_id'    => $bf['id'],
+                                    'field_value' => $val,
+                                )
+                            );
+                        }
+                    }
+                }
+
                 if ($updated !== false) {
                     // PRG: redirect to avoid re-submission on refresh and to load fresh data
                     wp_redirect(esc_url_raw(add_query_arg('profile_updated', '1')));
@@ -1735,7 +1798,75 @@ add_shortcode('mmgr_member_profile', function() {
                     <input type="file" name="community_photo" accept="image/*" id="community-photo-input" style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;" onchange="previewCommunityPhoto(this)">
                     <p style="margin:5px 0 0 0;font-size:13px;color:#999;">Profile picture for community posts (optional)</p>
                 </div>
-                
+
+                <?php
+                // Custom BIO Fields
+                global $wpdb;
+                $bio_fields_tbl       = $wpdb->prefix . 'membership_bio_fields';
+                $bio_field_values_tbl = $wpdb->prefix . 'membership_bio_field_values';
+                if (
+                    $wpdb->get_var("SHOW TABLES LIKE '$bio_fields_tbl'") === $bio_fields_tbl
+                ) {
+                    $custom_fields = $wpdb->get_results(
+                        "SELECT * FROM $bio_fields_tbl WHERE active = 1 ORDER BY sort_order, id",
+                        ARRAY_A
+                    );
+                    if (!empty($custom_fields)) {
+                        // Load existing values for this member
+                        $existing_values = array();
+                        if ($wpdb->get_var("SHOW TABLES LIKE '$bio_field_values_tbl'") === $bio_field_values_tbl) {
+                            $rows = $wpdb->get_results($wpdb->prepare(
+                                "SELECT field_id, field_value FROM $bio_field_values_tbl WHERE member_id = %d",
+                                $member['id']
+                            ), ARRAY_A);
+                            foreach ($rows as $row) {
+                                $existing_values[$row['field_id']] = $row['field_value'];
+                            }
+                        }
+                        foreach ($custom_fields as $cf) {
+                            $cf_id    = intval($cf['id']);
+                            $cf_name  = esc_html($cf['field_name']);
+                            $cf_ph    = esc_attr($cf['placeholder'] ?? '');
+                            $cf_val   = $existing_values[$cf_id] ?? '';
+                            ?>
+                            <div class="mmgr-field" style="margin-bottom:20px;">
+                                <label style="display:block;font-weight:bold;margin-bottom:5px;"><?php echo $cf_name; ?></label>
+                                <?php if ($cf['field_type'] === 'text'): ?>
+                                    <input type="text" name="bio_field_<?php echo $cf_id; ?>"
+                                           value="<?php echo esc_attr($cf_val); ?>"
+                                           placeholder="<?php echo $cf_ph; ?>"
+                                           style="width:100%;padding:12px;border:2px solid #ddd;border-radius:6px;font-size:16px;">
+                                <?php elseif ($cf['field_type'] === 'link'): ?>
+                                    <input type="url" name="bio_field_<?php echo $cf_id; ?>"
+                                           value="<?php echo esc_attr($cf_val); ?>"
+                                           placeholder="<?php echo $cf_ph ?: 'https://'; ?>"
+                                           style="width:100%;padding:12px;border:2px solid #ddd;border-radius:6px;font-size:16px;">
+                                <?php elseif ($cf['field_type'] === 'textarea'): ?>
+                                    <textarea name="bio_field_<?php echo $cf_id; ?>" rows="4"
+                                              placeholder="<?php echo $cf_ph; ?>"
+                                              style="width:100%;padding:12px;border:2px solid #ddd;border-radius:6px;font-size:16px;resize:vertical;"><?php echo esc_textarea($cf_val); ?></textarea>
+                                <?php elseif ($cf['field_type'] === 'html'): ?>
+                                    <textarea name="bio_field_<?php echo $cf_id; ?>" rows="6"
+                                              placeholder="<?php echo $cf_ph ?: 'Enter HTML content'; ?>"
+                                              style="width:100%;padding:12px;border:2px solid #ddd;border-radius:6px;font-size:14px;font-family:monospace;resize:vertical;"><?php echo esc_textarea($cf_val); ?></textarea>
+                                    <p style="margin:5px 0 0 0;font-size:13px;color:#999;">HTML is allowed in this field.</p>
+                                <?php elseif ($cf['field_type'] === 'image'): ?>
+                                    <?php if (!empty($cf_val)): ?>
+                                        <div style="margin-bottom:10px;">
+                                            <img src="<?php echo esc_url($cf_val); ?>" style="max-width:200px;border-radius:6px;border:2px solid #ddd;">
+                                        </div>
+                                    <?php endif; ?>
+                                    <input type="file" name="bio_field_img_<?php echo $cf_id; ?>" accept="image/*"
+                                           style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;">
+                                    <p style="margin:5px 0 0 0;font-size:13px;color:#999;">Upload a new image to replace the current one.</p>
+                                <?php endif; ?>
+                            </div>
+                            <?php
+                        }
+                    }
+                }
+                ?>
+
                 <button type="submit" name="update_profile" class="mmgr-btn-primary" style="background:#0073aa;color:white;padding:12px 30px;border:none;border-radius:6px;font-size:16px;font-weight:bold;cursor:pointer;">
                     💾 Save Changes
                 </button>
@@ -4375,7 +4506,69 @@ add_shortcode('mmgr_member_community_profile', function() {
                     <?php echo nl2br(esc_html($profile_member['community_bio'])); ?>
                 </div>
             <?php endif; ?>
-            
+
+            <?php
+            // Custom BIO Fields display
+            $bio_fields_tbl       = $wpdb->prefix . 'membership_bio_fields';
+            $bio_field_values_tbl = $wpdb->prefix . 'membership_bio_field_values';
+            if (
+                $wpdb->get_var("SHOW TABLES LIKE '$bio_fields_tbl'") === $bio_fields_tbl &&
+                $wpdb->get_var("SHOW TABLES LIKE '$bio_field_values_tbl'") === $bio_field_values_tbl
+            ) {
+                $custom_fields = $wpdb->get_results(
+                    "SELECT * FROM $bio_fields_tbl WHERE active = 1 ORDER BY sort_order, id",
+                    ARRAY_A
+                );
+                if (!empty($custom_fields)) {
+                    $field_ids = array_map('intval', array_column($custom_fields, 'id'));
+                    $placeholders = implode(',', array_fill(0, count($field_ids), '%d'));
+                    $values_query = $wpdb->prepare(
+                        "SELECT field_id, field_value FROM $bio_field_values_tbl WHERE member_id = %d AND field_id IN ($placeholders)",
+                        array_merge(array($profile_member_id), $field_ids)
+                    );
+                    $value_rows = $wpdb->get_results($values_query, ARRAY_A);
+                    $field_values = array();
+                    foreach ($value_rows as $vr) {
+                        $field_values[$vr['field_id']] = $vr['field_value'];
+                    }
+                    $has_custom = false;
+                    foreach ($custom_fields as $cf) {
+                        if (!empty($field_values[$cf['id']])) {
+                            $has_custom = true;
+                            break;
+                        }
+                    }
+                    if ($has_custom):
+                    ?>
+                    <div style="text-align:left;margin-bottom:20px;">
+                        <?php foreach ($custom_fields as $cf):
+                            $cf_id  = intval($cf['id']);
+                            $cf_val = $field_values[$cf_id] ?? '';
+                            if (empty($cf_val)) continue;
+                            ?>
+                            <div style="margin-bottom:12px;padding:10px 15px;background:#f9f9f9;border-radius:6px;">
+                                <strong style="display:block;margin-bottom:4px;color:#555;font-size:13px;"><?php echo esc_html($cf['field_name']); ?></strong>
+                                <?php if ($cf['field_type'] === 'link'): ?>
+                                    <a href="<?php echo esc_url($cf_val); ?>" target="_blank" rel="noopener noreferrer"
+                                       style="color:#0073aa;word-break:break-all;"><?php echo esc_html($cf_val); ?></a>
+                                <?php elseif ($cf['field_type'] === 'image'): ?>
+                                    <img src="<?php echo esc_url($cf_val); ?>" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid #ddd;" alt="<?php echo esc_attr($cf['field_name']); ?>">
+                                <?php elseif ($cf['field_type'] === 'html'): ?>
+                                    <div style="font-size:15px;color:#444;line-height:1.6;"><?php echo wp_kses_post($cf_val); ?></div>
+                                <?php elseif ($cf['field_type'] === 'textarea'): ?>
+                                    <div style="font-size:15px;color:#444;line-height:1.6;"><?php echo nl2br(esc_html($cf_val)); ?></div>
+                                <?php else: ?>
+                                    <span style="font-size:15px;color:#444;"><?php echo esc_html($cf_val); ?></span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php
+                    endif;
+                }
+            }
+            ?>
+
             <!-- Action Buttons -->
             <?php if ($profile_member_id != $current_member['id']): ?>
                 <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;">

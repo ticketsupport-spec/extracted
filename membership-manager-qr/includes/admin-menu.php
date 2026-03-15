@@ -178,6 +178,18 @@ add_action('admin_menu', function() {
 			require_once MMGR_PLUGIN_DIR . 'includes/admin/community-awards.php';
 		}
 	);
+
+	// Custom BIO Fields
+	add_submenu_page(
+		'membership_manager',
+		'Custom BIO Fields',
+		'BIO Fields',
+		'manage_options',
+		'membership_bio_fields',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/bio-fields.php';
+		}
+	);
     
     add_submenu_page(
         'membership_manager',

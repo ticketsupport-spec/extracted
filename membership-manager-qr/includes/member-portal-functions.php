@@ -305,6 +305,33 @@ function mmgr_create_portal_tables() {
         INDEX idx_event_id (event_id),
         INDEX idx_member_id (member_id)
     ) $charset_collate");
+
+    // Custom BIO fields definition table
+    $bio_fields_tbl = $wpdb->prefix . 'membership_bio_fields';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$bio_fields_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        field_name VARCHAR(100) NOT NULL,
+        field_type VARCHAR(20) NOT NULL DEFAULT 'text',
+        placeholder VARCHAR(255) DEFAULT NULL,
+        sort_order INT DEFAULT 0,
+        active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_active (active),
+        INDEX idx_sort (sort_order)
+    ) $charset_collate");
+
+    // Custom BIO field values table (member-entered data)
+    $bio_field_values_tbl = $wpdb->prefix . 'membership_bio_field_values';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$bio_field_values_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        field_id INT NOT NULL,
+        field_value TEXT DEFAULT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_member_field (member_id, field_id),
+        INDEX idx_member_id (member_id),
+        INDEX idx_field_id (field_id)
+    ) $charset_collate");
 }
 
 // Run on plugin activation
