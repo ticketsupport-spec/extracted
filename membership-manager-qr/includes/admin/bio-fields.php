@@ -43,25 +43,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_bio_field'])) {
         );
 
         if ($field_id > 0) {
-            $wpdb->update($bio_fields_tbl, $data, array('id' => $field_id));
-            echo '<div class="notice notice-success"><p>BIO field updated successfully!</p></div>';
+            $result = $wpdb->update($bio_fields_tbl, $data, array('id' => $field_id));
+            if ($result !== false) {
+                echo '<div class="notice notice-success"><p>BIO field updated successfully!</p></div>';
+            } else {
+                echo '<div class="notice notice-error"><p>Failed to update BIO field.</p></div>';
+            }
         } else {
-            $wpdb->insert($bio_fields_tbl, $data);
-            echo '<div class="notice notice-success"><p>BIO field created successfully!</p></div>';
+            $result = $wpdb->insert($bio_fields_tbl, $data);
+            if ($result !== false) {
+                echo '<div class="notice notice-success"><p>BIO field created successfully!</p></div>';
+            } else {
+                echo '<div class="notice notice-error"><p>Failed to create BIO field.</p></div>';
+            }
         }
     }
 }
 
 // Handle delete
 if (isset($_GET['delete']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'delete_bio_field_' . intval($_GET['delete']))) {
-    $del_id = intval($_GET['delete']);
-    $wpdb->delete($bio_fields_tbl, array('id' => $del_id));
-    // Also remove all stored values for this field
-    $bio_field_values_tbl = $wpdb->prefix . 'membership_bio_field_values';
-    if ($wpdb->get_var("SHOW TABLES LIKE '$bio_field_values_tbl'") === $bio_field_values_tbl) {
-        $wpdb->delete($bio_field_values_tbl, array('field_id' => $del_id));
+    if (!current_user_can('manage_options')) {
+        wp_die('Unauthorized');
     }
-    echo '<div class="notice notice-success"><p>BIO field deleted.</p></div>';
+    $del_id = intval($_GET['delete']);
+    $deleted = $wpdb->delete($bio_fields_tbl, array('id' => $del_id));
+    if ($deleted !== false) {
+        // Also remove all stored values for this field
+        $bio_field_values_tbl = $wpdb->prefix . 'membership_bio_field_values';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$bio_field_values_tbl'") === $bio_field_values_tbl) {
+            $wpdb->delete($bio_field_values_tbl, array('field_id' => $del_id));
+        }
+        echo '<div class="notice notice-success"><p>BIO field deleted.</p></div>';
+    } else {
+        echo '<div class="notice notice-error"><p>Could not delete field. It may not exist.</p></div>';
+    }
 }
 
 // Get all fields

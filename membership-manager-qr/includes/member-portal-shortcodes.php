@@ -1619,16 +1619,26 @@ add_shortcode('mmgr_member_profile', function() {
                         if ($bf['field_type'] === 'image') {
                             $file_key = 'bio_field_img_' . intval($bf['id']);
                             if (!empty($_FILES[$file_key]['name'])) {
-                                $img_upload = wp_handle_upload($_FILES[$file_key], array('test_form' => false));
-                                if (isset($img_upload['url'])) {
-                                    $wpdb->replace(
-                                        $bio_field_values_tbl,
-                                        array(
-                                            'member_id'   => $member['id'],
-                                            'field_id'    => $bf['id'],
-                                            'field_value' => $img_upload['url'],
-                                        )
-                                    );
+                                $allowed_mimes = array('image/jpeg', 'image/png', 'image/gif', 'image/webp');
+                                $file_type = wp_check_filetype_and_ext(
+                                    $_FILES[$file_key]['tmp_name'],
+                                    $_FILES[$file_key]['name'],
+                                    $allowed_mimes
+                                );
+                                if (empty($file_type['type']) || !in_array($file_type['type'], $allowed_mimes, true)) {
+                                    // Skip invalid file type silently
+                                } else {
+                                    $img_upload = wp_handle_upload($_FILES[$file_key], array('test_form' => false, 'mimes' => $allowed_mimes));
+                                    if (isset($img_upload['url'])) {
+                                        $wpdb->replace(
+                                            $bio_field_values_tbl,
+                                            array(
+                                                'member_id'   => $member['id'],
+                                                'field_id'    => $bf['id'],
+                                                'field_value' => $img_upload['url'],
+                                            )
+                                        );
+                                    }
                                 }
                             }
                         } elseif ($bf['field_type'] === 'html') {
