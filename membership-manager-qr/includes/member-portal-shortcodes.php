@@ -5775,8 +5775,9 @@ add_shortcode('mmgr_member_help', function() {
     }
 
     ob_start();
-    echo mmgr_get_portal_navigation('help', $current_member);
     ?>
+    <div class="mmgr-portal-container">
+    <?php echo mmgr_get_portal_navigation('help', $current_member); ?>
 
     <div class="mmgr-portal-titlecc">
         <h1>❓ Help Center</h1>
@@ -5902,6 +5903,7 @@ add_shortcode('mmgr_member_help', function() {
         }
     }());
     </script>
+    </div><!-- /.mmgr-portal-container -->
     <?php
     return ob_get_clean();
 });
