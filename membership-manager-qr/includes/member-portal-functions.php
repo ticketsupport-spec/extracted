@@ -892,10 +892,10 @@ function mmgr_render_received_like_item( $like ) {
             break;
     }
 
-    return '<div style="padding:10px;background:#f9f9f9;border-radius:6px;border-left:3px solid #FF2197;cursor:pointer;transition:all 0.3s;" onclick="window.location.href=\'' . $link . '\'">'
+    return '<a href="' . $link . '" style="padding:10px;background:#f9f9f9;border-radius:6px;border-left:3px solid #FF2197;cursor:pointer;transition:all 0.3s;display:block;text-decoration:none;">'
         . '<div style="font-weight:bold;color:#9b51e0;font-size:14px;">' . $icon . ' ' . $label . '</div>'
         . '<div style="font-size:12px;color:#666;">' . esc_html( $time_ago ) . '</div>'
-        . '</div>';
+        . '</a>';
 }
 
 /**
@@ -1064,10 +1064,10 @@ function mmgr_render_sent_like_item( $like ) {
             break;
     }
 
-    return '<div style="padding:10px;background:#f9f9f9;border-radius:6px;border-left:3px solid ' . $border . ';cursor:pointer;transition:all 0.3s;" onclick="window.location.href=\'' . $link . '\'">'
+    return '<a href="' . $link . '" style="padding:10px;background:#f9f9f9;border-radius:6px;border-left:3px solid ' . $border . ';cursor:pointer;transition:all 0.3s;display:block;text-decoration:none;">'
         . '<div style="font-weight:bold;color:#333;font-size:14px;">' . $icon . ' ' . esc_html( $label ) . '</div>'
         . '<div style="font-size:12px;color:#666;">' . esc_html( $time_ago ) . '</div>'
-        . '</div>';
+        . '</a>';
 }
 
 /**
