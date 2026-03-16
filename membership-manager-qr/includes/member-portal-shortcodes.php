@@ -1265,15 +1265,14 @@ add_shortcode('mmgr_member_activity', function() {
                     <?php else: ?>
                         <div style="display: flex; flex-direction: column; gap: 12px;">
                             <?php foreach ($posts as $post): ?>
-                                <div style="padding: 10px; background: #f9f9f9; border-radius: 6px; border-left: 3px solid #9b51e0; cursor: pointer; transition: all 0.3s;" 
-                                     onclick="window.location.href='<?php echo home_url('/member-community/'); ?>?topic=<?php echo intval($post['topic_id']); ?>&usercod=<?php echo rawurlencode($member['member_code']); ?>'">
+                                <a href="<?php echo esc_url(home_url('/member-community/') . '?topic=' . intval($post['topic_id']) . '&usercod=' . rawurlencode($member['member_code'])); ?>" style="padding:10px;background:#f9f9f9;border-radius:6px;border-left:3px solid #9b51e0;transition:all 0.3s;display:block;text-decoration:none;">
                                     <div style="font-weight: bold; color: #0073aa; font-size: 14px;">
                                         📝 <?php echo esc_html($post['topic_name'] ?: 'Forum Post'); ?>
                                     </div>
                                     <div style="font-size: 12px; color: #666;">
                                         <?php echo human_time_diff(strtotime($post['posted_at']), current_time('timestamp')) . ' ago'; ?>
                                     </div>
-                                </div>
+                                </a>
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
@@ -2444,8 +2443,11 @@ add_shortcode('mmgr_member_community', function() {
                 <div style="margin-top:12px;font-size:13px;color:#666;">
                     🛡️ <strong>Moderator<?php echo count($topic_moderators) > 1 ? 's' : ''; ?>:</strong>
                     <?php foreach ($topic_moderators as $i => $tm): ?>
-                        <?php $mod_display = !empty($tm['community_alias']) ? mmgr_unescape_alias($tm['community_alias']) : $tm['name']; ?>
-                        <?php echo esc_html($mod_display); ?><?php echo $i < count($topic_moderators) - 1 ? ', ' : ''; ?>
+                        <?php 
+                        $mod_display = !empty($tm['community_alias']) ? mmgr_unescape_alias($tm['community_alias']) : $tm['name'];
+                        $mod_url = esc_url(home_url('/member-community-profile/?id=' . intval($tm['member_id'])));
+                        ?>
+                        <a href="<?php echo $mod_url; ?>" style="color:#0073aa;text-decoration:none;"><?php echo esc_html($mod_display); ?></a><?php echo $i < count($topic_moderators) - 1 ? ', ' : ''; ?>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
@@ -4485,7 +4487,7 @@ add_shortcode('mmgr_member_community_profile', function() {
     $topics_table = $wpdb->prefix . 'membership_forum_topics';
     
     $activity = $wpdb->get_results($wpdb->prepare(
-        "SELECT t.topic_name, COUNT(p.id) as post_count 
+        "SELECT t.id as topic_id, t.topic_name, COUNT(p.id) as post_count 
          FROM $posts_table p 
          LEFT JOIN $topics_table t ON p.topic_id = t.id 
          WHERE p.member_id = %d 
@@ -4717,7 +4719,11 @@ add_shortcode('mmgr_member_community_profile', function() {
                 <div style="margin-bottom:16px;">
                     <p style="font-size:14px;color:#666;margin:0 0 8px 0;">
                         👥 <?php echo count($mutual_friends); ?> mutual friend<?php echo count($mutual_friends) !== 1 ? 's' : ''; ?>:
-                        <?php $mf_names = array_map(function($mf) { return esc_html(mmgr_unescape_alias($mf['community_alias'] ?: $mf['name'])); }, $mutual_friends); echo implode(', ', $mf_names); ?>
+                        <?php $mf_links = array_map(function($mf) {
+                            $name = esc_html(mmgr_unescape_alias($mf['community_alias'] ?: $mf['name']));
+                            $url  = esc_url(home_url('/member-community-profile/?id=' . intval($mf['id'])));
+                            return '<a href="' . $url . '" style="color:#0073aa;text-decoration:none;">' . $name . '</a>';
+                        }, $mutual_friends); echo implode(', ', $mf_links); ?>
                     </p>
                 </div>
             <?php endif; ?>
@@ -4733,14 +4739,17 @@ add_shortcode('mmgr_member_community_profile', function() {
                 <?php if (!empty($activity)): ?>
                     <div style="display:flex;flex-direction:column;gap:15px;">
                         <?php foreach ($activity as $act): ?>
+                            <?php $topic_url = esc_url(home_url('/member-community/') . '?topic=' . intval($act['topic_id'])); ?>
+                            <a href="<?php echo $topic_url; ?>" style="text-decoration:none;display:block;">
                             <div style="background:white;padding:15px;border-radius:6px;border-left:4px solid #FF2197;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                                    <strong><?php echo esc_html($act['topic_name']); ?></strong>
+                                    <strong style="color:#0073aa;"><?php echo esc_html($act['topic_name']); ?></strong>
                                     <span style="background:#FF2197;color:white;padding:5px 15px;border-radius:20px;font-weight:bold;">
-                                        <?php echo $act['post_count']; ?> posts
+                                        <?php echo intval($act['post_count']); ?> posts
                                     </span>
                                 </div>
                             </div>
+                            </a>
                         <?php endforeach; ?>
                     </div>
                 <?php else: ?>
