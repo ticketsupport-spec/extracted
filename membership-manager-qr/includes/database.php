@@ -348,6 +348,24 @@ function mmgr_create_tables() {
         ));
     }
 
+    // ===========================
+    // HELP TOPICS TABLE
+    // ===========================
+    $help_topics_table = $wpdb->prefix . 'membership_help_topics';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$help_topics_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        category VARCHAR(100) NOT NULL DEFAULT 'General',
+        sort_order INT DEFAULT 0,
+        active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_active (active),
+        INDEX idx_category (category),
+        INDEX idx_sort (sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     // Update plugin version
     update_option('mmgr_db_version', '1.0.0');
     
@@ -442,16 +460,68 @@ function mmgr_migrate_community_awards() {
 }
 
 /**
+ * Create the help topics table if it doesn't exist yet.
+ * Called as part of the 1.3.0 migration.
+ */
+function mmgr_migrate_help_topics() {
+    global $wpdb;
+    $help_topics_table = $wpdb->prefix . 'membership_help_topics';
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$help_topics_table'" ) === $help_topics_table ) {
+        return; // Already exists
+    }
+    $charset_collate = $wpdb->get_charset_collate();
+    $wpdb->query( "CREATE TABLE IF NOT EXISTS `$help_topics_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        category VARCHAR(100) NOT NULL DEFAULT 'General',
+        sort_order INT DEFAULT 0,
+        active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_active (active),
+        INDEX idx_category (category),
+        INDEX idx_sort (sort_order)
+    ) ENGINE=InnoDB $charset_collate" );
+
+    // Seed a handful of starter help topics
+    $defaults = array(
+        array( 'How do I log in?', 'Navigate to the member login page and enter the email address you registered with, along with your password. If you have forgotten your password, use the "Forgot Password" link on the login page.', 'Account' ),
+        array( 'How do I update my profile?', 'After logging in, click <strong>Profile</strong> in the navigation bar. From there you can update your photo, bio, and any custom fields.', 'Account' ),
+        array( 'How do I send a message to another member?', 'Go to the <strong>Messages</strong> page and click <em>New Message</em>, or visit a member\'s profile and click the <em>Send Message</em> button.', 'Messages' ),
+        array( 'How do I find other members?', 'Use the <strong>Directory</strong> page to search and browse all members. You can filter by name or membership level.', 'Community' ),
+        array( 'How do I RSVP to an event?', 'Visit the <strong>Events</strong> page and click the <em>RSVP</em> button on any upcoming event you would like to attend.', 'Events' ),
+        array( 'What are community awards?', 'Community awards are badges that are automatically earned based on your activity — such as visit count, likes received, or forum posts. They appear next to your name in the directory.', 'Community' ),
+        array( 'How do I add friends?', 'Visit another member\'s profile and click <em>Add Friend</em>. Once they accept, you will be connected as friends.', 'Community' ),
+        array( 'How do I report an issue?', 'If you encounter inappropriate content or behaviour, use the <em>Report</em> link on the relevant message or forum post. Our admin team will review it promptly.', 'General' ),
+    );
+    $sort = 0;
+    foreach ( $defaults as $d ) {
+        $sort += 10;
+        $wpdb->insert( $help_topics_table, array(
+            'title'      => $d[0],
+            'content'    => $d[1],
+            'category'   => $d[2],
+            'sort_order' => $sort,
+            'active'     => 1,
+        ) );
+    }
+
+    update_option( 'mmgr_db_version', '1.3.0' );
+}
+
+/**
  * Check and update database schema on plugin load
  */
 function mmgr_check_database() {
     $current_version = get_option('mmgr_db_version', '0.0.0');
-    $required_version = '1.2.0';
+    $required_version = '1.3.0';
     
     if (version_compare($current_version, $required_version, '<')) {
         mmgr_create_tables();
         mmgr_migrate_columns();
         mmgr_migrate_community_awards();
+        mmgr_migrate_help_topics();
     }
 }
 

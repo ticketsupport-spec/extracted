@@ -15,7 +15,110 @@ function mmgr_get_portal_navigation($active_page = '', $member = null) {
     $directory_url  = $uc ? home_url('/members-directory/?usercod=' . $uc) : home_url('/members-directory/');
     $events_url     = $uc ? home_url('/member-events/?usercod=' . $uc)     : home_url('/member-events/');
     $coc_url        = $uc ? home_url('/member-code-of-conduct/?usercod=' . $uc) : home_url('/member-code-of-conduct/');
+    $help_url       = $uc ? home_url('/member-help/?usercod=' . $uc)       : home_url('/member-help/');
     $logout_url     = $uc ? home_url('/member-dashboard/?usercod=' . $uc . '&action=logout') : home_url('/member-dashboard/?action=logout');
+
+    // Pending friend request count for nav badge
+    $pending_fr_count = 0;
+    if ( $member && ! empty( $member['id'] ) ) {
+        $pending_fr_count = mmgr_get_pending_friend_request_count( (int) $member['id'] );
+    }
+
+    // Initial counts for the stats bar (hydrated server-side; JS will keep them fresh)
+    $initial_messages = 0;
+    $initial_likes    = 0;
+    $initial_events   = 0;
+    $initial_awards   = '';
+    if ( $member && ! empty( $member['id'] ) ) {
+        global $wpdb;
+        $mid = (int) $member['id'];
+
+        $messages_table = $wpdb->prefix . 'membership_messages';
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '" . esc_sql( $messages_table ) . "'" ) === $messages_table ) {
+            $initial_messages = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM `" . esc_sql( $messages_table ) . "`
+                 WHERE to_member_id = %d AND read_at IS NULL AND deleted_by_receiver = 0",
+                $mid
+            ) );
+        }
+
+        if ( function_exists( 'mmgr_count_received_likes' ) ) {
+            $initial_likes = mmgr_count_received_likes( $mid );
+        }
+
+        $events_table = $wpdb->prefix . 'membership_events';
+        if ( $wpdb->get_var( "SHOW TABLES LIKE '" . esc_sql( $events_table ) . "'" ) === $events_table ) {
+            $initial_events = (int) $wpdb->get_var(
+                "SELECT COUNT(*) FROM `" . esc_sql( $events_table ) . "` WHERE active = 1 AND event_date >= CURDATE()"
+            );
+        }
+
+        if ( function_exists( 'mmgr_render_member_award_badges' ) ) {
+            $initial_awards = mmgr_render_member_award_badges( $mid );
+        }
+    }
+
+    ob_start();
+    ?>
+
+    
+    <div class="mmgr-portal-nav-wrapper">
+
+        <!-- Stats bar: shown above the menu on desktop; hidden on mobile (shown in toggle button instead) -->
+        <div id="mmgr-nav-stats-bar" class="mmgr-nav-stats-bar">
+            <span class="mmgr-nav-stat-item" title="Unread messages">
+                <span class="mmgr-nav-stat-icon">💬</span>
+                <span id="mmgr-stat-messages" class="mmgr-nav-stat-count"><?php echo esc_html( $initial_messages ); ?></span>
+            </span>
+            <span class="mmgr-nav-stat-item" title="Likes received">
+                <span class="mmgr-nav-stat-icon">❤️</span>
+                <span id="mmgr-stat-likes" class="mmgr-nav-stat-count"><?php echo esc_html( $initial_likes ); ?></span>
+            </span>
+            <span class="mmgr-nav-stat-item" title="Upcoming events">
+                <span class="mmgr-nav-stat-icon">📅</span>
+                <span id="mmgr-stat-events" class="mmgr-nav-stat-count"><?php echo esc_html( $initial_events ); ?></span>
+            </span>
+            <span id="mmgr-stat-awards" class="mmgr-nav-stat-awards"><?php echo wp_kses_post( $initial_awards ); ?></span>
+            <a href="<?php echo esc_url( $help_url ); ?>" class="mmgr-nav-help-icon<?php echo $active_page === 'help' ? ' active' : ''; ?>" title="Help Center">❓</a>
+        </div>
+
+        <button class="mmgr-nav-toggle-btn" onclick="document.getElementById('mmgr-nav-items').classList.toggle('active');">
+            <span class="mmgr-nav-toggle-label">☰ MENU</span>
+            <span class="mmgr-nav-toggle-stats">
+                <span class="mmgr-nav-stat-item" title="Unread messages">
+                    <span class="mmgr-nav-stat-icon">💬</span>
+                    <span id="mmgr-stat-messages-mobile" class="mmgr-nav-stat-count"><?php echo esc_html( $initial_messages ); ?></span>
+                </span>
+                <span class="mmgr-nav-stat-item" title="Likes received">
+                    <span class="mmgr-nav-stat-icon">❤️</span>
+                    <span id="mmgr-stat-likes-mobile" class="mmgr-nav-stat-count"><?php echo esc_html( $initial_likes ); ?></span>
+                </span>
+                <span class="mmgr-nav-stat-item" title="Upcoming events">
+                    <span class="mmgr-nav-stat-icon">📅</span>
+                    <span id="mmgr-stat-events-mobile" class="mmgr-nav-stat-count"><?php echo esc_html( $initial_events ); ?></span>
+                </span>
+                <span id="mmgr-stat-awards-mobile" class="mmgr-nav-stat-awards"><?php echo wp_kses_post( $initial_awards ); ?></span>
+                <a href="<?php echo esc_url( $help_url ); ?>" class="mmgr-nav-help-icon<?php echo $active_page === 'help' ? ' active' : ''; ?>" title="Help Center" onclick="event.stopPropagation();">❓</a>
+                <span id="mmgr-nav-unread-badge" class="mmgr-nav-unread-badge" style="display:none;"></span>
+            </span>
+        </button>
+        
+        <div id="mmgr-nav-items" class="mmgr-nav-items-container">
+            <a href="<?php echo esc_url($dashboard_url); ?>" class="<?php echo $active_page === 'dashboard' ? 'active' : ''; ?>">🏠 Dashboard</a>
+            <a href="<?php echo esc_url($activity_url); ?>" class="<?php echo $active_page === 'activity' ? 'active' : ''; ?>">📊 Activity<?php if ($pending_fr_count > 0): ?> <span class="mmgr-nav-unread-badge" style="display:inline-block;"><?php echo $pending_fr_count; ?></span><?php endif; ?></a>
+            <a href="<?php echo esc_url($messages_url); ?>" class="<?php echo $active_page === 'messages' ? 'active' : ''; ?>">💬 Messages <span id="mmgr-messages-unread-badge" class="mmgr-nav-unread-badge" style="display:none;"></span></a>
+            <a href="<?php echo esc_url($profile_url); ?>" class="<?php echo $active_page === 'profile' ? 'active' : ''; ?>">👤 Profile</a>
+            <a href="<?php echo esc_url($community_url); ?>" class="<?php echo $active_page === 'community' ? 'active' : ''; ?>">👥 Community</a>
+			<a href="<?php echo esc_url($directory_url); ?>" class="<?php echo $active_page === 'directory' ? 'active' : ''; ?>">📋 Directory</a>
+			<a href="<?php echo esc_url($events_url); ?>" class="<?php echo $active_page === 'events' ? 'active' : ''; ?>">📅 Events</a>
+			<a href="<?php echo esc_url($coc_url); ?>" class="<?php echo $active_page === 'coc' ? 'active' : ''; ?>">📜 Code of Conduct</a>
+			<a href="<?php echo esc_url($help_url); ?>" class="<?php echo $active_page === 'help' ? 'active' : ''; ?>">❓ Help</a>
+			<a href="<?php echo esc_url($logout_url); ?>" class="logout">🚪 Logout</a>
+        </div>
+    </div>
+    <?php
+    return ob_get_clean();
+}
 
     // Pending friend request count for nav badge
     $pending_fr_count = 0;
@@ -5742,4 +5845,164 @@ add_action('wp_footer', function() {
     }
     </script>
     <?php
+});
+
+// ============================================================
+// HELP CENTER PAGE
+// ============================================================
+add_shortcode('mmgr_member_help', function() {
+    global $wpdb;
+
+    $current_member = mmgr_get_current_member();
+    if (!$current_member) {
+        return '<p>You must be logged in to view the Help Center.</p>';
+    }
+
+    $help_tbl = $wpdb->prefix . 'membership_help_topics';
+
+    // Fetch all active topics
+    $topics = array();
+    if ($wpdb->get_var("SHOW TABLES LIKE '$help_tbl'") === $help_tbl) {
+        $topics = $wpdb->get_results(
+            "SELECT * FROM `$help_tbl` WHERE active = 1 ORDER BY sort_order ASC, category ASC, title ASC",
+            ARRAY_A
+        );
+    }
+
+    // Group by category
+    $by_category = array();
+    foreach ($topics as $t) {
+        $by_category[$t['category']][] = $t;
+    }
+
+    ob_start();
+    echo mmgr_get_portal_navigation('help', $current_member);
+    ?>
+
+    <div class="mmgr-portal-titlecc">
+        <h1>❓ Help Center</h1>
+        <p>Find answers to common questions. Use the search box below or browse by category.</p>
+    </div>
+
+    <div class="mmgr-help-wrap">
+
+        <!-- Search -->
+        <div class="mmgr-help-search-wrap">
+            <input type="search" id="mmgr-help-search"
+                   class="mmgr-help-search"
+                   placeholder="🔍  Search help topics…"
+                   autocomplete="off">
+        </div>
+
+        <?php if (empty($topics)): ?>
+            <p style="text-align:center;color:#888;padding:40px 0;">No help topics available yet. Check back soon!</p>
+        <?php else: ?>
+            <div id="mmgr-help-results-count" class="mmgr-help-results-count" style="display:none;"></div>
+
+            <?php foreach ($by_category as $category => $cat_topics): ?>
+                <div class="mmgr-help-category" data-category="<?php echo esc_attr($category); ?>">
+                    <h2 class="mmgr-help-category-title"><?php echo esc_html($category); ?></h2>
+                    <div class="mmgr-help-accordion">
+                        <?php foreach ($cat_topics as $t): ?>
+                            <div class="mmgr-help-item"
+                                 data-title="<?php echo esc_attr(strtolower($t['title'])); ?>"
+                                 data-content="<?php echo esc_attr(strtolower(wp_strip_all_tags($t['content']))); ?>">
+                                <button class="mmgr-help-question" type="button" aria-expanded="false">
+                                    <span class="mmgr-help-q-text"><?php echo esc_html($t['title']); ?></span>
+                                    <span class="mmgr-help-chevron">▼</span>
+                                </button>
+                                <div class="mmgr-help-answer" hidden>
+                                    <div class="mmgr-help-answer-inner">
+                                        <?php echo wp_kses_post($t['content']); ?>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+
+            <p id="mmgr-help-no-results" class="mmgr-help-no-results" style="display:none;">
+                😕 No topics matched your search. Try different keywords.
+            </p>
+        <?php endif; ?>
+
+    </div>
+
+    <script>
+    (function() {
+        var searchInput   = document.getElementById('mmgr-help-search');
+        var resultsCount  = document.getElementById('mmgr-help-results-count');
+        var noResults     = document.getElementById('mmgr-help-no-results');
+        var categories    = document.querySelectorAll('.mmgr-help-category');
+
+        // Accordion toggle
+        document.querySelectorAll('.mmgr-help-question').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var answer   = this.nextElementSibling;
+                var expanded = this.getAttribute('aria-expanded') === 'true';
+                this.setAttribute('aria-expanded', !expanded);
+                answer.hidden = expanded;
+                this.querySelector('.mmgr-help-chevron').textContent = expanded ? '▼' : '▲';
+            });
+        });
+
+        // Live search
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                var query   = this.value.trim().toLowerCase();
+                var visible = 0;
+
+                categories.forEach(function(cat) {
+                    var items = cat.querySelectorAll('.mmgr-help-item');
+                    var catVisible = 0;
+
+                    items.forEach(function(item) {
+                        var titleMatch   = item.getAttribute('data-title').indexOf(query) !== -1;
+                        var contentMatch = item.getAttribute('data-content').indexOf(query) !== -1;
+                        var match        = !query || titleMatch || contentMatch;
+
+                        item.style.display = match ? '' : 'none';
+
+                        if (match) {
+                            catVisible++;
+                            visible++;
+                            // Auto-expand items when searching
+                            if (query) {
+                                var btn    = item.querySelector('.mmgr-help-question');
+                                var answer = item.querySelector('.mmgr-help-answer');
+                                btn.setAttribute('aria-expanded', 'true');
+                                answer.hidden = false;
+                                btn.querySelector('.mmgr-help-chevron').textContent = '▲';
+                            }
+                        }
+                    });
+
+                    cat.style.display = catVisible > 0 ? '' : 'none';
+                });
+
+                if (resultsCount) {
+                    if (query) {
+                        resultsCount.style.display = '';
+                        resultsCount.textContent   = visible + ' result' + (visible !== 1 ? 's' : '') + ' for "' + this.value.trim() + '"';
+                    } else {
+                        resultsCount.style.display = 'none';
+                        // Collapse all when search is cleared
+                        document.querySelectorAll('.mmgr-help-question').forEach(function(btn) {
+                            btn.setAttribute('aria-expanded', 'false');
+                            btn.nextElementSibling.hidden = true;
+                            btn.querySelector('.mmgr-help-chevron').textContent = '▼';
+                        });
+                    }
+                }
+
+                if (noResults) {
+                    noResults.style.display = (query && visible === 0) ? '' : 'none';
+                }
+            });
+        }
+    }());
+    </script>
+    <?php
+    return ob_get_clean();
 });

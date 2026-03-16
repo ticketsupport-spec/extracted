@@ -167,6 +167,24 @@ add_action('wp_head', function() {
         margin-left: 4px;
     }
 
+    /* Help icon in the stats bar */
+    .mmgr-nav-help-icon {
+        margin-left: auto;
+        color: rgba(255,255,255,0.85);
+        text-decoration: none;
+        font-size: 18px;
+        line-height: 1;
+        padding: 2px 6px;
+        border-radius: 50%;
+        transition: background 0.2s, color 0.2s;
+        flex-shrink: 0;
+    }
+    .mmgr-nav-help-icon:hover,
+    .mmgr-nav-help-icon.active {
+        color: #fff;
+        background: rgba(255,255,255,0.25);
+    }
+
     /* On mobile the stats bar is hidden; stats appear in the toggle button row instead */
     .mmgr-nav-toggle-stats {
         display: none;
@@ -1262,6 +1280,11 @@ add_action('wp_head', function() {
         display: block;
     }
 	
+    <?php if (!get_option('mmgr_show_portal_titles', 1)): ?>
+    .mmgr-portal-titlecc {
+        display: none !important;
+    }
+    <?php endif; ?>
 	
     </style>	
     <?php
@@ -1464,6 +1487,126 @@ add_action('admin_head', function() {
     
     .mmgr-member-info-row:last-child {
         border-bottom: none;
+    }
+
+    /* ============================================
+       HELP CENTER PAGE
+       ============================================ */
+    .mmgr-help-wrap {
+        max-width: 820px;
+        margin: 0 auto;
+    }
+
+    .mmgr-help-search-wrap {
+        margin-bottom: 24px;
+    }
+
+    .mmgr-help-search {
+        width: 100%;
+        padding: 12px 16px;
+        font-size: 16px;
+        border: 2px solid var(--portal-border);
+        border-radius: 30px;
+        outline: none;
+        transition: border-color 0.2s;
+        box-sizing: border-box;
+    }
+    .mmgr-help-search:focus {
+        border-color: var(--portal-primary);
+    }
+
+    .mmgr-help-results-count {
+        font-size: 13px;
+        color: #666;
+        margin-bottom: 16px;
+    }
+
+    .mmgr-help-category {
+        margin-bottom: 28px;
+    }
+
+    .mmgr-help-category-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--portal-primary);
+        margin: 0 0 10px;
+        padding: 6px 14px;
+        background: linear-gradient(44deg, rgba(155,81,224,0.10), rgba(206,0,255,0.08));
+        border-left: 4px solid var(--portal-primary);
+        border-radius: 4px;
+    }
+
+    .mmgr-help-accordion {
+        border: 1px solid var(--portal-border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .mmgr-help-item + .mmgr-help-item {
+        border-top: 1px solid var(--portal-border);
+    }
+
+    .mmgr-help-question {
+        width: 100%;
+        background: #fff;
+        border: none;
+        text-align: left;
+        padding: 14px 18px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #222;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        transition: background 0.15s;
+    }
+    .mmgr-help-question:hover {
+        background: var(--portal-light-bg);
+    }
+    .mmgr-help-question[aria-expanded="true"] {
+        background: linear-gradient(44deg, rgba(155,81,224,0.08), rgba(206,0,255,0.05));
+        color: var(--portal-primary);
+    }
+
+    .mmgr-help-q-text {
+        flex: 1;
+    }
+
+    .mmgr-help-chevron {
+        font-size: 12px;
+        flex-shrink: 0;
+        color: var(--portal-primary);
+        transition: transform 0.2s;
+    }
+
+    .mmgr-help-answer {
+        background: var(--portal-light-bg);
+        border-top: 1px solid var(--portal-border);
+    }
+
+    .mmgr-help-answer-inner {
+        padding: 16px 18px;
+        font-size: 15px;
+        line-height: 1.7;
+        color: #333;
+    }
+
+    .mmgr-help-answer-inner a {
+        color: var(--portal-primary);
+    }
+
+    .mmgr-help-answer-inner ul,
+    .mmgr-help-answer-inner ol {
+        margin: 8px 0 8px 20px;
+    }
+
+    .mmgr-help-no-results {
+        text-align: center;
+        color: #888;
+        padding: 40px 0;
+        font-size: 16px;
     }
 
     /* ============================================

@@ -190,6 +190,18 @@ add_action('admin_menu', function() {
 			require_once MMGR_PLUGIN_DIR . 'includes/admin/bio-fields.php';
 		}
 	);
+
+	// Help Topics
+	add_submenu_page(
+		'membership_manager',
+		'Help Topics',
+		'Help Topics',
+		'manage_options',
+		'membership_help_topics',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/help-topics.php';
+		}
+	);
     
     add_submenu_page(
         'membership_manager',
