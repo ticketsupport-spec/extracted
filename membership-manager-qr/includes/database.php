@@ -466,11 +466,19 @@ function mmgr_migrate_community_awards() {
 function mmgr_migrate_help_topics() {
     global $wpdb;
     $help_topics_table = $wpdb->prefix . 'membership_help_topics';
-    if ( $wpdb->get_var( "SHOW TABLES LIKE '$help_topics_table'" ) === $help_topics_table ) {
-        return; // Already exists
-    }
-    $charset_collate = $wpdb->get_charset_collate();
-    $wpdb->query( "CREATE TABLE IF NOT EXISTS `$help_topics_table` (
+    $table_exists = $wpdb->get_var( "SHOW TABLES LIKE '$help_topics_table'" ) === $help_topics_table;
+
+    if ( $table_exists ) {
+        // If the table already exists but has no topics, seed the defaults so new
+        // installs (where mmgr_create_tables created the table without seeding) get them.
+        $has_topics = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$help_topics_table`" );
+        if ( $has_topics > 0 ) {
+            return; // Topics already present — nothing to do.
+        }
+        // Fall through to seed default topics below.
+    } else {
+        $charset_collate = $wpdb->get_charset_collate();
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS `$help_topics_table` (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
         content TEXT NOT NULL,
@@ -483,6 +491,7 @@ function mmgr_migrate_help_topics() {
         INDEX idx_category (category),
         INDEX idx_sort (sort_order)
     ) ENGINE=InnoDB $charset_collate" );
+    }
 
     // Seed a handful of starter help topics
     $defaults = array(
