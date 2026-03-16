@@ -110,6 +110,7 @@ function mmgr_get_portal_navigation($active_page = '', $member = null) {
 			<a href="<?php echo esc_url($directory_url); ?>" class="<?php echo $active_page === 'directory' ? 'active' : ''; ?>">📋 Directory</a>
 			<a href="<?php echo esc_url($events_url); ?>" class="<?php echo $active_page === 'events' ? 'active' : ''; ?>">📅 Events</a>
 			<a href="<?php echo esc_url($coc_url); ?>" class="<?php echo $active_page === 'coc' ? 'active' : ''; ?>">📜 Code of Conduct</a>
+			<a href="<?php echo esc_url($help_url); ?>" class="<?php echo $active_page === 'help' ? 'active' : ''; ?>">❓ Help</a>
 			<a href="<?php echo esc_url($logout_url); ?>" class="logout">🚪 Logout</a>
         </div>
     </div>
