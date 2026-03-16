@@ -89,6 +89,12 @@ function mmgr_create_plugin_pages() {
             'slug' => 'member-events',
             'content' => '[mmgr_member_events]',
             'option' => 'mmgr_page_events'
+        ),
+        array(
+            'title' => 'Member Help',
+            'slug' => 'member-help',
+            'content' => '[mmgr_member_help]',
+            'option' => 'mmgr_page_help'
         )
     );
     
@@ -210,6 +216,7 @@ function mmgr_settings_admin() {
         update_option('mmgr_welcome_pm_enabled', isset($_POST['mmgr_welcome_pm_enabled']) ? 1 : 0);
         update_option('mmgr_welcome_pm_message', wp_kses_post($_POST['mmgr_welcome_pm_message']));
         update_option('mmgr_registration_logo_id', isset($_POST['mmgr_registration_logo_id']) ? absint($_POST['mmgr_registration_logo_id']) : 0);
+        update_option('mmgr_show_portal_titles', isset($_POST['mmgr_show_portal_titles']) ? 1 : 0);
         if (isset($_POST['mmgr_registration_blurb'])) {
             update_option('mmgr_registration_blurb', wp_kses_post($_POST['mmgr_registration_blurb']));
         }
@@ -393,7 +400,8 @@ function mmgr_settings_admin() {
                     <td>
                         <label><input type="checkbox" name="mmgr_enable_welcome_email" value="1" <?php checked($enable_email, 1); ?>> Send welcome email</label><br>
                         <label><input type="checkbox" name="mmgr_attach_qr_code" value="1" <?php checked($attach_qr, 1); ?>> Attach QR code</label><br>
-                        <label><input type="checkbox" name="mmgr_enable_member_portal" value="1" <?php checked($enable_portal, 1); ?>> Enable member portal</label>
+                        <label><input type="checkbox" name="mmgr_enable_member_portal" value="1" <?php checked($enable_portal, 1); ?>> Enable member portal</label><br>
+                        <label><input type="checkbox" name="mmgr_show_portal_titles" value="1" <?php checked(get_option('mmgr_show_portal_titles', 1), 1); ?>> Show portal page title banners</label>
                     </td>
                 </tr>
                 <tr>
