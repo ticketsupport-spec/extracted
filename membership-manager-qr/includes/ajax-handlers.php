@@ -326,3 +326,55 @@ function mmgr_ajax_get_unread_count() {
 
     wp_send_json_success(array('count' => $count));
 }
+
+// Combined nav stats: unread messages, received likes, upcoming events, award badges
+add_action('wp_ajax_mmgr_get_nav_stats', 'mmgr_ajax_get_nav_stats');
+add_action('wp_ajax_nopriv_mmgr_get_nav_stats', 'mmgr_ajax_get_nav_stats');
+
+function mmgr_ajax_get_nav_stats() {
+    $member = mmgr_get_current_member();
+    if ( ! $member ) {
+        wp_send_json_error( array( 'message' => 'Not logged in' ) );
+        return;
+    }
+
+    global $wpdb;
+    $mid = (int) $member['id'];
+
+    // Unread messages
+    $messages_table = $wpdb->prefix . 'membership_messages';
+    $unread_messages = 0;
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '" . esc_sql( $messages_table ) . "'" ) === $messages_table ) {
+        $unread_messages = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM `" . esc_sql( $messages_table ) . "`
+             WHERE to_member_id = %d AND read_at IS NULL AND deleted_by_receiver = 0",
+            $mid
+        ) );
+    }
+
+    // Total likes received
+    $likes_count = function_exists( 'mmgr_count_received_likes' )
+        ? mmgr_count_received_likes( $mid )
+        : 0;
+
+    // Upcoming events count
+    $events_table   = $wpdb->prefix . 'membership_events';
+    $upcoming_count = 0;
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '" . esc_sql( $events_table ) . "'" ) === $events_table ) {
+        $upcoming_count = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM `" . esc_sql( $events_table ) . "` WHERE active = 1 AND event_date >= CURDATE()"
+        );
+    }
+
+    // Award badges HTML
+    $awards_html = function_exists( 'mmgr_render_member_award_badges' )
+        ? mmgr_render_member_award_badges( $mid )
+        : '';
+
+    wp_send_json_success( array(
+        'messages' => $unread_messages,
+        'likes'    => $likes_count,
+        'events'   => $upcoming_count,
+        'awards'   => $awards_html,
+    ) );
+}

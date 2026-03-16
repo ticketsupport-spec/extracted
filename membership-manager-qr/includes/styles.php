@@ -123,6 +123,79 @@ add_action('wp_head', function() {
     }
 
     /* ============================================
+       NAV STATS BAR (desktop: above menu bar)
+       ============================================ */
+    .mmgr-nav-stats-bar {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 6px 16px;
+        background: rgba(0,0,0,0.35);
+        flex-wrap: wrap;
+    }
+
+    .mmgr-nav-stat-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .mmgr-nav-stat-icon {
+        font-size: 16px;
+        line-height: 1;
+    }
+
+    .mmgr-nav-stat-count {
+        background: rgba(255,255,255,0.15);
+        border-radius: 10px;
+        padding: 1px 7px;
+        font-size: 12px;
+        font-weight: bold;
+        min-width: 20px;
+        text-align: center;
+        line-height: 1.6;
+    }
+
+    .mmgr-nav-stat-awards {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        margin-left: 4px;
+    }
+
+    /* On mobile the stats bar is hidden; stats appear in the toggle button row instead */
+    .mmgr-nav-toggle-stats {
+        display: none;
+    }
+
+    @media (max-width: 600px) {
+        .mmgr-nav-stats-bar {
+            display: none !important;
+        }
+
+        .mmgr-nav-toggle-stats {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        /* Make count chips slightly smaller in the cramped button bar */
+        .mmgr-nav-toggle-stats .mmgr-nav-stat-count {
+            font-size: 11px;
+            padding: 1px 5px;
+        }
+
+        .mmgr-nav-toggle-label {
+            flex-shrink: 0;
+        }
+    }
+
+    /* ============================================
        UNREAD MESSAGE BADGE
        ============================================ */
     .mmgr-nav-unread-badge {
@@ -1704,11 +1777,24 @@ add_action('wp_footer', function() {
     ?>
     <script>
     (function() {
-        var navBadge = document.getElementById('mmgr-nav-unread-badge');
-        var msgBadge = document.getElementById('mmgr-messages-unread-badge');
+        // IDs present on every portal page that has the nav
+        var navBadge    = document.getElementById('mmgr-nav-unread-badge');
+        var msgBadge    = document.getElementById('mmgr-messages-unread-badge');
 
-        // Only run on pages with the portal navigation
-        if (!navBadge && !msgBadge) return;
+        // Stats bar elements (desktop)
+        var statMsg     = document.getElementById('mmgr-stat-messages');
+        var statLikes   = document.getElementById('mmgr-stat-likes');
+        var statEvents  = document.getElementById('mmgr-stat-events');
+        var statAwards  = document.getElementById('mmgr-stat-awards');
+
+        // Mobile toggle button stats
+        var statMsgM    = document.getElementById('mmgr-stat-messages-mobile');
+        var statLikesM  = document.getElementById('mmgr-stat-likes-mobile');
+        var statEventsM = document.getElementById('mmgr-stat-events-mobile');
+        var statAwardsM = document.getElementById('mmgr-stat-awards-mobile');
+
+        // Only run on pages that include the portal navigation stats bar
+        if (!statMsg && !statMsgM && !navBadge && !msgBadge) return;
 
         var ajaxUrl = '<?php echo esc_url(admin_url('admin-ajax.php')); ?>';
 
@@ -1726,23 +1812,50 @@ add_action('wp_footer', function() {
             }
         }
 
-        function mmgrFetchUnreadCount() {
+        function mmgrSetText(el, val) {
+            if (el) el.textContent = val;
+        }
+
+        function mmgrSetHTML(el, html) {
+            if (el) el.innerHTML = html;
+        }
+
+        function mmgrFetchNavStats() {
             var formData = new FormData();
-            formData.append('action', 'mmgr_get_unread_count');
+            formData.append('action', 'mmgr_get_nav_stats');
 
             fetch(ajaxUrl, { method: 'POST', body: formData })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    if (data && data.success && typeof data.data.count !== 'undefined') {
-                        mmgrUpdateUnreadBadges(parseInt(data.data.count, 10));
-                    }
+                    if (!data || !data.success) return;
+                    var d = data.data;
+
+                    // Update unread message badges (legacy + stats bar)
+                    var msgs = parseInt(d.messages, 10) || 0;
+                    mmgrUpdateUnreadBadges(msgs);
+                    mmgrSetText(statMsg,  msgs);
+                    mmgrSetText(statMsgM, msgs);
+
+                    // Likes
+                    var likes = parseInt(d.likes, 10) || 0;
+                    mmgrSetText(statLikes,  likes);
+                    mmgrSetText(statLikesM, likes);
+
+                    // Events
+                    var events = parseInt(d.events, 10) || 0;
+                    mmgrSetText(statEvents,  events);
+                    mmgrSetText(statEventsM, events);
+
+                    // Award badges (HTML)
+                    mmgrSetHTML(statAwards,  d.awards || '');
+                    mmgrSetHTML(statAwardsM, d.awards || '');
                 })
                 .catch(function() { /* Network error – will retry on next interval. */ });
         }
 
-        // Initial check and then every 30 seconds
-        mmgrFetchUnreadCount();
-        setInterval(mmgrFetchUnreadCount, 30000);
+        // Initial fetch and then every 60 seconds
+        mmgrFetchNavStats();
+        setInterval(mmgrFetchNavStats, 60000);
     })();
     </script>
     <?php
