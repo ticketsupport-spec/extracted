@@ -5777,58 +5777,59 @@ add_shortcode('mmgr_member_help', function() {
     ob_start();
     ?>
     <div class="mmgr-portal-container">
-    <?php echo mmgr_get_portal_navigation('help', $current_member); ?>
-
-    <div class="mmgr-portal-titlecc">
-        <h1>❓ Help Center</h1>
-        <p>Find answers to common questions. Use the search box below or browse by category.</p>
-    </div>
-
-    <div class="mmgr-help-wrap">
-
-        <!-- Search -->
-        <div class="mmgr-help-search-wrap">
-            <input type="search" id="mmgr-help-search"
-                   class="mmgr-help-search"
-                   placeholder="🔍  Search help topics…"
-                   autocomplete="off">
+        <!-- Navigation -->
+        <?php echo mmgr_get_portal_navigation('help', $current_member); ?>
+        <div class="mmgr-portal-titlecc">
+            <h1>❓ Help Center</h1>
+            <p>Find answers to common questions. Use the search box below or browse by category.</p>
         </div>
+        <div class="mmgr-portal-card">
+            <div class="mmgr-help-wrap">
 
-        <?php if (empty($topics)): ?>
-            <p style="text-align:center;color:#888;padding:40px 0;">No help topics available yet. Check back soon!</p>
-        <?php else: ?>
-            <div id="mmgr-help-results-count" class="mmgr-help-results-count" style="display:none;"></div>
-
-            <?php foreach ($by_category as $category => $cat_topics): ?>
-                <div class="mmgr-help-category" data-category="<?php echo esc_attr($category); ?>">
-                    <h2 class="mmgr-help-category-title"><?php echo esc_html($category); ?></h2>
-                    <div class="mmgr-help-accordion">
-                        <?php foreach ($cat_topics as $t): ?>
-                            <div class="mmgr-help-item"
-                                 data-title="<?php echo esc_attr(strtolower($t['title'])); ?>"
-                                 data-content="<?php echo esc_attr(strtolower(wp_strip_all_tags($t['content']))); ?>">
-                                <button class="mmgr-help-question" type="button" aria-expanded="false">
-                                    <span class="mmgr-help-q-text"><?php echo esc_html($t['title']); ?></span>
-                                    <span class="mmgr-help-chevron">▼</span>
-                                </button>
-                                <div class="mmgr-help-answer" hidden>
-                                    <div class="mmgr-help-answer-inner">
-                                        <?php echo wp_kses_post($t['content']); ?>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
+                <!-- Search -->
+                <div class="mmgr-help-search-wrap">
+                    <input type="search" id="mmgr-help-search"
+                           class="mmgr-help-search"
+                           placeholder="🔍  Search help topics…"
+                           autocomplete="off">
                 </div>
-            <?php endforeach; ?>
 
-            <p id="mmgr-help-no-results" class="mmgr-help-no-results" style="display:none;">
-                😕 No topics matched your search. Try different keywords.
-            </p>
-        <?php endif; ?>
+                <?php if (empty($topics)): ?>
+                    <p style="text-align:center;color:#888;padding:40px 0;">No help topics available yet. Check back soon!</p>
+                <?php else: ?>
+                    <div id="mmgr-help-results-count" class="mmgr-help-results-count" style="display:none;"></div>
 
+                    <?php foreach ($by_category as $category => $cat_topics): ?>
+                        <div class="mmgr-help-category" data-category="<?php echo esc_attr($category); ?>">
+                            <h2 class="mmgr-help-category-title"><?php echo esc_html($category); ?></h2>
+                            <div class="mmgr-help-accordion">
+                                <?php foreach ($cat_topics as $t): ?>
+                                    <div class="mmgr-help-item"
+                                         data-title="<?php echo esc_attr(strtolower($t['title'])); ?>"
+                                         data-content="<?php echo esc_attr(strtolower(wp_strip_all_tags($t['content']))); ?>">
+                                        <button class="mmgr-help-question" type="button" aria-expanded="false">
+                                            <span class="mmgr-help-q-text"><?php echo esc_html($t['title']); ?></span>
+                                            <span class="mmgr-help-chevron">▼</span>
+                                        </button>
+                                        <div class="mmgr-help-answer" hidden>
+                                            <div class="mmgr-help-answer-inner">
+                                                <?php echo wp_kses_post($t['content']); ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+
+                    <p id="mmgr-help-no-results" class="mmgr-help-no-results" style="display:none;">
+                        😕 No topics matched your search. Try different keywords.
+                    </p>
+                <?php endif; ?>
+
+            </div>
+        </div>
     </div>
-
     <script>
     (function() {
         var searchInput   = document.getElementById('mmgr-help-search');
@@ -5903,7 +5904,6 @@ add_shortcode('mmgr_member_help', function() {
         }
     }());
     </script>
-    </div><!-- /.mmgr-portal-container -->
     <?php
     return ob_get_clean();
 });
