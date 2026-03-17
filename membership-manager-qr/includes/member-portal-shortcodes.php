@@ -5811,9 +5811,9 @@ add_shortcode('mmgr_member_help', function() {
                                             <span class="mmgr-help-q-text"><?php echo esc_html($t['title']); ?></span>
                                             <span class="mmgr-help-chevron">▼</span>
                                         </button>
-                                        <div class="mmgr-help-answer" hidden>
+                                        <div class="mmgr-help-answer">
                                             <div class="mmgr-help-answer-inner">
-                                                <?php echo wp_kses_post($t['content']); ?>
+                                                <?php echo wp_kses_post(wp_unslash($t['content'])); ?>
                                             </div>
                                         </div>
                                     </div>
@@ -5837,14 +5837,78 @@ add_shortcode('mmgr_member_help', function() {
         var noResults     = document.getElementById('mmgr-help-no-results');
         var categories    = document.querySelectorAll('.mmgr-help-category');
 
+        /* Bubble colours cycling */
+        var bubbleColors = ['#9b51e0','#ce00ff','#ff2197','#ff6b6b','#ffd93d','#6bcb77','#4d96ff'];
+
+        /* Spawn offset floating bubbles from an item */
+        function spawnBubbles(item) {
+            var rect = item.getBoundingClientRect();
+            var parentRect = item.offsetParent ? item.offsetParent.getBoundingClientRect() : {left:0, top:0};
+            var count = 6 + Math.floor(Math.random() * 4); /* 6–9 bubbles */
+            for (var i = 0; i < count; i++) {
+                (function(i) {
+                    var bubble = document.createElement('span');
+                    bubble.className = 'mmgr-help-bubble';
+                    var size = 8 + Math.random() * 14; /* 8–22 px */
+                    var startX = 10 + Math.random() * (item.offsetWidth - 20);
+                    var startY = item.offsetHeight * 0.5 + (Math.random() - 0.5) * item.offsetHeight * 0.6;
+                    var bx = (Math.random() - 0.5) * 80; /* –40 to +40 px horizontal drift */
+                    var by = -(30 + Math.random() * 70); /* 30–100 px upward */
+                    var color = bubbleColors[Math.floor(Math.random() * bubbleColors.length)];
+                    var delay = i * 0.06;
+                    bubble.style.cssText =
+                        'width:' + size + 'px;' +
+                        'height:' + size + 'px;' +
+                        'left:' + startX + 'px;' +
+                        'top:' + startY + 'px;' +
+                        'background:' + color + ';' +
+                        'opacity:0.85;' +
+                        '--bx:' + bx + 'px;' +
+                        '--by:' + by + 'px;' +
+                        'animation-delay:' + delay + 's;';
+                    item.appendChild(bubble);
+                    bubble.addEventListener('animationend', function() { bubble.remove(); });
+                })(i);
+            }
+        }
+
+        /* Open an answer panel */
+        function openAnswer(btn, answer) {
+            btn.setAttribute('aria-expanded', 'true');
+            answer.classList.add('mmgr-open');
+            var chevron = btn.querySelector('.mmgr-help-chevron');
+            chevron.textContent = '▲';
+            chevron.classList.remove('is-spinning-close');
+            chevron.classList.add('is-spinning-open');
+            chevron.addEventListener('animationend', function() {
+                chevron.classList.remove('is-spinning-open');
+            }, {once: true});
+            spawnBubbles(btn.closest('.mmgr-help-item'));
+        }
+
+        /* Close an answer panel */
+        function closeAnswer(btn, answer) {
+            btn.setAttribute('aria-expanded', 'false');
+            answer.classList.remove('mmgr-open');
+            var chevron = btn.querySelector('.mmgr-help-chevron');
+            chevron.textContent = '▼';
+            chevron.classList.remove('is-spinning-open');
+            chevron.classList.add('is-spinning-close');
+            chevron.addEventListener('animationend', function() {
+                chevron.classList.remove('is-spinning-close');
+            }, {once: true});
+        }
+
         // Accordion toggle
         document.querySelectorAll('.mmgr-help-question').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var answer   = this.nextElementSibling;
                 var expanded = this.getAttribute('aria-expanded') === 'true';
-                this.setAttribute('aria-expanded', !expanded);
-                answer.hidden = expanded;
-                this.querySelector('.mmgr-help-chevron').textContent = expanded ? '▼' : '▲';
+                if (expanded) {
+                    closeAnswer(this, answer);
+                } else {
+                    openAnswer(this, answer);
+                }
             });
         });
 
@@ -5872,9 +5936,9 @@ add_shortcode('mmgr_member_help', function() {
                             if (query) {
                                 var btn    = item.querySelector('.mmgr-help-question');
                                 var answer = item.querySelector('.mmgr-help-answer');
-                                btn.setAttribute('aria-expanded', 'true');
-                                answer.hidden = false;
-                                btn.querySelector('.mmgr-help-chevron').textContent = '▲';
+                                if (btn.getAttribute('aria-expanded') !== 'true') {
+                                    openAnswer(btn, answer);
+                                }
                             }
                         }
                     });
@@ -5890,9 +5954,7 @@ add_shortcode('mmgr_member_help', function() {
                         resultsCount.style.display = 'none';
                         // Collapse all when search is cleared
                         document.querySelectorAll('.mmgr-help-question').forEach(function(btn) {
-                            btn.setAttribute('aria-expanded', 'false');
-                            btn.nextElementSibling.hidden = true;
-                            btn.querySelector('.mmgr-help-chevron').textContent = '▼';
+                            closeAnswer(btn, btn.nextElementSibling);
                         });
                     }
                 }

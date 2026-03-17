@@ -1492,6 +1492,28 @@ add_action('admin_head', function() {
     /* ============================================
        HELP CENTER PAGE
        ============================================ */
+
+    /* --- Bubble keyframes --- */
+    @keyframes mmgr-bubble-float {
+        0%   { transform: translate(0, 0) scale(1);   opacity: 0.85; }
+        60%  { opacity: 0.6; }
+        100% { transform: translate(var(--bx), var(--by)) scale(0.3); opacity: 0; }
+    }
+    @keyframes mmgr-chevron-spin-open {
+        0%   { transform: rotate(0deg) scale(1); }
+        50%  { transform: rotate(200deg) scale(1.4); }
+        100% { transform: rotate(180deg) scale(1); }
+    }
+    @keyframes mmgr-chevron-spin-close {
+        0%   { transform: rotate(180deg) scale(1); }
+        40%  { transform: rotate(-20deg) scale(0.8); }
+        100% { transform: rotate(0deg) scale(1); }
+    }
+    @keyframes mmgr-search-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(155,81,224,0.4), 0 4px 16px rgba(155,81,224,0.15); }
+        50%       { box-shadow: 0 0 0 6px rgba(155,81,224,0), 0 4px 20px rgba(155,81,224,0.25); }
+    }
+
     .mmgr-help-wrap {
         max-width: 820px;
         margin: 0 auto;
@@ -1502,27 +1524,30 @@ add_action('admin_head', function() {
     }
 
     .mmgr-help-search-wrap {
-        margin-bottom: 24px;
+        margin-bottom: 28px;
+        position: relative;
     }
 
+    /* Round, glowing search box */
     .mmgr-help-search {
         width: 100% !important;
-        padding: 12px 16px !important;
+        padding: 14px 22px !important;
         font-size: 16px !important;
         background: #fff !important;
         color: #333 !important;
-        border: 2px solid #9b51e0 !important;
-        border-radius: 30px !important;
+        border: 2.5px solid #9b51e0 !important;
+        border-radius: 999px !important;
         outline: none !important;
-        transition: border-color 0.2s !important;
+        transition: border-color 0.25s, box-shadow 0.25s !important;
         box-sizing: border-box !important;
         -webkit-appearance: none;
         appearance: none;
-        box-shadow: none !important;
+        box-shadow: 0 4px 16px rgba(155,81,224,0.13) !important;
     }
     .mmgr-help-search:focus {
-        border-color: #9b51e0 !important;
-        box-shadow: 0 0 0 3px rgba(155,81,224,0.15) !important;
+        border-color: #ce00ff !important;
+        box-shadow: 0 0 0 4px rgba(155,81,224,0.18), 0 4px 20px rgba(206,0,255,0.18) !important;
+        animation: mmgr-search-pulse 1.6s ease-in-out infinite !important;
     }
 
     .mmgr-help-results-count {
@@ -1557,6 +1582,8 @@ add_action('admin_head', function() {
 
     .mmgr-help-item {
         display: block !important;
+        position: relative !important;
+        overflow: visible !important;
     }
 
     .mmgr-help-item + .mmgr-help-item {
@@ -1598,15 +1625,40 @@ add_action('admin_head', function() {
     }
 
     .mmgr-help-chevron {
-        font-size: 12px !important;
+        font-size: 13px !important;
         flex-shrink: 0 !important;
         color: #9b51e0 !important;
-        transition: transform 0.2s !important;
+        display: inline-block !important;
+    }
+    /* chevron spins on open */
+    .mmgr-help-chevron.is-spinning-open {
+        animation: mmgr-chevron-spin-open 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+    }
+    /* chevron snaps on close */
+    .mmgr-help-chevron.is-spinning-close {
+        animation: mmgr-chevron-spin-close 0.22s cubic-bezier(0.55, 0, 1, 0.45) forwards !important;
     }
 
+    /* Answer panel: animate open (slow, springy) and close (fast snap) */
     .mmgr-help-answer {
+        max-height: 0 !important;
+        overflow: hidden !important;
         background: #f9f9f9 !important;
+        border-top: 0px solid transparent !important;
+        /* fast close */
+        transition:
+            max-height 0.22s cubic-bezier(0.55, 0, 1, 0.45),
+            border-color 0.22s ease,
+            border-width 0.22s ease !important;
+    }
+    .mmgr-help-answer.mmgr-open {
+        max-height: 2000px !important;
         border-top: 1px solid #e0e0e0 !important;
+        /* slow bouncy open */
+        transition:
+            max-height 0.72s cubic-bezier(0.34, 1.56, 0.64, 1),
+            border-color 0.2s ease,
+            border-width 0.2s ease !important;
     }
 
     .mmgr-help-answer-inner {
@@ -1623,6 +1675,15 @@ add_action('admin_head', function() {
     .mmgr-help-answer-inner ul,
     .mmgr-help-answer-inner ol {
         margin: 8px 0 8px 20px;
+    }
+
+    /* Floating offset bubble */
+    .mmgr-help-bubble {
+        position: absolute !important;
+        border-radius: 50% !important;
+        pointer-events: none !important;
+        animation: mmgr-bubble-float 0.9s ease-out forwards !important;
+        z-index: 99 !important;
     }
 
     .mmgr-help-no-results {
