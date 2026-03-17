@@ -355,7 +355,7 @@ function mmgr_create_tables() {
     $wpdb->query("CREATE TABLE IF NOT EXISTS `$help_topics_table` (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
-        content TEXT NOT NULL,
+        content LONGTEXT NOT NULL,
         category VARCHAR(100) NOT NULL DEFAULT 'General',
         sort_order INT DEFAULT 0,
         active TINYINT(1) DEFAULT 1,
@@ -481,7 +481,7 @@ function mmgr_migrate_help_topics() {
         $wpdb->query( "CREATE TABLE IF NOT EXISTS `$help_topics_table` (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
-        content TEXT NOT NULL,
+        content LONGTEXT NOT NULL,
         category VARCHAR(100) NOT NULL DEFAULT 'General',
         sort_order INT DEFAULT 0,
         active TINYINT(1) DEFAULT 1,
@@ -515,8 +515,38 @@ function mmgr_migrate_help_topics() {
             'active'     => 1,
         ) );
     }
+}
 
-    update_option( 'mmgr_db_version', '1.3.0' );
+/**
+ * Migrate the help_topics content column from TEXT to LONGTEXT so that
+ * rich-content answers (including embedded images uploaded via the
+ * WordPress media library) are not silently truncated.
+ * Safe to call repeatedly – guarded by a column-type check.
+ */
+function mmgr_migrate_help_topics_content_longtext() {
+    global $wpdb;
+    $help_topics_table = $wpdb->prefix . 'membership_help_topics';
+
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$help_topics_table'" ) !== $help_topics_table ) {
+        return; // Table doesn't exist yet; mmgr_migrate_help_topics will create it as LONGTEXT.
+    }
+
+    $col = $wpdb->get_row(
+        $wpdb->prepare(
+            "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME   = %s
+               AND COLUMN_NAME  = 'content'",
+            $help_topics_table
+        ),
+        ARRAY_A
+    );
+
+    if ( ! $col || strtolower( $col['DATA_TYPE'] ) === 'longtext' ) {
+        return; // Already LONGTEXT or column not found.
+    }
+
+    $wpdb->query( "ALTER TABLE `" . esc_sql( $help_topics_table ) . "` MODIFY COLUMN `content` LONGTEXT NOT NULL" );
 }
 
 /**
@@ -524,13 +554,15 @@ function mmgr_migrate_help_topics() {
  */
 function mmgr_check_database() {
     $current_version = get_option('mmgr_db_version', '0.0.0');
-    $required_version = '1.3.0';
+    $required_version = '1.4.0';
     
     if (version_compare($current_version, $required_version, '<')) {
         mmgr_create_tables();
         mmgr_migrate_columns();
         mmgr_migrate_community_awards();
         mmgr_migrate_help_topics();
+        mmgr_migrate_help_topics_content_longtext();
+        update_option( 'mmgr_db_version', '1.4.0' );
     }
 }
 

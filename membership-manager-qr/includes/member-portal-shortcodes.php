@@ -5816,7 +5816,7 @@ add_shortcode('mmgr_member_help', function() {
                                             <span class="mmgr-help-q-text"><?php echo esc_html($t['title']); ?></span>
                                             <span class="mmgr-help-chevron">▼</span>
                                         </button>
-                                        <div class="mmgr-help-answer">
+                                        <div class="mmgr-help-answer" style="max-height:0;overflow:hidden;">
                                             <div class="mmgr-help-answer-inner">
                                                 <?php echo wp_kses_post(wp_unslash($t['content'])); ?>
                                             </div>
@@ -5880,6 +5880,9 @@ add_shortcode('mmgr_member_help', function() {
         /* Open an answer panel */
         function openAnswer(btn, answer) {
             btn.setAttribute('aria-expanded', 'true');
+            // Remove inline-hidden style so CSS class can control max-height
+            answer.style.removeProperty('max-height');
+            answer.style.removeProperty('overflow');
             answer.classList.add('mmgr-open');
             var chevron = btn.querySelector('.mmgr-help-chevron');
             chevron.textContent = '▲';
@@ -5895,6 +5898,9 @@ add_shortcode('mmgr_member_help', function() {
         function closeAnswer(btn, answer) {
             btn.setAttribute('aria-expanded', 'false');
             answer.classList.remove('mmgr-open');
+            // Re-apply inline hidden style so the panel stays closed if CSS is overridden
+            answer.style.maxHeight = '0';
+            answer.style.overflow  = 'hidden';
             var chevron = btn.querySelector('.mmgr-help-chevron');
             chevron.textContent = '▼';
             chevron.classList.remove('is-spinning-open');
