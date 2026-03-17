@@ -93,10 +93,21 @@ $categories = $wpdb->get_col("SELECT DISTINCT category FROM $help_tbl ORDER BY c
                         <tr>
                             <th><label for="topic_content">Answer / Content *</label></th>
                             <td>
-                                <textarea id="topic_content" name="topic_content" required
-                                          class="large-text" rows="8"
-                                          placeholder="Provide a helpful answer. Basic HTML is allowed."><?php echo $edit_topic ? esc_textarea($edit_topic['content']) : ''; ?></textarea>
-                                <p class="description">Basic HTML is allowed (e.g. <code>&lt;strong&gt;</code>, <code>&lt;a&gt;</code>, <code>&lt;ul&gt;</code>).</p>
+                                <?php
+                                wp_editor(
+                                    $edit_topic ? wp_kses_post($edit_topic['content']) : '',
+                                    'topic_content',
+                                    array(
+                                        'textarea_name' => 'topic_content',
+                                        'textarea_rows' => 10,
+                                        'media_buttons' => true,
+                                        'teeny'         => false,
+                                        'tinymce'       => true,
+                                        'quicktags'     => true,
+                                    )
+                                );
+                                ?>
+                                <p class="description">Use the editor above to format your answer and insert images from the Media Library.</p>
                             </td>
                         </tr>
                         <tr>
@@ -211,6 +222,7 @@ $categories = $wpdb->get_col("SELECT DISTINCT category FROM $help_tbl ORDER BY c
                     <li>Topics are grouped by <strong>Category</strong> and displayed as an expandable accordion.</li>
                     <li>Only <strong>Active</strong> topics are shown to members.</li>
                     <li>A <strong>❓ help icon</strong> is shown in the top navigation bar so members can reach the help page at any time.</li>
+                    <li>Use the <strong>Add Media</strong> button in the editor to upload and insert images directly into help topic answers.</li>
                 </ul>
             </div>
         </div>
