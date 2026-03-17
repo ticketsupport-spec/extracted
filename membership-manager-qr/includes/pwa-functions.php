@@ -396,7 +396,7 @@ function mmgr_pwa_inject_head() {
     $portal_slugs = [
         'member-dashboard', 'member-messages', 'member-activity',
         'member-profile',   'member-community', 'members-directory',
-        'member-login',     'member-code-of-conduct',
+        'member-login',     'member-code-of-conduct', 'member-help',
     ];
     if (!in_array($current_slug, $portal_slugs, true)) {
         return;
@@ -618,7 +618,7 @@ function mmgr_pwa_inject_install_banner() {
     $portal_slugs = [
         'member-dashboard', 'member-messages', 'member-activity',
         'member-profile',   'member-community', 'members-directory',
-        'member-login',     'member-code-of-conduct',
+        'member-login',     'member-code-of-conduct', 'member-help',
     ];
     if (!in_array($current_slug, $portal_slugs, true)) {
         return;

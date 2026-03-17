@@ -5750,12 +5750,17 @@ add_action('wp_footer', function() {
 // HELP CENTER PAGE
 // ============================================================
 add_shortcode('mmgr_member_help', function() {
-    global $wpdb;
+    nocache_headers();
 
     $current_member = mmgr_get_current_member();
     if (!$current_member) {
-        return '<p>You must be logged in to view the Help Center.</p>';
+        wp_redirect(home_url('/member-login/'));
+        exit;
     }
+
+    mmgr_enforce_usercod($current_member);
+
+    global $wpdb;
 
     $help_tbl = $wpdb->prefix . 'membership_help_topics';
 
