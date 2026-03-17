@@ -1495,6 +1495,10 @@ add_action('admin_head', function() {
     .mmgr-help-wrap {
         max-width: 820px;
         margin: 0 auto;
+        background: #fff;
+        border-radius: 8px;
+        padding: 25px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
 
     .mmgr-help-search-wrap {
@@ -1505,6 +1509,8 @@ add_action('admin_head', function() {
         width: 100%;
         padding: 12px 16px;
         font-size: 16px;
+        background: #fff;
+        color: #333;
         border: 2px solid var(--portal-border);
         border-radius: 30px;
         outline: none;
