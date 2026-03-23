@@ -607,8 +607,6 @@ add_shortcode('membership_checkin', function($atts){
                 photoArea.appendChild(capB);
                 photoArea.appendChild(retB);
             }
-            // Hide the retake trigger button
-            const triggerBtn = document.getElementById('mmgr-retake-btn-' + memberId);
             // Start stream on the newly created video element
             mmgrStartPhotoCapture(memberId);
             return;

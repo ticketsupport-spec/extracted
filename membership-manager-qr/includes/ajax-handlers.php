@@ -482,14 +482,36 @@ function mmgr_ajax_checkin_save_photo() {
         return;
     }
 
-    // Write to WordPress uploads directory
+    // Write to a WordPress temp file first so we can validate the actual image content
+    $tmp_path = wp_tempnam( 'mmgr-checkin-photo' );
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    if ( file_put_contents( $tmp_path, $image_bin ) === false ) {
+        wp_send_json_error( array( 'message' => 'Could not write temporary image file.' ) );
+        return;
+    }
+
+    // Validate that the decoded bytes are actually a real image (prevents disguised file uploads)
+    $image_info = @getimagesize( $tmp_path );
+    if ( $image_info === false ) {
+        @unlink( $tmp_path );
+        wp_send_json_error( array( 'message' => 'Uploaded data is not a valid image.' ) );
+        return;
+    }
+    $allowed_mime_types = array( 'image/jpeg', 'image/png', 'image/webp' );
+    if ( ! in_array( $image_info['mime'], $allowed_mime_types, true ) ) {
+        @unlink( $tmp_path );
+        wp_send_json_error( array( 'message' => 'Only JPEG, PNG and WebP images are allowed.' ) );
+        return;
+    }
+
+    // Move the validated temp file into the WordPress uploads directory
     $upload_dir = wp_upload_dir();
     $filename   = 'member-' . $member_id . '-checkin-' . time() . '.' . $ext;
     $filepath   = trailingslashit( $upload_dir['path'] ) . $filename;
     $file_url   = trailingslashit( $upload_dir['url'] ) . $filename;
 
-    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-    if ( file_put_contents( $filepath, $image_bin ) === false ) {
+    if ( ! rename( $tmp_path, $filepath ) ) {
+        @unlink( $tmp_path );
         wp_send_json_error( array( 'message' => 'Could not save image file.' ) );
         return;
     }
