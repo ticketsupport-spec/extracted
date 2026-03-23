@@ -82,6 +82,66 @@ function mmgr_handle_checkin() {
     ) );
     $is_first_visit = ( $visit_count === 0 );
 
+    // ── Pending orientation items for this member ─────────────────────────
+    $orientation_items_tbl = $wpdb->prefix . 'membership_orientation_items';
+    $orientation_comp_tbl  = $wpdb->prefix . 'membership_orientation_completions';
+    $pending_orientation_items = array();
+    $total_orientation_items   = 0;
+
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$orientation_items_tbl'" ) === $orientation_items_tbl ) {
+        $total_orientation_items = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM `$orientation_items_tbl` WHERE active = 1"
+        );
+        if ( $total_orientation_items > 0 ) {
+            $pending = $wpdb->get_results( $wpdb->prepare(
+                "SELECT oi.id, oi.title
+                 FROM `$orientation_items_tbl` oi
+                 WHERE oi.active = 1
+                   AND NOT EXISTS (
+                     SELECT 1 FROM `$orientation_comp_tbl` oc
+                     WHERE oc.member_id = %d AND oc.item_id = oi.id
+                   )
+                 ORDER BY oi.sort_order ASC, oi.id ASC",
+                $member['id']
+            ), ARRAY_A );
+            if ( $pending ) {
+                $pending_orientation_items = $pending;
+            }
+        }
+    }
+
+    // ── Membership fee due check ──────────────────────────────────────────
+    $levels_tbl            = $wpdb->prefix . 'membership_levels';
+    $membership_fee_due    = false;
+    $membership_fee_reason = '';
+    $membership_fee_amount = 0.0;
+
+    $level_info  = $wpdb->get_row( $wpdb->prepare(
+        "SELECT price FROM `$levels_tbl` WHERE level_name = %s",
+        $member['level']
+    ), ARRAY_A );
+    $level_price = $level_info ? floatval( $level_info['price'] ) : 0.0;
+
+    if ( empty( $member['paid'] ) || intval( $member['paid'] ) === 0 ) {
+        // Never paid
+        $membership_fee_due    = true;
+        $membership_fee_reason = 'first_time';
+        $membership_fee_amount = $level_price;
+    } elseif ( $is_expired ) {
+        // Membership has expired — renewal due
+        $membership_fee_due    = true;
+        $membership_fee_reason = 'expired';
+        $membership_fee_amount = $level_price;
+    } elseif ( ! empty( $member['expire_date'] ) ) {
+        // Expiring within 30 days
+        $days_left = ( strtotime( $member['expire_date'] ) - strtotime( $today ) ) / DAY_IN_SECONDS;
+        if ( $days_left <= 30 && $days_left >= 0 ) {
+            $membership_fee_due    = true;
+            $membership_fee_reason = 'expiring_soon';
+            $membership_fee_amount = $level_price;
+        }
+    }
+
     // Return structured member data
     wp_send_json_success(array(
         'member' => array(
@@ -103,7 +163,12 @@ function mmgr_handle_checkin() {
             'orientation_done' => !empty($member['orientation_done']) ? (bool) $member['orientation_done'] : false,
             'id_verified' => !empty($member['id_verified']) ? (bool) $member['id_verified'] : false,
         ),
-        'daily_fee' => floatval($daily_fee)
+        'daily_fee'                 => floatval($daily_fee),
+        'pending_orientation_items' => $pending_orientation_items,
+        'total_orientation_items'   => $total_orientation_items,
+        'membership_fee_due'        => $membership_fee_due,
+        'membership_fee_reason'     => $membership_fee_reason,
+        'membership_fee_amount'     => $membership_fee_amount,
     ));
 }
 
@@ -518,4 +583,99 @@ function mmgr_ajax_checkin_save_photo() {
 
     $wpdb->update( $tbl, array( 'photo_url' => $file_url ), array( 'id' => $member_id ) );
     wp_send_json_success( array( 'photo_url' => $file_url, 'message' => 'Photo saved.' ) );
+}
+
+/**
+ * AJAX: Staff checks off one orientation item for a member.
+ * Automatically marks orientation_done on the member record when all items are complete.
+ */
+add_action('wp_ajax_mmgr_checkin_complete_item', 'mmgr_ajax_checkin_complete_item');
+add_action('wp_ajax_nopriv_mmgr_checkin_complete_item', 'mmgr_ajax_checkin_complete_item');
+
+function mmgr_ajax_checkin_complete_item() {
+    global $wpdb;
+    $items_tbl   = $wpdb->prefix . 'membership_orientation_items';
+    $comp_tbl    = $wpdb->prefix . 'membership_orientation_completions';
+    $members_tbl = $wpdb->prefix . 'memberships';
+
+    $member_id = isset( $_POST['member_id'] ) ? intval( $_POST['member_id'] ) : 0;
+    $item_id   = isset( $_POST['item_id'] )   ? intval( $_POST['item_id'] )   : 0;
+
+    if ( ! $member_id || ! $item_id ) {
+        wp_send_json_error( array( 'message' => 'Invalid parameters.' ) );
+        return;
+    }
+
+    // Verify item is active
+    $item = $wpdb->get_var( $wpdb->prepare(
+        "SELECT id FROM `$items_tbl` WHERE id = %d AND active = 1",
+        $item_id
+    ) );
+    if ( ! $item ) {
+        wp_send_json_error( array( 'message' => 'Orientation item not found.' ) );
+        return;
+    }
+
+    // Record completion (IGNORE duplicates in case of double-tap)
+    $wpdb->query( $wpdb->prepare(
+        "INSERT IGNORE INTO `$comp_tbl` (member_id, item_id, completed_at) VALUES (%d, %d, %s)",
+        $member_id, $item_id, current_time('mysql')
+    ) );
+
+    // Count remaining active items not yet completed by this member
+    $remaining = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM `$items_tbl` oi
+         WHERE oi.active = 1
+           AND NOT EXISTS (
+             SELECT 1 FROM `$comp_tbl` oc
+             WHERE oc.member_id = %d AND oc.item_id = oi.id
+           )",
+        $member_id
+    ) );
+
+    // When all items are done, set orientation_done flag on member record
+    if ( $remaining === 0 ) {
+        $wpdb->update( $members_tbl, array( 'orientation_done' => 1 ), array( 'id' => $member_id ) );
+    }
+
+    wp_send_json_success( array(
+        'remaining' => $remaining,
+        'all_done'  => ( $remaining === 0 ),
+    ) );
+}
+
+/**
+ * AJAX: Staff records membership fee payment at check-in.
+ * Sets paid=1, records payment method + amount, sets expire_date to +1 year.
+ */
+add_action('wp_ajax_mmgr_checkin_collect_fee', 'mmgr_ajax_checkin_collect_fee');
+add_action('wp_ajax_nopriv_mmgr_checkin_collect_fee', 'mmgr_ajax_checkin_collect_fee');
+
+function mmgr_ajax_checkin_collect_fee() {
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'memberships';
+
+    $member_id      = isset( $_POST['member_id'] )      ? intval( $_POST['member_id'] )              : 0;
+    $payment_method = isset( $_POST['payment_method'] ) ? sanitize_text_field( $_POST['payment_method'] ) : 'cash';
+    $payment_amount = isset( $_POST['payment_amount'] ) ? floatval( $_POST['payment_amount'] )        : 0.0;
+
+    if ( ! $member_id ) {
+        wp_send_json_error( array( 'message' => 'Invalid member ID.' ) );
+        return;
+    }
+
+    $new_expire = date( 'Y-m-d', strtotime( '+1 year' ) );
+
+    $wpdb->update( $tbl, array(
+        'paid'           => 1,
+        'payment_date'   => current_time('mysql'),
+        'payment_method' => $payment_method,
+        'payment_amount' => $payment_amount,
+        'expire_date'    => $new_expire,
+    ), array( 'id' => $member_id ) );
+
+    wp_send_json_success( array(
+        'message'     => 'Membership fee recorded.',
+        'expire_date' => date( 'M d, Y', strtotime( $new_expire ) ),
+    ) );
 }

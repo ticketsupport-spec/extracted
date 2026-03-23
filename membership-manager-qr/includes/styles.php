@@ -2036,6 +2036,63 @@ add_action('admin_head', function() {
         cursor: default;
     }
 
+    /* Membership fee due section */
+    .mmgr-fee-due-section {
+        border-radius: 8px;
+        padding: 16px;
+        margin-top: 16px;
+    }
+
+    .mmgr-fee-due-section h3 {
+        margin: 0 0 8px 0;
+        font-size: 1.1rem;
+        font-weight: bold;
+    }
+
+    /* Orientation checklist section */
+    .mmgr-orientation-section {
+        background: #f0f8e8;
+        border: 2px solid #4a8c00;
+        border-radius: 8px;
+        padding: 16px;
+        margin-top: 16px;
+    }
+
+    .mmgr-orientation-section h3 {
+        margin: 0 0 10px 0;
+        color: #2d5a00;
+        font-size: 1.1rem;
+        font-weight: bold;
+    }
+
+    .mmgr-checklist-item {
+        background: #fff;
+        padding: 14px;
+        border-radius: 6px;
+        border: 1px solid #b8dca0;
+        margin-bottom: 8px;
+        transition: opacity 0.3s;
+    }
+
+    .mmgr-checklist-item label {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        cursor: pointer;
+        font-size: 15px;
+        font-weight: 500;
+        line-height: 1.4;
+    }
+
+    .mmgr-checklist-item input[type="checkbox"] {
+        width: 22px;
+        height: 22px;
+        flex-shrink: 0;
+        margin-top: 1px;
+        cursor: pointer;
+        accent-color: #00a32a;
+    }
+
     @media (max-width: 600px) {
         .mmgr-member-card-header {
             flex-direction: column;

@@ -325,6 +325,16 @@ add_shortcode('membership_checkin', function($atts){
     const mmgrBtnBase   = '<?php echo esc_js($btn_base_style); ?>';
     const mmgrBtnActive = '<?php echo esc_js($btn_active_style); ?>';
 
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function mmgrEscHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    // Tracks pending orientation items per member (decremented as staff check off)
+    const mmgrOrientPending = {};
+
     function switchMode(mode) {
         document.querySelectorAll('.mmgr-mode').forEach(el => el.style.setProperty('display', 'none', 'important'));
         document.querySelectorAll('.mmgr-mode-switch button').forEach(btn => {
@@ -395,9 +405,19 @@ add_shortcode('membership_checkin', function($atts){
             const result = document.getElementById('checkin-result');
             
             if (data.success && data.data && data.data.member) {
-                const member = data.data.member;
+                const member   = data.data.member;
                 const dailyFee = data.data.daily_fee || 0;
-                const isFirst = member.is_first_visit;
+                const isFirst  = member.is_first_visit;
+
+                // Orientation checklist data
+                const pendingItems         = data.data.pending_orientation_items || [];
+                const totalOrientItems     = data.data.total_orientation_items   || 0;
+                const completedOrientItems = totalOrientItems - pendingItems.length;
+
+                // Membership fee due data
+                const feeDue    = data.data.membership_fee_due    || false;
+                const feeReason = data.data.membership_fee_reason || '';
+                const feeAmount = data.data.membership_fee_amount || 0;
                 const ajaxUrl = '<?php echo admin_url('admin-ajax.php'); ?>';
 
                 // Build member info card
@@ -457,33 +477,109 @@ add_shortcode('membership_checkin', function($atts){
 
                 html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Last Visit:</strong> ' + member.last_visited + '</p>';
 
-                // ── FIRST VISIT: ORIENTATION + ID VERIFIED BUTTONS ──────────
+                // ── FIRST VISIT: ID VERIFIED + ORIENTATION STATUS ───────────
                 if (isFirst) {
-                    const orientBtnId  = 'mmgr-orient-btn-' + member.id;
-                    const idBtnId      = 'mmgr-id-btn-' + member.id;
-                    const orientDone   = member.orientation_done;
-                    const idDone       = member.id_verified;
+                    const idDone    = member.id_verified;
+                    const orientDone = member.orientation_done;
 
                     html += '<div style="margin-top:14px !important;display:flex !important;flex-wrap:wrap !important;gap:10px !important;">';
 
-                    // Orientation button
-                    if (orientDone) {
-                        html += '<button id="' + orientBtnId + '" disabled class="mmgr-checkin-staff-btn mmgr-staff-btn-done" style="background:#888 !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:default !important;">✅ Orientation Done</button>';
+                    // Show orientation button only if NO checklist items are configured (legacy fallback).
+                    // When items are configured the checklist section handles orientation.
+                    if (totalOrientItems === 0) {
+                        if (orientDone) {
+                            html += '<button id="mmgr-orient-btn-' + member.id + '" disabled class="mmgr-checkin-staff-btn mmgr-staff-btn-done" style="background:#888 !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:default !important;">✅ Orientation Done</button>';
+                        } else {
+                            html += '<button id="mmgr-orient-btn-' + member.id + '" onclick="mmgrConfirmOrientation(' + member.id + ')" class="mmgr-checkin-staff-btn" style="background:#6a0dad !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:pointer !important;">🎓 Confirm Orientation</button>';
+                        }
                     } else {
-                        html += '<button id="' + orientBtnId + '" onclick="mmgrConfirmOrientation(' + member.id + ')" class="mmgr-checkin-staff-btn" style="background:#6a0dad !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:pointer !important;">🎓 Confirm Orientation</button>';
+                        // Hidden element so mmgrConfirmOrientation() can target it when checklist auto-completes
+                        if (orientDone && pendingItems.length === 0) {
+                            html += '<button id="mmgr-orient-btn-' + member.id + '" disabled class="mmgr-checkin-staff-btn mmgr-staff-btn-done" style="background:#888 !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:default !important;">✅ Orientation Done</button>';
+                        } else {
+                            html += '<button id="mmgr-orient-btn-' + member.id + '" style="display:none !important;" disabled aria-hidden="true"></button>';
+                        }
                     }
 
-                    // ID Verified button
+                    // ID Verified button always shown on first visit
                     if (idDone) {
-                        html += '<button id="' + idBtnId + '" disabled class="mmgr-checkin-staff-btn mmgr-staff-btn-done" style="background:#888 !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:default !important;">✅ ID Verified</button>';
+                        html += '<button id="mmgr-id-btn-' + member.id + '" disabled class="mmgr-checkin-staff-btn mmgr-staff-btn-done" style="background:#888 !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:default !important;">✅ ID Verified</button>';
                     } else {
-                        html += '<button id="' + idBtnId + '" onclick="mmgrConfirmIdVerified(' + member.id + ')" class="mmgr-checkin-staff-btn" style="background:#d4600a !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:pointer !important;">🪪 Confirm Valid ID</button>';
+                        html += '<button id="mmgr-id-btn-' + member.id + '" onclick="mmgrConfirmIdVerified(' + member.id + ')" class="mmgr-checkin-staff-btn" style="background:#d4600a !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:pointer !important;">🪪 Confirm Valid ID</button>';
                     }
 
                     html += '</div>';
                 }
 
                 html += '</div></div>'; // close member-info and card-header
+
+                // ── MEMBERSHIP FEE DUE SECTION ──────────────────────────────
+                if (feeDue) {
+                    let feeStyle  = 'background:#fff3cd !important;border:2px solid #f0c33c !important;';
+                    let feeIcon   = '💳';
+                    let feeTitle  = 'Membership Fee Due';
+                    let feeDesc   = 'Please collect the membership fee from this member.';
+
+                    if (feeReason === 'first_time') {
+                        feeIcon  = '💳';
+                        feeTitle = 'Membership Fee Due — First Time Member';
+                        feeDesc  = 'This member has not yet paid their membership fee.';
+                    } else if (feeReason === 'expired') {
+                        feeStyle = 'background:#f8d7da !important;border:2px solid #dc3232 !important;';
+                        feeIcon  = '🔴';
+                        feeTitle = 'Membership Renewal Due — Expired';
+                        feeDesc  = 'This membership has expired. Please collect the renewal fee.';
+                    } else if (feeReason === 'expiring_soon') {
+                        feeIcon  = '⏰';
+                        feeTitle = 'Membership Expiring Soon';
+                        feeDesc  = 'This membership expires within 30 days. Consider collecting renewal now.';
+                    }
+
+                    html += '<div id="mmgr-fee-due-' + member.id + '" class="mmgr-fee-due-section" style="' + feeStyle + 'border-radius:8px !important;padding:16px !important;margin-top:16px !important;">';
+                    html += '<h3 style="margin:0 0 8px 0 !important;font-size:1.1rem !important;font-weight:bold !important;">' + feeIcon + ' ' + feeTitle + '</h3>';
+                    html += '<p style="margin:0 0 12px 0 !important;font-size:14px !important;">' + feeDesc + '</p>';
+                    html += '<div style="display:flex !important;align-items:center !important;gap:10px !important;flex-wrap:wrap !important;">';
+                    html += '<strong style="font-size:18px !important;">Fee: $' + feeAmount.toFixed(2) + '</strong>';
+                    html += '<select id="mmgr-fee-method-' + member.id + '" style="padding:8px 12px !important;border:2px solid #ccc !important;border-radius:6px !important;font-size:14px !important;">';
+                    html += '<option value="cash">💵 Cash</option>';
+                    html += '<option value="card">💳 Card/EFTPOS</option>';
+                    html += '<option value="other">Other</option>';
+                    html += '</select>';
+                    html += '<button onclick="mmgrCollectMembershipFee(' + member.id + ', ' + feeAmount + ')" style="background:#00a32a !important;color:#fff !important;border:none !important;padding:10px 18px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:pointer !important;">✅ Mark Fee Collected</button>';
+                    html += '</div>';
+                    html += '<div id="mmgr-fee-status-' + member.id + '" style="margin-top:8px !important;font-size:13px !important;"></div>';
+                    html += '</div>';
+                }
+
+                // ── ORIENTATION CHECKLIST SECTION ────────────────────────────
+                if (pendingItems.length > 0) {
+                    mmgrOrientPending[member.id] = pendingItems.length;
+
+                    html += '<div id="mmgr-orientation-' + member.id + '" class="mmgr-orientation-section" style="background:#f0f8e8 !important;border:2px solid #4a8c00 !important;border-radius:8px !important;padding:16px !important;margin-top:16px !important;">';
+                    html += '<h3 style="margin:0 0 10px 0 !important;color:#2d5a00 !important;font-size:1.1rem !important;font-weight:bold !important;">🎓 Orientation Checklist</h3>';
+
+                    if (completedOrientItems > 0) {
+                        html += '<p style="margin:0 0 10px 0 !important;font-size:13px !important;color:#2d5a00 !important;">✅ ' + completedOrientItems + ' of ' + totalOrientItems + ' items already completed — please cover the remaining items:</p>';
+                    } else {
+                        html += '<p style="margin:0 0 10px 0 !important;font-size:13px !important;color:#2d5a00 !important;">Take the tablet with you and check each item off as you go through orientation with the member:</p>';
+                    }
+
+                    html += '<div id="mmgr-checklist-' + member.id + '" style="display:flex !important;flex-direction:column !important;gap:8px !important;">';
+                    pendingItems.forEach(function(item) {
+                        html += '<div id="mmgr-item-' + member.id + '-' + item.id + '" style="background:#fff !important;padding:14px !important;border-radius:6px !important;border:1px solid #b8dca0 !important;">';
+                        html += '<label style="display:flex !important;align-items:flex-start !important;gap:12px !important;cursor:pointer !important;font-size:15px !important;font-weight:500 !important;line-height:1.4 !important;">';
+                        html += '<input type="checkbox" onchange="mmgrCompleteOrientationItem(' + member.id + ', ' + item.id + ', this)" style="width:22px !important;height:22px !important;margin-top:1px !important;flex-shrink:0 !important;cursor:pointer !important;accent-color:#00a32a !important;">';
+                        html += mmgrEscHtml(item.title);
+                        html += '</label>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+
+                    html += '<div id="mmgr-orientation-progress-' + member.id + '" style="margin-top:12px !important;font-size:14px !important;color:#2d5a00 !important;font-weight:600 !important;">';
+                    html += pendingItems.length + ' item' + (pendingItems.length > 1 ? 's' : '') + ' remaining';
+                    html += '</div>';
+                    html += '</div>';
+                }
 
                 // Payment section
                 html += '<div class="mmgr-payment-section" style="background:#f0f8ff !important;padding:15px !important;border-radius:6px !important;margin-top:15px !important;">';
@@ -557,6 +653,102 @@ add_shortcode('membership_checkin', function($atts){
                     btn.style.setProperty('background','#888','important');
                     btn.style.setProperty('cursor','default','important');
                 }
+            });
+    }
+
+    // ── Collect membership fee ─────────────────────────────────────────────────
+    function mmgrCollectMembershipFee(memberId, feeAmount) {
+        const methodEl = document.getElementById('mmgr-fee-method-' + memberId);
+        const statusEl = document.getElementById('mmgr-fee-status-' + memberId);
+        const method   = methodEl ? methodEl.value : 'cash';
+
+        if (statusEl) statusEl.textContent = '⏳ Saving…';
+
+        const fd = new FormData();
+        fd.append('action',         'mmgr_checkin_collect_fee');
+        fd.append('member_id',      memberId);
+        fd.append('payment_method', method);
+        fd.append('payment_amount', feeAmount);
+
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(resp => {
+                const section = document.getElementById('mmgr-fee-due-' + memberId);
+                if (resp.success) {
+                    if (section) {
+                        section.style.setProperty('background', '#d4edda', 'important');
+                        section.style.setProperty('border-color', '#00a32a', 'important');
+                        section.innerHTML = '<p style="margin:0 !important;color:#155724 !important;font-weight:bold !important;font-size:15px !important;">✅ Membership fee collected! New expiry: ' + resp.data.expire_date + '</p>';
+                    }
+                } else {
+                    if (statusEl) statusEl.textContent = '❌ ' + (resp.data ? resp.data.message : 'Error saving');
+                }
+            })
+            .catch(() => {
+                if (statusEl) statusEl.textContent = '❌ Network error';
+            });
+    }
+
+    // ── Orientation checklist item completion ──────────────────────────────────
+    function mmgrCompleteOrientationItem(memberId, itemId, checkbox) {
+        checkbox.disabled = true;
+
+        const fd = new FormData();
+        fd.append('action',    'mmgr_checkin_complete_item');
+        fd.append('member_id', memberId);
+        fd.append('item_id',   itemId);
+
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(resp => {
+                if (resp.success) {
+                    const itemDiv = document.getElementById('mmgr-item-' + memberId + '-' + itemId);
+                    if (itemDiv) {
+                        itemDiv.style.setProperty('opacity', '0.55', 'important');
+                        const label = itemDiv.querySelector('label');
+                        if (label) {
+                            label.style.textDecoration = 'line-through';
+                            label.style.color = '#666';
+                            const ck = document.createElement('span');
+                            ck.textContent = ' ✅';
+                            label.appendChild(ck);
+                        }
+                    }
+
+                    if (typeof mmgrOrientPending[memberId] !== 'undefined') {
+                        mmgrOrientPending[memberId]--;
+                        const remaining  = mmgrOrientPending[memberId];
+                        const progressEl = document.getElementById('mmgr-orientation-progress-' + memberId);
+
+                        if (remaining <= 0) {
+                            if (progressEl) {
+                                progressEl.innerHTML = '<span style="color:#00a32a;font-weight:bold;font-size:15px;">✅ All orientation items complete!</span>';
+                            }
+                            // Auto-save orientation done on member record
+                            mmgrConfirmOrientation(memberId);
+                            // Show the (hidden) orientation button as done if visible
+                            const ob = document.getElementById('mmgr-orient-btn-' + memberId);
+                            if (ob) {
+                                ob.style.setProperty('display', 'inline-block', 'important');
+                                ob.textContent = '✅ Orientation Done';
+                                ob.disabled = true;
+                                ob.style.setProperty('background', '#888', 'important');
+                            }
+                        } else {
+                            if (progressEl) {
+                                progressEl.textContent = remaining + ' item' + (remaining > 1 ? 's' : '') + ' remaining';
+                            }
+                        }
+                    }
+                } else {
+                    checkbox.checked  = false;
+                    checkbox.disabled = false;
+                    alert('Error saving: ' + (resp.data ? resp.data.message : 'Unknown error'));
+                }
+            })
+            .catch(() => {
+                checkbox.checked  = false;
+                checkbox.disabled = false;
             });
     }
 
