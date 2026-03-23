@@ -25,6 +25,9 @@ if (isset($_GET['export_logs_csv']) && current_user_can('manage_options')) {
             v.visit_time,
             v.daily_fee,
             v.notes,
+            v.is_first_visit,
+            v.orientation_done,
+            v.id_verified,
             m.name,
             m.member_code,
             m.level,
@@ -39,7 +42,7 @@ if (isset($_GET['export_logs_csv']) && current_user_can('manage_options')) {
     header('Content-Disposition: attachment; filename="visit-logs-'.date('Y-m-d').'.csv"');
     
     $output = fopen('php://output', 'w');
-    fputcsv($output, array('ID', 'Date/Time', 'Member Name', 'Member Code', 'Level', 'Phone', 'Email', 'Daily Fee', 'Notes'));
+    fputcsv($output, array('ID', 'Date/Time', 'Member Name', 'Member Code', 'Level', 'Phone', 'Email', 'Daily Fee', 'First Visit', 'Orientation Done', 'ID Verified', 'Notes'));
     
     foreach ($logs as $log) {
         fputcsv($output, array(
@@ -51,6 +54,9 @@ if (isset($_GET['export_logs_csv']) && current_user_can('manage_options')) {
             $log['phone'] ?: 'N/A',
             $log['email'] ?: 'N/A',
             '$' . number_format($log['daily_fee'], 2),
+            $log['is_first_visit'] ? 'Yes' : 'No',
+            $log['orientation_done'] ? 'Yes' : 'No',
+            $log['id_verified'] ? 'Yes' : 'No',
             $log['notes'] ?: ''
         ));
     }
@@ -75,6 +81,9 @@ $logs = $wpdb->get_results($wpdb->prepare("
         v.visit_time,
         v.daily_fee,
         v.notes,
+        v.is_first_visit,
+        v.orientation_done,
+        v.id_verified,
         m.name,
         m.member_code,
         m.level,
@@ -224,6 +233,15 @@ $month_revenue = $wpdb->get_var($wpdb->prepare(
                                 <span style="background:#00a32a;color:white;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:bold;">💵 PAID</span>
                             <?php else: ?>
                                 <span style="background:#d63638;color:white;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:bold;">⚠️ UNPAID</span>
+                            <?php endif; ?>
+                            <?php if (!empty($log['is_first_visit'])): ?>
+                                <span style="background:#c00;color:white;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:bold;margin-left:3px;">🎉 FIRST VISIT</span>
+                            <?php endif; ?>
+                            <?php if (!empty($log['orientation_done'])): ?>
+                                <span style="background:#6a0dad;color:white;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:bold;margin-left:3px;">🎓 Orientation ✓</span>
+                            <?php endif; ?>
+                            <?php if (!empty($log['id_verified'])): ?>
+                                <span style="background:#d4600a;color:white;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:bold;margin-left:3px;">🪪 ID Verified ✓</span>
                             <?php endif; ?>
                             <?php if (!empty($log['notes'])): ?>
                                 <br><small style="color:#666;"><?php echo esc_html($log['notes']); ?></small>

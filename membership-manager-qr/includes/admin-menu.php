@@ -93,8 +93,8 @@ add_action('admin_menu', function() {
     
     add_submenu_page(
         'membership_manager',
-        'Membership Levels',
-        'Levels',
+        'Member Fees',
+        'Member Fees',
         'manage_options',
         'membership_levels',
         'mmgr_levels_page'
@@ -200,6 +200,18 @@ add_action('admin_menu', function() {
 		'membership_help_topics',
 		function() {
 			require_once MMGR_PLUGIN_DIR . 'includes/admin/help-topics.php';
+		}
+	);
+
+	// Orientation Checklist
+	add_submenu_page(
+		'membership_manager',
+		'Orientation Checklist',
+		'Orientation',
+		'manage_options',
+		'membership_orientation',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/orientation-items.php';
 		}
 	);
     

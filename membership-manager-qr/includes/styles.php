@@ -200,6 +200,7 @@ add_action('wp_head', function() {
             align-items: center;
             gap: 10px;
             flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         /* Make count chips slightly smaller in the cramped button bar */
@@ -1985,10 +1986,122 @@ add_action('admin_head', function() {
         background: #008a22;
     }
 
+    /* First-visit banner */
+    .mmgr-first-visit-banner {
+        background: #c00;
+        color: #fff;
+        text-align: center;
+        padding: 14px 20px;
+        border-radius: 8px;
+        margin-bottom: 18px;
+    }
+
+    .mmgr-first-visit-banner h2 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 900;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+    }
+
+    /* Square 200×200 member photo for check-in (no circle crop) */
+    .mmgr-checkin-photo-square {
+        width: 200px;
+        height: 200px;
+        object-fit: contain;
+        border-radius: 6px;
+        border: 3px solid #00a32a;
+        display: block;
+        flex-shrink: 0;
+    }
+
+    /* Staff action buttons (orientation / ID verified) */
+    .mmgr-checkin-staff-btn {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+
+    .mmgr-checkin-staff-btn:hover:not(:disabled) {
+        opacity: 0.85;
+    }
+
+    .mmgr-staff-btn-done {
+        background: #888;
+        color: #fff;
+        cursor: default;
+    }
+
+    /* Membership fee due section */
+    .mmgr-fee-due-section {
+        border-radius: 8px;
+        padding: 16px;
+        margin-top: 16px;
+    }
+
+    .mmgr-fee-due-section h3 {
+        margin: 0 0 8px 0;
+        font-size: 1.1rem;
+        font-weight: bold;
+    }
+
+    /* Orientation checklist section */
+    .mmgr-orientation-section {
+        background: #f0f8e8;
+        border: 2px solid #4a8c00;
+        border-radius: 8px;
+        padding: 16px;
+        margin-top: 16px;
+    }
+
+    .mmgr-orientation-section h3 {
+        margin: 0 0 10px 0;
+        color: #2d5a00;
+        font-size: 1.1rem;
+        font-weight: bold;
+    }
+
+    .mmgr-checklist-item {
+        background: #fff;
+        padding: 14px;
+        border-radius: 6px;
+        border: 1px solid #b8dca0;
+        margin-bottom: 8px;
+        transition: opacity 0.3s;
+    }
+
+    .mmgr-checklist-item label {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        cursor: pointer;
+        font-size: 15px;
+        font-weight: 500;
+        line-height: 1.4;
+    }
+
+    .mmgr-checklist-item input[type="checkbox"] {
+        width: 22px;
+        height: 22px;
+        flex-shrink: 0;
+        margin-top: 1px;
+        cursor: pointer;
+        accent-color: #00a32a;
+    }
+
     @media (max-width: 600px) {
         .mmgr-member-card-header {
             flex-direction: column;
             align-items: center;
+        }
+
+        .mmgr-checkin-photo-square {
+            width: 160px;
+            height: 160px;
         }
     }
     </style>

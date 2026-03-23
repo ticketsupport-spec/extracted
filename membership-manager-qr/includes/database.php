@@ -113,6 +113,9 @@ function mmgr_create_tables() {
         visit_time DATETIME NOT NULL,
         daily_fee DECIMAL(10,2) DEFAULT 0,
         notes TEXT,
+        is_first_visit TINYINT(1) NOT NULL DEFAULT 0,
+        orientation_done TINYINT(1) NOT NULL DEFAULT 0,
+        id_verified TINYINT(1) NOT NULL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_member_id (member_id),
         INDEX idx_visit_time (visit_time)
@@ -366,6 +369,52 @@ function mmgr_create_tables() {
         INDEX idx_sort (sort_order)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    // ===========================
+    // ORIENTATION ITEMS TABLE
+    // ===========================
+    $orientation_items_table = $wpdb->prefix . 'membership_orientation_items';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$orientation_items_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(500) NOT NULL,
+        sort_order INT NOT NULL DEFAULT 0,
+        active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_active (active),
+        INDEX idx_sort (sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // Seed default orientation items if none exist
+    $orientation_count = $wpdb->get_var("SELECT COUNT(*) FROM `$orientation_items_table`");
+    if ($orientation_count == 0) {
+        $defaults = array(
+            array('Gone over the club\'s rules with the member',                          10),
+            array('Shown the member the location of towels',                               20),
+            array('Discussed activities that take place at club events with the member',   30),
+        );
+        foreach ($defaults as $d) {
+            $wpdb->insert($orientation_items_table, array(
+                'title'      => $d[0],
+                'sort_order' => $d[1],
+                'active'     => 1,
+            ));
+        }
+    }
+
+    // ===========================
+    // ORIENTATION COMPLETIONS TABLE
+    // ===========================
+    $orientation_comp_table = $wpdb->prefix . 'membership_orientation_completions';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$orientation_comp_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        item_id INT NOT NULL,
+        completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_member_item (member_id, item_id),
+        INDEX idx_member_id (member_id),
+        INDEX idx_item_id (item_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     // Update plugin version
     update_option('mmgr_db_version', '1.0.0');
     
@@ -550,11 +599,90 @@ function mmgr_migrate_help_topics_content_longtext() {
 }
 
 /**
+ * Add first-visit staff-action columns to the memberships table,
+ * and matching log columns to the visits table.
+ * Safe to call repeatedly – each check is guarded by SHOW COLUMNS.
+ */
+function mmgr_migrate_first_visit_columns() {
+    global $wpdb;
+    $tbl        = $wpdb->prefix . 'memberships';
+    $visits_tbl = $wpdb->prefix . 'membership_visits';
+
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$tbl'" ) === $tbl ) {
+        if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$tbl` LIKE 'orientation_done'" ) ) {
+            $wpdb->query( "ALTER TABLE `$tbl` ADD COLUMN `orientation_done` TINYINT(1) NOT NULL DEFAULT 0" );
+        }
+        if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$tbl` LIKE 'id_verified'" ) ) {
+            $wpdb->query( "ALTER TABLE `$tbl` ADD COLUMN `id_verified` TINYINT(1) NOT NULL DEFAULT 0" );
+        }
+    }
+
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$visits_tbl'" ) === $visits_tbl ) {
+        if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$visits_tbl` LIKE 'is_first_visit'" ) ) {
+            $wpdb->query( "ALTER TABLE `$visits_tbl` ADD COLUMN `is_first_visit` TINYINT(1) NOT NULL DEFAULT 0" );
+        }
+        if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$visits_tbl` LIKE 'orientation_done'" ) ) {
+            $wpdb->query( "ALTER TABLE `$visits_tbl` ADD COLUMN `orientation_done` TINYINT(1) NOT NULL DEFAULT 0" );
+        }
+        if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$visits_tbl` LIKE 'id_verified'" ) ) {
+            $wpdb->query( "ALTER TABLE `$visits_tbl` ADD COLUMN `id_verified` TINYINT(1) NOT NULL DEFAULT 0" );
+        }
+    }
+}
+
+/**
+ * Create orientation tables for existing installs that already ran mmgr_create_tables()
+ * before these tables were added. Safe to call repeatedly.
+ */
+function mmgr_migrate_orientation_tables() {
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $items_tbl = $wpdb->prefix . 'membership_orientation_items';
+    $comp_tbl  = $wpdb->prefix . 'membership_orientation_completions';
+
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$items_tbl'" ) !== $items_tbl ) {
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS `$items_tbl` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(500) NOT NULL,
+            sort_order INT NOT NULL DEFAULT 0,
+            active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_active (active),
+            INDEX idx_sort (sort_order)
+        ) ENGINE=InnoDB $charset_collate" );
+
+        // Seed defaults on fresh migration
+        $defaults = array(
+            array( 'Gone over the club\'s rules with the member',                          10 ),
+            array( 'Shown the member the location of towels',                               20 ),
+            array( 'Discussed activities that take place at club events with the member',   30 ),
+        );
+        foreach ( $defaults as $d ) {
+            $wpdb->insert( $items_tbl, array( 'title' => $d[0], 'sort_order' => $d[1], 'active' => 1 ) );
+        }
+    }
+
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$comp_tbl'" ) !== $comp_tbl ) {
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS `$comp_tbl` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            member_id INT NOT NULL,
+            item_id INT NOT NULL,
+            completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_member_item (member_id, item_id),
+            INDEX idx_member_id (member_id),
+            INDEX idx_item_id (item_id)
+        ) ENGINE=InnoDB $charset_collate" );
+    }
+}
+
+/**
  * Check and update database schema on plugin load
  */
 function mmgr_check_database() {
     $current_version = get_option('mmgr_db_version', '0.0.0');
-    $required_version = '1.4.0';
+    $required_version = '1.6.0';
     
     if (version_compare($current_version, $required_version, '<')) {
         mmgr_create_tables();
@@ -562,7 +690,9 @@ function mmgr_check_database() {
         mmgr_migrate_community_awards();
         mmgr_migrate_help_topics();
         mmgr_migrate_help_topics_content_longtext();
-        update_option( 'mmgr_db_version', '1.4.0' );
+        mmgr_migrate_first_visit_columns();
+        mmgr_migrate_orientation_tables();
+        update_option( 'mmgr_db_version', '1.6.0' );
     }
 }
 
