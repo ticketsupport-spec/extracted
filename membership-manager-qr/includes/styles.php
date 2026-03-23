@@ -200,6 +200,7 @@ add_action('wp_head', function() {
             align-items: center;
             gap: 10px;
             flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         /* Make count chips slightly smaller in the cramped button bar */
