@@ -1429,8 +1429,18 @@ add_shortcode('mmgr_member_activity', function() {
                         ?>
                             <tr style="border-bottom:1px solid #e0e0e0;">
                                 <td style="padding:12px;">
-                                    <strong><?php echo date('F j, Y', strtotime($visit['visit_time'])); ?></strong><br>
+                                    <strong><?php echo date('F j, Y', strtotime($visit['visit_time'])); ?></strong>
+                                    <?php if (!empty($visit['is_first_visit'])): ?>
+                                        <span style="background:#c00;color:white;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:bold;margin-left:5px;">🎉 First Visit</span>
+                                    <?php endif; ?>
+                                    <br>
                                     <span style="color:#666;font-size:13px;"><?php echo date('g:i A', strtotime($visit['visit_time'])); ?></span>
+                                    <?php if (!empty($visit['orientation_done'])): ?>
+                                        <span style="background:#6a0dad;color:white;padding:2px 6px;border-radius:10px;font-size:11px;margin-left:3px;">🎓 Orientation ✓</span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($visit['id_verified'])): ?>
+                                        <span style="background:#d4600a;color:white;padding:2px 6px;border-radius:10px;font-size:11px;margin-left:3px;">🪪 ID ✓</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td style="padding:12px;">
                                     <strong style="color:#00a32a;">$<?php echo number_format($visit['daily_fee'], 2); ?></strong>

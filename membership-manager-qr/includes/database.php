@@ -113,6 +113,9 @@ function mmgr_create_tables() {
         visit_time DATETIME NOT NULL,
         daily_fee DECIMAL(10,2) DEFAULT 0,
         notes TEXT,
+        is_first_visit TINYINT(1) NOT NULL DEFAULT 0,
+        orientation_done TINYINT(1) NOT NULL DEFAULT 0,
+        id_verified TINYINT(1) NOT NULL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_member_id (member_id),
         INDEX idx_visit_time (visit_time)
@@ -550,25 +553,34 @@ function mmgr_migrate_help_topics_content_longtext() {
 }
 
 /**
- * Add first-visit staff-action columns to the memberships table.
- * orientation_done  - staff confirmed member received orientation walkthrough
- * id_verified       - staff confirmed member showed valid ID
+ * Add first-visit staff-action columns to the memberships table,
+ * and matching log columns to the visits table.
  * Safe to call repeatedly – each check is guarded by SHOW COLUMNS.
  */
 function mmgr_migrate_first_visit_columns() {
     global $wpdb;
-    $tbl = $wpdb->prefix . 'memberships';
+    $tbl        = $wpdb->prefix . 'memberships';
+    $visits_tbl = $wpdb->prefix . 'membership_visits';
 
-    if ( $wpdb->get_var( "SHOW TABLES LIKE '$tbl'" ) !== $tbl ) {
-        return;
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$tbl'" ) === $tbl ) {
+        if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$tbl` LIKE 'orientation_done'" ) ) {
+            $wpdb->query( "ALTER TABLE `$tbl` ADD COLUMN `orientation_done` TINYINT(1) NOT NULL DEFAULT 0" );
+        }
+        if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$tbl` LIKE 'id_verified'" ) ) {
+            $wpdb->query( "ALTER TABLE `$tbl` ADD COLUMN `id_verified` TINYINT(1) NOT NULL DEFAULT 0" );
+        }
     }
 
-    if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$tbl` LIKE 'orientation_done'" ) ) {
-        $wpdb->query( "ALTER TABLE `$tbl` ADD COLUMN `orientation_done` TINYINT(1) NOT NULL DEFAULT 0" );
-    }
-
-    if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$tbl` LIKE 'id_verified'" ) ) {
-        $wpdb->query( "ALTER TABLE `$tbl` ADD COLUMN `id_verified` TINYINT(1) NOT NULL DEFAULT 0" );
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$visits_tbl'" ) === $visits_tbl ) {
+        if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$visits_tbl` LIKE 'is_first_visit'" ) ) {
+            $wpdb->query( "ALTER TABLE `$visits_tbl` ADD COLUMN `is_first_visit` TINYINT(1) NOT NULL DEFAULT 0" );
+        }
+        if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$visits_tbl` LIKE 'orientation_done'" ) ) {
+            $wpdb->query( "ALTER TABLE `$visits_tbl` ADD COLUMN `orientation_done` TINYINT(1) NOT NULL DEFAULT 0" );
+        }
+        if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$visits_tbl` LIKE 'id_verified'" ) ) {
+            $wpdb->query( "ALTER TABLE `$visits_tbl` ADD COLUMN `id_verified` TINYINT(1) NOT NULL DEFAULT 0" );
+        }
     }
 }
 

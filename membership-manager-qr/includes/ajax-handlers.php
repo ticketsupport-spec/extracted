@@ -128,9 +128,9 @@ function mmgr_confirm_payment() {
         return;
     }
     
-    // Get member name
+    // Get member record (name + first-visit flags)
     $member = $wpdb->get_row($wpdb->prepare(
-        "SELECT name FROM $tbl WHERE id = %d",
+        "SELECT name, orientation_done, id_verified FROM $tbl WHERE id = %d",
         $member_id
     ), ARRAY_A);
     
@@ -138,17 +138,36 @@ function mmgr_confirm_payment() {
         wp_send_json_error(array('message' => 'Member not found'));
         return;
     }
-    
-    // Add payment status to notes
+
+    // Determine whether this is the member's very first visit
+    $prior_visits = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM $visits_tbl WHERE member_id = %d",
+        $member_id
+    ) );
+    $is_first_visit = ( $prior_visits === 0 ) ? 1 : 0;
+
+    // Capture first-visit staff-action flags from member record
+    $orientation_done = isset( $member['orientation_done'] ) ? (int) $member['orientation_done'] : 0;
+    $id_verified      = isset( $member['id_verified'] )      ? (int) $member['id_verified']      : 0;
+
+    // Build notes — include first-visit markers so they're visible in the visit log
     $payment_note = $paid ? 'PAID' : 'UNPAID';
-    $full_notes = !empty($notes) ? $payment_note . ' - ' . $notes : $payment_note;
-    
-    // Record visit with payment status
+    $extra_notes  = array();
+    if ( $is_first_visit )    $extra_notes[] = 'FIRST VISIT';
+    if ( $orientation_done )  $extra_notes[] = 'Orientation ✓';
+    if ( $id_verified )       $extra_notes[] = 'ID Verified ✓';
+    if ( ! empty( $notes ) )  $extra_notes[] = $notes;
+    $full_notes = $payment_note . ( ! empty( $extra_notes ) ? ' - ' . implode( ' | ', $extra_notes ) : '' );
+
+    // Record visit with payment status and first-visit log data
     $visit_data = array(
-        'member_id' => $member_id,
-        'visit_time' => current_time('mysql'),
-        'daily_fee' => $daily_fee,
-        'notes' => $full_notes
+        'member_id'       => $member_id,
+        'visit_time'      => current_time('mysql'),
+        'daily_fee'       => $daily_fee,
+        'notes'           => $full_notes,
+        'is_first_visit'  => $is_first_visit,
+        'orientation_done'=> $orientation_done,
+        'id_verified'     => $id_verified,
     );
     
     $wpdb->insert($visits_tbl, $visit_data);

@@ -1986,10 +1986,65 @@ add_action('admin_head', function() {
         background: #008a22;
     }
 
+    /* First-visit banner */
+    .mmgr-first-visit-banner {
+        background: #c00;
+        color: #fff;
+        text-align: center;
+        padding: 14px 20px;
+        border-radius: 8px;
+        margin-bottom: 18px;
+    }
+
+    .mmgr-first-visit-banner h2 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 900;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+    }
+
+    /* Square 200×200 member photo for check-in (no circle crop) */
+    .mmgr-checkin-photo-square {
+        width: 200px;
+        height: 200px;
+        object-fit: contain;
+        border-radius: 6px;
+        border: 3px solid #00a32a;
+        display: block;
+        flex-shrink: 0;
+    }
+
+    /* Staff action buttons (orientation / ID verified) */
+    .mmgr-checkin-staff-btn {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+
+    .mmgr-checkin-staff-btn:hover:not(:disabled) {
+        opacity: 0.85;
+    }
+
+    .mmgr-staff-btn-done {
+        background: #888;
+        color: #fff;
+        cursor: default;
+    }
+
     @media (max-width: 600px) {
         .mmgr-member-card-header {
             flex-direction: column;
             align-items: center;
+        }
+
+        .mmgr-checkin-photo-square {
+            width: 160px;
+            height: 160px;
         }
     }
     </style>
