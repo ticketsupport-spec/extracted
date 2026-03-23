@@ -1,6 +1,13 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+// How long a member session lives (in seconds).
+// Using a very long value means sessions persist until the member explicitly
+// signs out, matching the "stay logged in on trusted devices" requirement.
+if (!defined('MMGR_SESSION_LIFETIME')) {
+    define('MMGR_SESSION_LIFETIME', 10 * 365 * 24 * 60 * 60); // 10 years
+}
+
 /**
  * Create database tables for member portal
  */
@@ -451,12 +458,14 @@ if (!function_exists('mmgr_create_member_session')) {
         
         // Create new session, storing the email used to authenticate so we can
         // verify it matches the member profile email on every subsequent request.
+        // Sessions are intentionally long-lived so that members on their own
+        // trusted devices stay logged in until they explicitly sign out.
         $wpdb->insert($sessions_tbl, array(
             'member_id'    => $member_id,
             'session_token'=> $token,
             'login_email'  => sanitize_email($login_email),
             'created_at'   => current_time('mysql'),
-            'expires_at'   => date('Y-m-d H:i:s', strtotime('+30 days')),
+            'expires_at'   => date('Y-m-d H:i:s', time() + MMGR_SESSION_LIFETIME),
             'ip_address'   => isset($_SERVER['REMOTE_ADDR']) && filter_var($_SERVER['REMOTE_ADDR'], FILTER_VALIDATE_IP) ? $_SERVER['REMOTE_ADDR'] : '',
             'user_agent'   => isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field(substr($_SERVER['HTTP_USER_AGENT'], 0, 255)) : '',
         ));
@@ -465,7 +474,7 @@ if (!function_exists('mmgr_create_member_session')) {
         // to ensure the cookie is only sent over HTTPS and not accessible via JavaScript.
         if (PHP_VERSION_ID >= 70300) {
             setcookie('mmgr_session', $token, array(
-                'expires'  => time() + (30 * 24 * 60 * 60),
+                'expires'  => time() + MMGR_SESSION_LIFETIME,
                 'path'     => '/',
                 'secure'   => true,
                 'httponly' => true,
@@ -473,8 +482,7 @@ if (!function_exists('mmgr_create_member_session')) {
             ));
         } else {
             // PHP < 7.3: use header() directly to set SameSite reliably.
-            $max_age = 30 * 24 * 60 * 60;
-            header('Set-Cookie: mmgr_session=' . rawurlencode($token) . '; Max-Age=' . $max_age . '; Path=/; Secure; HttpOnly; SameSite=Strict', false);
+            header('Set-Cookie: mmgr_session=' . rawurlencode($token) . '; Max-Age=' . MMGR_SESSION_LIFETIME . '; Path=/; Secure; HttpOnly; SameSite=Strict', false);
         }
         
         return $token;
@@ -524,7 +532,33 @@ if (!function_exists('mmgr_get_current_member')) {
             $wpdb->delete($sessions_tbl, array('session_token' => $token));
             return null;
         }
-        
+
+        // Rolling session renewal: push the expiry forward when the session is
+        // getting stale (less than half its lifetime remaining).  This avoids a
+        // database write on every page load while still ensuring active users are
+        // never unexpectedly logged out.
+        $renew_threshold = time() + (MMGR_SESSION_LIFETIME / 2);
+        $current_expires = strtotime($session['expires_at']);
+        if ($current_expires < $renew_threshold) {
+            $new_expires = date('Y-m-d H:i:s', time() + MMGR_SESSION_LIFETIME);
+            $wpdb->update(
+                $sessions_tbl,
+                array('expires_at' => $new_expires),
+                array('session_token' => $token)
+            );
+            if (PHP_VERSION_ID >= 70300) {
+                setcookie('mmgr_session', $token, array(
+                    'expires'  => time() + MMGR_SESSION_LIFETIME,
+                    'path'     => '/',
+                    'secure'   => true,
+                    'httponly' => true,
+                    'samesite' => 'Strict',
+                ));
+            } else {
+                header('Set-Cookie: mmgr_session=' . rawurlencode($token) . '; Max-Age=' . MMGR_SESSION_LIFETIME . '; Path=/; Secure; HttpOnly; SameSite=Strict', false);
+            }
+        }
+
         return $member;
     }
 }

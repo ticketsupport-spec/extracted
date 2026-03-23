@@ -716,13 +716,14 @@ add_shortcode('mmgr_password_setup', function() {
  */
 add_shortcode('mmgr_member_login', function() {
     nocache_headers();
-    // Do NOT auto-redirect if a session cookie already exists.
-    // Automatically redirecting to the dashboard when any valid session is present
-    // causes a security issue on shared devices: person B visiting the login page
-    // would be silently forwarded to person A's dashboard without ever entering
-    // their own credentials.  Always show the login form so whoever submits it
-    // gets their own, fresh session.
-    
+    // Auto-redirect to dashboard if the member already has a valid session.
+    // This lets members on their own trusted devices skip the login form entirely.
+    $existing_member = mmgr_get_current_member();
+    if ($existing_member) {
+        wp_redirect(add_query_arg('usercod', $existing_member['member_code'], home_url('/member-dashboard/')));
+        exit;
+    }
+
     $error = '';
     
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['member_login'])) {
@@ -773,17 +774,17 @@ add_shortcode('mmgr_member_login', function() {
                     </div>
                 <?php endif; ?>
                 
-                <form method="POST">
+                <form method="POST" id="mmgr-login-form" autocomplete="on">
                     <?php wp_nonce_field('mmgr_member_login', 'login_nonce'); ?>
                     
                     <div class="mmgr-login-field">
-                        <label>Email Address</label>
-                        <input type="email" name="email" required placeholder="your-email@example.com" autocomplete="email">
+                        <label for="mmgr-email">Email Address</label>
+                        <input type="email" id="mmgr-email" name="email" required placeholder="your-email@example.com" autocomplete="username email">
                     </div>
                     
                     <div class="mmgr-login-field">
-                        <label>Password</label>
-                        <input type="password" name="password" required placeholder="Enter your password" autocomplete="current-password">
+                        <label for="mmgr-password">Password</label>
+                        <input type="password" id="mmgr-password" name="password" required placeholder="Enter your password" autocomplete="current-password">
                     </div>
                     
                     <button type="submit" name="member_login" class="mmgr-login-btn">
