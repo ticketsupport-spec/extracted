@@ -74,7 +74,14 @@ function mmgr_handle_checkin() {
     $start_date = !empty($member['start_date']) ? date('M d, Y', strtotime($member['start_date'])) : 'N/A';
     $expire_date = !empty($member['expire_date']) ? date('M d, Y', strtotime($member['expire_date'])) : 'N/A';
     $last_visited = !empty($member['last_visited']) ? date('M d, Y g:i A', strtotime($member['last_visited'])) : 'Never';
-    
+
+    // Determine first visit (no previous visits recorded for this member)
+    $visit_count = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM $visits_tbl WHERE member_id = %d",
+        $member['id']
+    ) );
+    $is_first_visit = ( $visit_count === 0 );
+
     // Return structured member data
     wp_send_json_success(array(
         'member' => array(
@@ -91,7 +98,10 @@ function mmgr_handle_checkin() {
             'start_date' => $start_date,
             'expire_date' => $expire_date,
             'last_visited' => $last_visited,
-            'is_expired' => $is_expired
+            'is_expired' => $is_expired,
+            'is_first_visit' => $is_first_visit,
+            'orientation_done' => !empty($member['orientation_done']) ? (bool) $member['orientation_done'] : false,
+            'id_verified' => !empty($member['id_verified']) ? (bool) $member['id_verified'] : false,
         ),
         'daily_fee' => floatval($daily_fee)
     ));
@@ -377,4 +387,94 @@ function mmgr_ajax_get_nav_stats() {
         'events'   => $upcoming_count,
         'awards'   => $awards_html,
     ) );
+}
+
+/**
+ * AJAX: Staff marks orientation walkthrough complete for a first-time member.
+ */
+add_action('wp_ajax_mmgr_checkin_orientation', 'mmgr_ajax_checkin_orientation');
+add_action('wp_ajax_nopriv_mmgr_checkin_orientation', 'mmgr_ajax_checkin_orientation');
+
+function mmgr_ajax_checkin_orientation() {
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'memberships';
+
+    $member_id = isset($_POST['member_id']) ? intval($_POST['member_id']) : 0;
+    if ( ! $member_id ) {
+        wp_send_json_error( array( 'message' => 'Invalid member ID' ) );
+        return;
+    }
+
+    $wpdb->update( $tbl, array( 'orientation_done' => 1 ), array( 'id' => $member_id ) );
+    wp_send_json_success( array( 'message' => 'Orientation confirmed.' ) );
+}
+
+/**
+ * AJAX: Staff marks ID verified for a first-time member.
+ */
+add_action('wp_ajax_mmgr_checkin_id_verified', 'mmgr_ajax_checkin_id_verified');
+add_action('wp_ajax_nopriv_mmgr_checkin_id_verified', 'mmgr_ajax_checkin_id_verified');
+
+function mmgr_ajax_checkin_id_verified() {
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'memberships';
+
+    $member_id = isset($_POST['member_id']) ? intval($_POST['member_id']) : 0;
+    if ( ! $member_id ) {
+        wp_send_json_error( array( 'message' => 'Invalid member ID' ) );
+        return;
+    }
+
+    $wpdb->update( $tbl, array( 'id_verified' => 1 ), array( 'id' => $member_id ) );
+    wp_send_json_success( array( 'message' => 'ID verified.' ) );
+}
+
+/**
+ * AJAX: Staff captures/retakes a member profile photo from the check-in device camera.
+ * Accepts a base64-encoded image data URI in $_POST['photo_data'].
+ */
+add_action('wp_ajax_mmgr_checkin_save_photo', 'mmgr_ajax_checkin_save_photo');
+add_action('wp_ajax_nopriv_mmgr_checkin_save_photo', 'mmgr_ajax_checkin_save_photo');
+
+function mmgr_ajax_checkin_save_photo() {
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'memberships';
+
+    $member_id  = isset( $_POST['member_id'] )  ? intval( $_POST['member_id'] )           : 0;
+    $photo_data = isset( $_POST['photo_data'] ) ? sanitize_text_field( $_POST['photo_data'] ) : '';
+
+    if ( ! $member_id ) {
+        wp_send_json_error( array( 'message' => 'Invalid member ID' ) );
+        return;
+    }
+
+    // Validate data URI — must be a JPEG or PNG image
+    if ( ! preg_match( '/^data:image\/(jpeg|png|webp);base64,/', $photo_data, $matches ) ) {
+        wp_send_json_error( array( 'message' => 'Invalid image data.' ) );
+        return;
+    }
+
+    $ext       = ( $matches[1] === 'png' ) ? 'png' : ( ( $matches[1] === 'webp' ) ? 'webp' : 'jpg' );
+    $base64    = preg_replace( '/^data:image\/[a-z]+;base64,/', '', $photo_data );
+    $image_bin = base64_decode( $base64 );
+
+    if ( $image_bin === false || strlen( $image_bin ) < 100 ) {
+        wp_send_json_error( array( 'message' => 'Could not decode image data.' ) );
+        return;
+    }
+
+    // Write to WordPress uploads directory
+    $upload_dir = wp_upload_dir();
+    $filename   = 'member-' . $member_id . '-checkin-' . time() . '.' . $ext;
+    $filepath   = trailingslashit( $upload_dir['path'] ) . $filename;
+    $file_url   = trailingslashit( $upload_dir['url'] ) . $filename;
+
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    if ( file_put_contents( $filepath, $image_bin ) === false ) {
+        wp_send_json_error( array( 'message' => 'Could not save image file.' ) );
+        return;
+    }
+
+    $wpdb->update( $tbl, array( 'photo_url' => $file_url ), array( 'id' => $member_id ) );
+    wp_send_json_success( array( 'photo_url' => $file_url, 'message' => 'Photo saved.' ) );
 }

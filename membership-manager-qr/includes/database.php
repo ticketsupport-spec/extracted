@@ -550,11 +550,34 @@ function mmgr_migrate_help_topics_content_longtext() {
 }
 
 /**
+ * Add first-visit staff-action columns to the memberships table.
+ * orientation_done  - staff confirmed member received orientation walkthrough
+ * id_verified       - staff confirmed member showed valid ID
+ * Safe to call repeatedly – each check is guarded by SHOW COLUMNS.
+ */
+function mmgr_migrate_first_visit_columns() {
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'memberships';
+
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$tbl'" ) !== $tbl ) {
+        return;
+    }
+
+    if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$tbl` LIKE 'orientation_done'" ) ) {
+        $wpdb->query( "ALTER TABLE `$tbl` ADD COLUMN `orientation_done` TINYINT(1) NOT NULL DEFAULT 0" );
+    }
+
+    if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$tbl` LIKE 'id_verified'" ) ) {
+        $wpdb->query( "ALTER TABLE `$tbl` ADD COLUMN `id_verified` TINYINT(1) NOT NULL DEFAULT 0" );
+    }
+}
+
+/**
  * Check and update database schema on plugin load
  */
 function mmgr_check_database() {
     $current_version = get_option('mmgr_db_version', '0.0.0');
-    $required_version = '1.4.0';
+    $required_version = '1.5.0';
     
     if (version_compare($current_version, $required_version, '<')) {
         mmgr_create_tables();
@@ -562,7 +585,8 @@ function mmgr_check_database() {
         mmgr_migrate_community_awards();
         mmgr_migrate_help_topics();
         mmgr_migrate_help_topics_content_longtext();
-        update_option( 'mmgr_db_version', '1.4.0' );
+        mmgr_migrate_first_visit_columns();
+        update_option( 'mmgr_db_version', '1.5.0' );
     }
 }
 

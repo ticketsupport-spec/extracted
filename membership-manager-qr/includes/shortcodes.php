@@ -397,65 +397,122 @@ add_shortcode('membership_checkin', function($atts){
             if (data.success && data.data && data.data.member) {
                 const member = data.data.member;
                 const dailyFee = data.data.daily_fee || 0;
-                
+                const isFirst = member.is_first_visit;
+                const ajaxUrl = '<?php echo admin_url('admin-ajax.php'); ?>';
+
                 // Build member info card
                 let html = '<div class="mmgr-member-card" style="background:#fff !important;border:3px solid #00a32a !important;border-radius:12px !important;padding:20px !important;margin:20px 0 !important;box-shadow:0 4px 6px rgba(0,0,0,0.1) !important;">';
-                
+
+                // ── FIRST VISIT BANNER ──────────────────────────────────────
+                if (isFirst) {
+                    html += '<div class="mmgr-first-visit-banner" style="background:#c00 !important;color:#fff !important;text-align:center !important;padding:14px 20px !important;border-radius:8px !important;margin-bottom:18px !important;">'
+                          + '<h2 style="margin:0 !important;font-size:2rem !important;font-weight:900 !important;letter-spacing:2px !important;text-transform:uppercase !important;">🎉 FIRST VISIT 🎉</h2>'
+                          + '</div>';
+                }
+
                 // Photo and basic info
                 html += '<div class="mmgr-member-card-header" style="display:flex !important;gap:20px !important;align-items:flex-start !important;margin-bottom:20px !important;">';
-                
-                // Photo
+
+                // ── PHOTO (200×200 square fitted, no circle crop) ────────────
+                const photoContainerId = 'mmgr-photo-area-' + member.id;
+                html += '<div id="' + photoContainerId + '" style="flex-shrink:0 !important;">';
                 if (member.photo_url) {
-                    html += '<img src="' + member.photo_url + '" class="mmgr-member-photo" alt="Photo of ' + member.name + '" style="width:100px !important;height:100px !important;object-fit:cover !important;border-radius:50% !important;border:3px solid #00a32a !important;flex-shrink:0 !important;">';
+                    html += '<img id="mmgr-member-img-' + member.id + '" src="' + member.photo_url + '" alt="Photo of ' + member.name + '" class="mmgr-checkin-photo-square" style="width:200px !important;height:200px !important;object-fit:contain !important;border-radius:6px !important;border:3px solid #00a32a !important;display:block !important;">';
+                    if (isFirst) {
+                        // Retake photo button — always visible on first visit so staff can update if photo doesn't match ID
+                        html += '<button onclick="mmgrStartPhotoCapture(' + member.id + ')" id="mmgr-retake-btn-' + member.id + '" style="margin-top:8px !important;width:200px !important;background:#0073aa !important;color:#fff !important;border:none !important;padding:8px !important;border-radius:6px !important;font-size:13px !important;font-weight:bold !important;cursor:pointer !important;">📷 Retake Photo</button>';
+                    }
                 } else {
-                    html += '<div class="mmgr-member-avatar" style="width:100px !important;height:100px !important;background:#f0f0f0 !important;border-radius:50% !important;display:flex !important;align-items:center !important;justify-content:center !important;font-size:50px !important;border:3px solid #ccc !important;flex-shrink:0 !important;">👤</div>';
+                    // No photo on file — show camera capture UI immediately
+                    html += '<div style="width:200px !important;">'
+                          + '<video id="mmgr-cam-' + member.id + '" style="width:200px !important;height:200px !important;object-fit:cover !important;border-radius:6px !important;border:3px solid #ccc !important;display:none !important;"></video>'
+                          + '<canvas id="mmgr-canvas-' + member.id + '" style="display:none !important;width:200px !important;height:200px !important;"></canvas>'
+                          + '<img id="mmgr-member-img-' + member.id + '" src="" alt="" style="width:200px !important;height:200px !important;object-fit:contain !important;border-radius:6px !important;border:3px solid #00a32a !important;display:none !important;">'
+                          + '<div id="mmgr-cam-placeholder-' + member.id + '" style="width:200px !important;height:200px !important;background:#f0f0f0 !important;border-radius:6px !important;border:3px dashed #ccc !important;display:flex !important;align-items:center !important;justify-content:center !important;font-size:50px !important;">📷</div>'
+                          + '<button onclick="mmgrStartPhotoCapture(' + member.id + ')" id="mmgr-start-cam-btn-' + member.id + '" style="margin-top:8px !important;width:200px !important;background:#0073aa !important;color:#fff !important;border:none !important;padding:8px !important;border-radius:6px !important;font-size:13px !important;font-weight:bold !important;cursor:pointer !important;">📷 Take Photo</button>'
+                          + '<button onclick="mmgrCapturePhoto(' + member.id + ')" id="mmgr-capture-btn-' + member.id + '" style="display:none !important;margin-top:8px !important;width:200px !important;background:#00a32a !important;color:#fff !important;border:none !important;padding:8px !important;border-radius:6px !important;font-size:13px !important;font-weight:bold !important;cursor:pointer !important;">✅ Capture</button>'
+                          + '<button onclick="mmgrRetakePhoto(' + member.id + ')" id="mmgr-retake-btn-' + member.id + '" style="display:none !important;margin-top:4px !important;width:200px !important;background:#e65c00 !important;color:#fff !important;border:none !important;padding:8px !important;border-radius:6px !important;font-size:13px !important;font-weight:bold !important;cursor:pointer !important;">🔄 Retake</button>'
+                          + '</div>';
                 }
-                
+                html += '</div>'; // close photo area
+
                 // Member details
                 html += '<div class="mmgr-member-info" style="flex:1 !important;">';
                 html += '<h2 class="mmgr-member-name" style="margin:0 0 5px 0 !important;color:#00a32a !important;font-size:1.25rem !important;">✅ ' + member.name + '</h2>';
-                
+
                 if (member.partner_name) {
                     html += '<p style="margin:5px 0 !important;font-size:14px !important;">+ ' + member.partner_name + '</p>';
                 }
-                
+
                 html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Level:</strong> ' + member.level + '</p>';
                 html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Code:</strong> <code>' + member.member_code + '</code></p>';
                 html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Phone:</strong> ' + member.phone + '</p>';
                 html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Email:</strong> ' + member.email + '</p>';
-                
+
                 if (member.is_expired) {
                     html += '<p class="mmgr-expired-notice" style="margin:10px 0 !important;padding:10px !important;background:#fff3cd !important;border-left:4px solid #f0c33c !important;border-radius:4px !important;"><strong>⚠️ Membership Expired:</strong> ' + member.expire_date + '</p>';
                 } else {
                     html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Expires:</strong> ' + member.expire_date + '</p>';
                 }
-                
+
                 html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Last Visit:</strong> ' + member.last_visited + '</p>';
-                html += '</div></div>';
-                
-				// Payment section
-				html += '<div class="mmgr-payment-section" style="background:#f0f8ff !important;padding:15px !important;border-radius:6px !important;margin-top:15px !important;">';
-				html += '<div class="mmgr-fee-group" style="margin-bottom:15px !important;">';
-				html += '<label for="daily_fee_' + member.id + '" class="mmgr-fee-label" style="display:block !important;margin-bottom:5px !important;font-weight:bold !important;">Daily Fee:</label>';
-				html += '<div class="mmgr-fee-row" style="display:flex !important;align-items:center !important;gap:10px !important;margin-bottom:8px !important;">';
-				html += '<span class="mmgr-fee-amount" style="font-size:24px !important;font-weight:bold !important;">$</span>';
-				html += '<input type="number" id="daily_fee_' + member.id + '" value="' + dailyFee.toFixed(2) + '" step="0.01" min="0" class="mmgr-fee-input" style="width:120px !important;padding:10px !important;font-size:18px !important;border:2px solid #0073aa !important;border-radius:6px !important;font-weight:bold !important;">';
-				html += '<button onclick="applyDiscount(' + member.id + ')" class="mmgr-discount-btn" style="background:#f0c33c !important;color:#1d2327 !important;border:none !important;padding:8px 15px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:pointer !important;">🎟️ Apply Discount</button>';
-				html += '</div>';
-				html += '<p class="mmgr-fee-hint" style="margin:5px 0 0 0 !important;font-size:12px !important;color:#666 !important;">Edit amount for discounts, coupons, or special pricing</p>';
-				html += '</div>';
-				html += '<div class="mmgr-payment-options" style="display:flex !important;gap:10px !important;align-items:center !important;margin-bottom:10px !important;">';
-				html += '<label style="display:flex !important;align-items:center !important;gap:5px !important;cursor:pointer !important;"><input type="radio" name="payment_status_' + member.id + '" value="1" checked> 💵 Paid</label>';
-				html += '<label style="display:flex !important;align-items:center !important;gap:5px !important;cursor:pointer !important;"><input type="radio" name="payment_status_' + member.id + '" value="0"> ⚠️ Unpaid</label>';
-				html += '</div>';
-				html += '<input type="text" id="visit_notes_' + member.id + '" placeholder="Notes (optional - e.g., 50% discount coupon)" class="mmgr-notes-input" style="width:100% !important;padding:10px !important;border:1px solid #ccc !important;border-radius:4px !important;margin-bottom:10px !important;box-sizing:border-box !important;">';
-				html += '<button onclick="confirmPayment(' + member.id + ')" class="mmgr-confirm-btn" style="background:#00a32a !important;color:#fff !important;border:none !important;padding:12px 24px !important;border-radius:6px !important;font-size:16px !important;font-weight:bold !important;cursor:pointer !important;width:100% !important;">✓ Confirm Check-In</button>';
-				html += '</div>'; // Close payment section
 
-				html += '</div>'; // Close member card
+                // ── FIRST VISIT: ORIENTATION + ID VERIFIED BUTTONS ──────────
+                if (isFirst) {
+                    const orientBtnId  = 'mmgr-orient-btn-' + member.id;
+                    const idBtnId      = 'mmgr-id-btn-' + member.id;
+                    const orientDone   = member.orientation_done;
+                    const idDone       = member.id_verified;
 
-				result.innerHTML = html;
-                
+                    html += '<div style="margin-top:14px !important;display:flex !important;flex-wrap:wrap !important;gap:10px !important;">';
+
+                    // Orientation button
+                    if (orientDone) {
+                        html += '<button id="' + orientBtnId + '" disabled class="mmgr-checkin-staff-btn mmgr-staff-btn-done" style="background:#888 !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:default !important;">✅ Orientation Done</button>';
+                    } else {
+                        html += '<button id="' + orientBtnId + '" onclick="mmgrConfirmOrientation(' + member.id + ')" class="mmgr-checkin-staff-btn" style="background:#6a0dad !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:pointer !important;">🎓 Confirm Orientation</button>';
+                    }
+
+                    // ID Verified button
+                    if (idDone) {
+                        html += '<button id="' + idBtnId + '" disabled class="mmgr-checkin-staff-btn mmgr-staff-btn-done" style="background:#888 !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:default !important;">✅ ID Verified</button>';
+                    } else {
+                        html += '<button id="' + idBtnId + '" onclick="mmgrConfirmIdVerified(' + member.id + ')" class="mmgr-checkin-staff-btn" style="background:#d4600a !important;color:#fff !important;border:none !important;padding:10px 16px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:pointer !important;">🪪 Confirm Valid ID</button>';
+                    }
+
+                    html += '</div>';
+                }
+
+                html += '</div></div>'; // close member-info and card-header
+
+                // Payment section
+                html += '<div class="mmgr-payment-section" style="background:#f0f8ff !important;padding:15px !important;border-radius:6px !important;margin-top:15px !important;">';
+                html += '<div class="mmgr-fee-group" style="margin-bottom:15px !important;">';
+                html += '<label for="daily_fee_' + member.id + '" class="mmgr-fee-label" style="display:block !important;margin-bottom:5px !important;font-weight:bold !important;">Daily Fee:</label>';
+                html += '<div class="mmgr-fee-row" style="display:flex !important;align-items:center !important;gap:10px !important;margin-bottom:8px !important;">';
+                html += '<span class="mmgr-fee-amount" style="font-size:24px !important;font-weight:bold !important;">$</span>';
+                html += '<input type="number" id="daily_fee_' + member.id + '" value="' + dailyFee.toFixed(2) + '" step="0.01" min="0" class="mmgr-fee-input" style="width:120px !important;padding:10px !important;font-size:18px !important;border:2px solid #0073aa !important;border-radius:6px !important;font-weight:bold !important;">';
+                html += '<button onclick="applyDiscount(' + member.id + ')" class="mmgr-discount-btn" style="background:#f0c33c !important;color:#1d2327 !important;border:none !important;padding:8px 15px !important;border-radius:6px !important;font-size:14px !important;font-weight:bold !important;cursor:pointer !important;">🎟️ Apply Discount</button>';
+                html += '</div>';
+                html += '<p class="mmgr-fee-hint" style="margin:5px 0 0 0 !important;font-size:12px !important;color:#666 !important;">Edit amount for discounts, coupons, or special pricing</p>';
+                html += '</div>';
+                html += '<div class="mmgr-payment-options" style="display:flex !important;gap:10px !important;align-items:center !important;margin-bottom:10px !important;">';
+                html += '<label style="display:flex !important;align-items:center !important;gap:5px !important;cursor:pointer !important;"><input type="radio" name="payment_status_' + member.id + '" value="1" checked> 💵 Paid</label>';
+                html += '<label style="display:flex !important;align-items:center !important;gap:5px !important;cursor:pointer !important;"><input type="radio" name="payment_status_' + member.id + '" value="0"> ⚠️ Unpaid</label>';
+                html += '</div>';
+                html += '<input type="text" id="visit_notes_' + member.id + '" placeholder="Notes (optional - e.g., 50% discount coupon)" class="mmgr-notes-input" style="width:100% !important;padding:10px !important;border:1px solid #ccc !important;border-radius:4px !important;margin-bottom:10px !important;box-sizing:border-box !important;">';
+                html += '<button onclick="confirmPayment(' + member.id + ')" class="mmgr-confirm-btn" style="background:#00a32a !important;color:#fff !important;border:none !important;padding:12px 24px !important;border-radius:6px !important;font-size:16px !important;font-weight:bold !important;cursor:pointer !important;width:100% !important;">✓ Confirm Check-In</button>';
+                html += '</div>'; // Close payment section
+
+                html += '</div>'; // Close member card
+
+                result.innerHTML = html;
+
+                // If no photo and first visit, auto-start camera
+                if (!member.photo_url && isFirst) {
+                    mmgrStartPhotoCapture(member.id);
+                }
+
             } else {
                 result.innerHTML = '<div class="mmgr-error" style="background:#f8d7da !important;border-left:4px solid #dc3232 !important;color:#721c24 !important;padding:12px 15px !important;border-radius:6px !important;margin:15px 0 !important;font-weight:600 !important;font-size:14px !important;">' + (data.data ? data.data.message : 'An error occurred') + '</div>';
             }
@@ -465,6 +522,169 @@ add_shortcode('membership_checkin', function($atts){
             result.innerHTML = '<div class="mmgr-error" style="background:#f8d7da !important;border-left:4px solid #dc3232 !important;color:#721c24 !important;padding:12px 15px !important;border-radius:6px !important;margin:15px 0 !important;font-weight:600 !important;font-size:14px !important;">❌ Error: ' + err.message + '</div>';
             console.error('Check-in error:', err);
         });
+    }
+
+    // ── First-visit: confirm orientation ──────────────────────────────────────
+    function mmgrConfirmOrientation(memberId) {
+        const btn = document.getElementById('mmgr-orient-btn-' + memberId);
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+        const fd = new FormData();
+        fd.append('action', 'mmgr_checkin_orientation');
+        fd.append('member_id', memberId);
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method:'POST', body:fd })
+            .then(r => r.json())
+            .then(() => {
+                if (btn) {
+                    btn.textContent = '✅ Orientation Done';
+                    btn.style.setProperty('background','#888','important');
+                    btn.style.setProperty('cursor','default','important');
+                }
+            });
+    }
+
+    // ── First-visit: confirm ID verified ──────────────────────────────────────
+    function mmgrConfirmIdVerified(memberId) {
+        const btn = document.getElementById('mmgr-id-btn-' + memberId);
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+        const fd = new FormData();
+        fd.append('action', 'mmgr_checkin_id_verified');
+        fd.append('member_id', memberId);
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method:'POST', body:fd })
+            .then(r => r.json())
+            .then(() => {
+                if (btn) {
+                    btn.textContent = '✅ ID Verified';
+                    btn.style.setProperty('background','#888','important');
+                    btn.style.setProperty('cursor','default','important');
+                }
+            });
+    }
+
+    // ── Photo capture helpers ──────────────────────────────────────────────────
+    const mmgrStreams = {};
+
+    function mmgrStartPhotoCapture(memberId) {
+        const video   = document.getElementById('mmgr-cam-' + memberId);
+        const canvas  = document.getElementById('mmgr-canvas-' + memberId);
+        const img     = document.getElementById('mmgr-member-img-' + memberId);
+        const placeholder = document.getElementById('mmgr-cam-placeholder-' + memberId);
+        const startBtn  = document.getElementById('mmgr-start-cam-btn-' + memberId);
+        const capBtn    = document.getElementById('mmgr-capture-btn-' + memberId);
+        const retakeBtn = document.getElementById('mmgr-retake-btn-' + memberId);
+
+        // If we got here from the "Retake" button on an existing-photo member,
+        // the video/canvas elements may not exist yet — inject them.
+        if (!video) {
+            const photoArea = document.getElementById('mmgr-photo-area-' + memberId);
+            if (!photoArea) return;
+            const existingImg = document.getElementById('mmgr-member-img-' + memberId);
+            // Insert camera elements before the existing img
+            const vid = document.createElement('video');
+            vid.id = 'mmgr-cam-' + memberId;
+            vid.style.cssText = 'width:200px !important;height:200px !important;object-fit:cover !important;border-radius:6px !important;border:3px solid #ccc !important;display:block !important;';
+            const cnv = document.createElement('canvas');
+            cnv.id = 'mmgr-canvas-' + memberId;
+            cnv.style.cssText = 'display:none !important;width:200px !important;height:200px !important;';
+            const capB = document.createElement('button');
+            capB.id = 'mmgr-capture-btn-' + memberId;
+            capB.textContent = '✅ Capture';
+            capB.style.cssText = 'margin-top:8px !important;width:200px !important;background:#00a32a !important;color:#fff !important;border:none !important;padding:8px !important;border-radius:6px !important;font-size:13px !important;font-weight:bold !important;cursor:pointer !important;';
+            capB.onclick = () => mmgrCapturePhoto(memberId);
+            const retB = document.createElement('button');
+            retB.id = 'mmgr-retake-btn-' + memberId;
+            retB.textContent = '🔄 Retake';
+            retB.style.cssText = 'display:none !important;margin-top:4px !important;width:200px !important;background:#e65c00 !important;color:#fff !important;border:none !important;padding:8px !important;border-radius:6px !important;font-size:13px !important;font-weight:bold !important;cursor:pointer !important;';
+            retB.onclick = () => mmgrRetakePhoto(memberId);
+            if (existingImg) {
+                existingImg.style.setProperty('display','none','important');
+                photoArea.insertBefore(retB,   existingImg);
+                photoArea.insertBefore(capB,   existingImg);
+                photoArea.insertBefore(cnv,    existingImg);
+                photoArea.insertBefore(vid,    existingImg);
+            } else {
+                photoArea.appendChild(vid);
+                photoArea.appendChild(cnv);
+                photoArea.appendChild(capB);
+                photoArea.appendChild(retB);
+            }
+            // Hide the retake trigger button
+            const triggerBtn = document.getElementById('mmgr-retake-btn-' + memberId);
+            // Start stream on the newly created video element
+            mmgrStartPhotoCapture(memberId);
+            return;
+        }
+
+        // Stop existing stream if any
+        if (mmgrStreams[memberId]) {
+            mmgrStreams[memberId].getTracks().forEach(t => t.stop());
+            delete mmgrStreams[memberId];
+        }
+
+        if (placeholder) placeholder.style.setProperty('display','none','important');
+        if (startBtn)    startBtn.style.setProperty('display','none','important');
+        if (retakeBtn)   retakeBtn.style.setProperty('display','none','important');
+        if (img)         img.style.setProperty('display','none','important');
+
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+            .then(stream => {
+                mmgrStreams[memberId] = stream;
+                video.srcObject = stream;
+                video.style.setProperty('display','block','important');
+                video.play();
+                if (capBtn) capBtn.style.setProperty('display','block','important');
+            })
+            .catch(err => {
+                alert('Camera error: ' + err.message);
+                if (startBtn)  startBtn.style.setProperty('display','block','important');
+                if (retakeBtn) retakeBtn.style.setProperty('display','block','important');
+            });
+    }
+
+    function mmgrCapturePhoto(memberId) {
+        const video   = document.getElementById('mmgr-cam-' + memberId);
+        const canvas  = document.getElementById('mmgr-canvas-' + memberId);
+        const img     = document.getElementById('mmgr-member-img-' + memberId);
+        const capBtn  = document.getElementById('mmgr-capture-btn-' + memberId);
+        const retakeBtn = document.getElementById('mmgr-retake-btn-' + memberId);
+
+        if (!video || !canvas) return;
+
+        canvas.width  = video.videoWidth  || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+        // Stop stream
+        if (mmgrStreams[memberId]) {
+            mmgrStreams[memberId].getTracks().forEach(t => t.stop());
+            delete mmgrStreams[memberId];
+        }
+        video.style.setProperty('display','none','important');
+        if (capBtn) capBtn.style.setProperty('display','none','important');
+
+        if (img) {
+            img.src = dataUrl;
+            img.style.setProperty('display','block','important');
+        }
+        if (retakeBtn) retakeBtn.style.setProperty('display','block','important');
+
+        // Upload photo to server
+        const fd = new FormData();
+        fd.append('action',     'mmgr_checkin_save_photo');
+        fd.append('member_id',  memberId);
+        fd.append('photo_data', dataUrl);
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method:'POST', body:fd })
+            .then(r => r.json())
+            .then(resp => {
+                if (!resp.success) {
+                    alert('Photo save failed: ' + (resp.data ? resp.data.message : 'Unknown error'));
+                }
+            });
+    }
+
+    function mmgrRetakePhoto(memberId) {
+        mmgrStartPhotoCapture(memberId);
     }
     
 			 function confirmPayment(memberId) {
