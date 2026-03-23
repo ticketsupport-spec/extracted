@@ -388,9 +388,9 @@ function mmgr_create_tables() {
     $orientation_count = $wpdb->get_var("SELECT COUNT(*) FROM `$orientation_items_table`");
     if ($orientation_count == 0) {
         $defaults = array(
-            array('Gone over the club\'s rules with member',                              10),
-            array('Location of towels',                                                   20),
-            array('Member is aware of activities that take place at club events',         30),
+            array('Gone over the club\'s rules with the member',                          10),
+            array('Shown the member the location of towels',                               20),
+            array('Discussed activities that take place at club events with the member',   30),
         );
         foreach ($defaults as $d) {
             $wpdb->insert($orientation_items_table, array(
@@ -655,9 +655,9 @@ function mmgr_migrate_orientation_tables() {
 
         // Seed defaults on fresh migration
         $defaults = array(
-            array( 'Gone over the club\'s rules with member',                              10 ),
-            array( 'Location of towels',                                                   20 ),
-            array( 'Member is aware of activities that take place at club events',         30 ),
+            array( 'Gone over the club\'s rules with the member',                          10 ),
+            array( 'Shown the member the location of towels',                               20 ),
+            array( 'Discussed activities that take place at club events with the member',   30 ),
         );
         foreach ( $defaults as $d ) {
             $wpdb->insert( $items_tbl, array( 'title' => $d[0], 'sort_order' => $d[1], 'active' => 1 ) );

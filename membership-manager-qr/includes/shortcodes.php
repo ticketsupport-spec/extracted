@@ -324,6 +324,7 @@ add_shortcode('membership_checkin', function($atts){
     let html5QrCode;
     const mmgrBtnBase   = '<?php echo esc_js($btn_base_style); ?>';
     const mmgrBtnActive = '<?php echo esc_js($btn_active_style); ?>';
+    const mmgrAjaxUrl   = '<?php echo admin_url('admin-ajax.php'); ?>';
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     function mmgrEscHtml(str) {
@@ -396,7 +397,7 @@ add_shortcode('membership_checkin', function($atts){
         formData.append('action', 'mmgr_checkin');
         formData.append('code', code);
         
-        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+        fetch(mmgrAjaxUrl, {
             method: 'POST',
             body: formData
         })
@@ -418,7 +419,6 @@ add_shortcode('membership_checkin', function($atts){
                 const feeDue    = data.data.membership_fee_due    || false;
                 const feeReason = data.data.membership_fee_reason || '';
                 const feeAmount = data.data.membership_fee_amount || 0;
-                const ajaxUrl = '<?php echo admin_url('admin-ajax.php'); ?>';
 
                 // Build member info card
                 let html = '<div class="mmgr-member-card" style="background:#fff !important;border:3px solid #00a32a !important;border-radius:12px !important;padding:20px !important;margin:20px 0 !important;box-shadow:0 4px 6px rgba(0,0,0,0.1) !important;">';
@@ -627,7 +627,7 @@ add_shortcode('membership_checkin', function($atts){
         const fd = new FormData();
         fd.append('action', 'mmgr_checkin_orientation');
         fd.append('member_id', memberId);
-        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method:'POST', body:fd })
+        fetch(mmgrAjaxUrl, { method:'POST', body:fd })
             .then(r => r.json())
             .then(() => {
                 if (btn) {
@@ -645,7 +645,7 @@ add_shortcode('membership_checkin', function($atts){
         const fd = new FormData();
         fd.append('action', 'mmgr_checkin_id_verified');
         fd.append('member_id', memberId);
-        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method:'POST', body:fd })
+        fetch(mmgrAjaxUrl, { method:'POST', body:fd })
             .then(r => r.json())
             .then(() => {
                 if (btn) {
@@ -670,7 +670,7 @@ add_shortcode('membership_checkin', function($atts){
         fd.append('payment_method', method);
         fd.append('payment_amount', feeAmount);
 
-        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method: 'POST', body: fd })
+        fetch(mmgrAjaxUrl, { method: 'POST', body: fd })
             .then(r => r.json())
             .then(resp => {
                 const section = document.getElementById('mmgr-fee-due-' + memberId);
@@ -698,7 +698,7 @@ add_shortcode('membership_checkin', function($atts){
         fd.append('member_id', memberId);
         fd.append('item_id',   itemId);
 
-        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method: 'POST', body: fd })
+        fetch(mmgrAjaxUrl, { method: 'POST', body: fd })
             .then(r => r.json())
             .then(resp => {
                 if (resp.success) {
@@ -864,7 +864,7 @@ add_shortcode('membership_checkin', function($atts){
         fd.append('action',     'mmgr_checkin_save_photo');
         fd.append('member_id',  memberId);
         fd.append('photo_data', dataUrl);
-        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method:'POST', body:fd })
+        fetch(mmgrAjaxUrl, { method:'POST', body:fd })
             .then(r => r.json())
             .then(resp => {
                 if (!resp.success) {
@@ -889,7 +889,7 @@ add_shortcode('membership_checkin', function($atts){
 				formData.append('paid', paid);
 				formData.append('notes', notes);
 				
-				fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+				fetch(mmgrAjaxUrl, {
 					method: 'POST',
 					body: formData
 				})

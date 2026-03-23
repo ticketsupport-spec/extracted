@@ -50,7 +50,8 @@ if (isset($_GET['edit'])) {
     $editing = $wpdb->get_row($wpdb->prepare("SELECT * FROM `$items_tbl` WHERE id = %d", intval($_GET['edit'])), ARRAY_A);
 }
 
-$next_order = count($items) ? (max(array_column($items, 'sort_order')) + 10) : 10;
+$sort_orders = count($items) > 0 ? array_column($items, 'sort_order') : array();
+$next_order  = $sort_orders ? (max($sort_orders) + 10) : 10;
 ?>
 <div class="wrap">
     <h1>Orientation Checklist Items</h1>
