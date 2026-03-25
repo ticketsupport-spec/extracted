@@ -220,6 +220,9 @@ function mmgr_settings_admin() {
         if (isset($_POST['mmgr_registration_blurb'])) {
             update_option('mmgr_registration_blurb', wp_kses_post($_POST['mmgr_registration_blurb']));
         }
+        if (isset($_POST['mmgr_fees_due_message'])) {
+            update_option('mmgr_fees_due_message', sanitize_textarea_field($_POST['mmgr_fees_due_message']));
+        }
         
         echo '<div class="notice notice-success"><p>✓ Settings saved successfully!</p></div>';
     }
@@ -389,6 +392,13 @@ function mmgr_settings_admin() {
                             Display this content on its own page using the shortcode <code>[membership_code_of_conduct]</code>.<br>
                             It is also shown inline on the registration form so members can read and agree to it before signing up.
                         </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="fees_due_message">Membership Fees Due Message</label></th>
+                    <td>
+                        <textarea name="mmgr_fees_due_message" id="fees_due_message" class="large-text" rows="3"><?php echo esc_textarea(get_option('mmgr_fees_due_message', 'Please contact us to complete your payment and activate your membership.')); ?></textarea>
+                        <p class="description">Message shown on the member dashboard when membership fees are outstanding.</p>
                     </td>
                 </tr>
             </table>
