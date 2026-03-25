@@ -3618,11 +3618,66 @@ add_shortcode('mmgr_member_messages', function() {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
     
-    // Auto-refresh messages every 10 seconds
+    // AJAX polling for new messages and conversations (replaces full page reload)
     <?php if ($active_conversation !== null): ?>
-    setInterval(function() {
-        location.reload();
-    }, 10000);
+    var mmgrLastMsgId = <?php
+        $max_id = 0;
+        if (!empty($messages)) {
+            foreach ($messages as $_m) { if (intval($_m['id']) > $max_id) $max_id = intval($_m['id']); }
+        }
+        echo $max_id;
+    ?>;
+    var mmgrPollMsgNonce   = '<?php echo wp_create_nonce('mmgr_poll_messages'); ?>';
+    var mmgrPollConvNonce  = '<?php echo wp_create_nonce('mmgr_poll_conversations'); ?>';
+    var mmgrPollOtherId    = <?php echo intval($active_conversation); ?>;
+    var mmgrPollAjax       = '<?php echo admin_url('admin-ajax.php'); ?>';
+
+    function mmgrPollMessages() {
+        fetch(mmgrPollAjax, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'action=mmgr_poll_messages&other_member_id=' + mmgrPollOtherId +
+                  '&last_id=' + mmgrLastMsgId + '&nonce=' + encodeURIComponent(mmgrPollMsgNonce)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.success && d.data.count > 0) {
+                var container = document.getElementById('messages-container');
+                if (!container) return;
+                var list = document.getElementById('messages-list');
+                if (!list) {
+                    container.innerHTML = '<div id="messages-list"></div>';
+                    list = document.getElementById('messages-list');
+                }
+                list.insertAdjacentHTML('beforeend', d.data.html);
+                // Auto-scroll to bottom only if already near bottom
+                var nearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 120;
+                if (nearBottom) container.scrollTop = container.scrollHeight;
+                mmgrLastMsgId = d.data.last_id;
+            }
+        })
+        .catch(function(e) { console.error('mmgr poll messages error', e); });
+    }
+
+    function mmgrPollConversations() {
+        fetch(mmgrPollAjax, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'action=mmgr_poll_conversations&active_id=' + mmgrPollOtherId +
+                  '&nonce=' + encodeURIComponent(mmgrPollConvNonce)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.success) {
+                var tab = document.getElementById('conversations-tab');
+                if (tab) tab.innerHTML = d.data.html;
+            }
+        })
+        .catch(function(e) { console.error('mmgr poll conversations error', e); });
+    }
+
+    setInterval(mmgrPollMessages, 10000);
+    setInterval(mmgrPollConversations, 30000);
     <?php endif; ?>
     
     function deleteImage(messageId) {
@@ -3972,9 +4027,131 @@ add_action('wp_ajax_mmgr_remove_contact', function() {
 });
 
 
-/**
- * Send Private Message via AJAX
- */
+// AJAX: Poll for new messages (used by JS interval to avoid full page reload)
+add_action('wp_ajax_mmgr_poll_messages', function() {
+    check_ajax_referer('mmgr_poll_messages', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Not logged in'));
+    }
+
+    $other_member_id = intval($_POST['other_member_id']);
+    $last_id         = intval($_POST['last_id']);
+
+    global $wpdb;
+    $messages_table = $wpdb->prefix . 'membership_messages';
+
+    $messages = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM $messages_table
+          WHERE id > %d
+            AND ((from_member_id = %d AND to_member_id = %d AND deleted_by_sender = 0)
+              OR (from_member_id = %d AND to_member_id = %d AND deleted_by_receiver = 0))
+          ORDER BY sent_at ASC",
+        $last_id,
+        $member['id'], $other_member_id,
+        $other_member_id, $member['id']
+    ), ARRAY_A);
+
+    if (!empty($messages)) {
+        mmgr_mark_messages_read($other_member_id, $member['id']);
+    }
+
+    $current_member_id = intval($member['id']);
+    $html   = '';
+    $max_id = $last_id;
+
+    foreach ($messages as $msg) {
+        $msg_id = intval($msg['id']);
+        if ($msg_id > $max_id) $max_id = $msg_id;
+
+        $is_sent      = (intval($msg['from_member_id']) === $current_member_id);
+        $bubble_class = $is_sent ? 'sent' : 'received';
+        $time         = date('M j, g:i A', strtotime($msg['sent_at']));
+
+        $html .= '<div class="mmgr-message-bubble ' . $bubble_class . '">';
+        $html .= '<div class="mmgr-message-content">';
+
+        if (!empty($msg['message'])) {
+            $html .= '<div>' . nl2br(esc_html($msg['message'])) . '</div>';
+        }
+
+        if (!empty($msg['image_url']) && !$msg['image_deleted']) {
+            $html .= '<img src="' . esc_url($msg['image_url']) . '" class="mmgr-message-image"'
+                   . ' onclick="window.open(\'' . esc_url($msg['image_url']) . '\',\'_blank\')" alt="Image">';
+        } elseif ($msg['image_deleted']) {
+            $html .= '<div style="opacity:0.5;font-style:italic;font-size:13px;">🖼️ Image removed by sender</div>';
+        }
+
+        $html .= '<div class="mmgr-message-time">' . esc_html($time) . '</div>';
+
+        if (!$is_sent && intval($msg['from_member_id']) !== 0) {
+            $html .= '<button onclick="reportMessage(' . $msg_id . ')" style="font-size:10px;background:none;border:none;color:#d00;cursor:pointer;margin-top:5px;padding:0;">🚩 Report</button>';
+        }
+
+        $html .= '</div></div>';
+    }
+
+    wp_send_json_success(array(
+        'html'    => $html,
+        'count'   => count($messages),
+        'last_id' => $max_id,
+    ));
+});
+
+// AJAX: Poll for updated conversations list (sidebar refresh without page reload)
+add_action('wp_ajax_mmgr_poll_conversations', function() {
+    check_ajax_referer('mmgr_poll_conversations', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Not logged in'));
+    }
+
+    $active_id    = intval($_POST['active_id']);
+    $conversations = mmgr_get_conversations_list(intval($member['id']), false);
+
+    if (empty($conversations)) {
+        $html = '<div style="padding:40px 20px;text-align:center;color:#999;">'
+              . '<p style="font-size:48px;margin:0;">💬</p>'
+              . '<p>No conversations yet</p>'
+              . '<p style="font-size:13px;">Start chatting with your contacts!</p>'
+              . '</div>';
+    } else {
+        $html = '';
+        foreach ($conversations as $conv) {
+            $mid          = intval($conv['member']['id']);
+            $active_class = ($active_id === $mid) ? 'active' : '';
+            $display_name = esc_html(mmgr_get_display_name($conv['member']));
+            $time_ago     = esc_html(human_time_diff(strtotime($conv['last_message_time']), current_time('timestamp')) . ' ago');
+
+            $html .= '<div class="mmgr-conversation-item ' . $active_class . '" onclick="window.location.href=\'?chat=' . $mid . '\'">';
+
+            if (!empty($conv['member']['photo_url'])) {
+                $html .= '<img src="' . esc_url($conv['member']['photo_url']) . '" class="mmgr-conversation-avatar" alt="Avatar">';
+            } else {
+                $icon  = ($mid === 0) ? '🛡️' : '👤';
+                $html .= '<div class="mmgr-avatar-placeholder">' . $icon . '</div>';
+            }
+
+            $html .= '<div style="flex:1;min-width:0;">';
+            $html .= '<div style="font-weight:bold;color:#000;margin-bottom:3px;">' . $display_name . '</div>';
+            $html .= '<div style="font-size:12px;color:#666;">' . $time_ago . '</div>';
+            $html .= '</div>';
+
+            if (intval($conv['unread_count']) > 0) {
+                $html .= '<span class="mmgr-unread-badge">' . intval($conv['unread_count']) . '</span>';
+            }
+
+            $html .= '</div>';
+        }
+    }
+
+    wp_send_json_success(array('html' => $html));
+});
+
+
+
 add_action('wp_ajax_nopriv_mmgr_send_pm', function() { do_action('wp_ajax_mmgr_send_pm'); });
 add_action('wp_ajax_mmgr_send_pm', function() {
     check_ajax_referer('mmgr_send_pm', 'nonce');
