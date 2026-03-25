@@ -696,7 +696,7 @@ add_action('wp_head', function() {
     .mmgr-chat-area {
         display: flex;
         flex-direction: column;
-        overflow: hidden;
+        overflow: visible;
     }
     
     .mmgr-conversation-item,
@@ -770,6 +770,9 @@ add_action('wp_head', function() {
     
     .mmgr-chat-header {
         background: linear-gradient(135deg, var(--portal-primary), var(--portal-secondary));
+        border-radius: 6px 6px 0 0;
+        position: relative;
+        z-index: 1;
     }
 
     .mmgr-admin-chat-header {
@@ -843,6 +846,10 @@ add_action('wp_head', function() {
         background: white;
         border-top: 2px solid var(--portal-border);
         flex-shrink: 0;
+    }
+
+    .mmgr-chat-input {
+        border-radius: 0 0 6px 6px;
     }
     
     .mmgr-input-wrapper,
