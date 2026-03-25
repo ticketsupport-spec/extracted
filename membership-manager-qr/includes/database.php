@@ -287,6 +287,17 @@ function mmgr_create_tables() {
         INDEX idx_message_id (message_id),
         INDEX idx_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // Conversation archive table (tracks which members have archived a conversation)
+    $archive_table = $wpdb->prefix . 'membership_conversation_archive';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$archive_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        other_member_id INT NOT NULL,
+        archived_at DATETIME NOT NULL,
+        UNIQUE KEY unique_archive (member_id, other_member_id),
+        INDEX idx_member_id (member_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     
     // ===========================
     // PWA PUSH SUBSCRIPTIONS TABLE
@@ -678,11 +689,32 @@ function mmgr_migrate_orientation_tables() {
 }
 
 /**
+ * Create the conversation archive table for existing installs that already ran mmgr_create_tables()
+ * before this table was added. Safe to call repeatedly.
+ */
+function mmgr_migrate_archive_table() {
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
+    $archive_table = $wpdb->prefix . 'membership_conversation_archive';
+
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$archive_table'" ) !== $archive_table ) {
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS `$archive_table` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            member_id INT NOT NULL,
+            other_member_id INT NOT NULL,
+            archived_at DATETIME NOT NULL,
+            UNIQUE KEY unique_archive (member_id, other_member_id),
+            INDEX idx_member_id (member_id)
+        ) ENGINE=InnoDB $charset_collate" );
+    }
+}
+
+/**
  * Check and update database schema on plugin load
  */
 function mmgr_check_database() {
     $current_version = get_option('mmgr_db_version', '0.0.0');
-    $required_version = '1.6.0';
+    $required_version = '1.7.0';
     
     if (version_compare($current_version, $required_version, '<')) {
         mmgr_create_tables();
@@ -692,7 +724,8 @@ function mmgr_check_database() {
         mmgr_migrate_help_topics_content_longtext();
         mmgr_migrate_first_visit_columns();
         mmgr_migrate_orientation_tables();
-        update_option( 'mmgr_db_version', '1.6.0' );
+        mmgr_migrate_archive_table();
+        update_option( 'mmgr_db_version', '1.7.0' );
     }
 }
 

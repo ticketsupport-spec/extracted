@@ -15,6 +15,7 @@ function mmgr_send_message($from_member_id, $to_member_id, $message, $image_url 
     global $wpdb;
     $messages_table = $wpdb->prefix . 'membership_messages';
     $blocks_table = $wpdb->prefix . 'membership_blocks';
+    $archive_table = $wpdb->prefix . 'membership_conversation_archive';
     
     // Check if sender is blocked by receiver (skip check if sending to admin)
     if ($to_member_id != 0) {
@@ -39,6 +40,20 @@ function mmgr_send_message($from_member_id, $to_member_id, $message, $image_url 
     ));
     
     if ($result) {
+        // Unarchive the conversation for both parties when a new message is sent
+        if ($wpdb->get_var("SHOW TABLES LIKE '$archive_table'") === $archive_table) {
+            // Unarchive for the recipient (their view of the sender's conversation)
+            $wpdb->delete($archive_table, array(
+                'member_id'       => $to_member_id,
+                'other_member_id' => $from_member_id,
+            ));
+            // Unarchive for the sender (their own view) in case they had archived it
+            $wpdb->delete($archive_table, array(
+                'member_id'       => $from_member_id,
+                'other_member_id' => $to_member_id,
+            ));
+        }
+
         // Send push notification to the recipient (skip admin id = 0)
         if ($to_member_id != 0 && function_exists('mmgr_pwa_send_push_to_member')) {
             if ($from_member_id == 0) {
@@ -133,11 +148,29 @@ function mmgr_get_conversation_count($member1_id, $member2_id) {
 /**
  * Get member's conversations list
  */
-function mmgr_get_conversations_list($member_id) {
+function mmgr_get_conversations_list($member_id, $archived = false) {
     global $wpdb;
     $messages_table = $wpdb->prefix . 'membership_messages';
     $members_table = $wpdb->prefix . 'memberships';
-    
+    $archive_table = $wpdb->prefix . 'membership_conversation_archive';
+
+    $archive_table_exists = $wpdb->get_var("SHOW TABLES LIKE '$archive_table'") === $archive_table;
+
+    // Pre-fetch all archived conversation partner IDs in a single query
+    $archived_ids = array();
+    if ($archive_table_exists) {
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT other_member_id FROM $archive_table WHERE member_id = %d",
+            $member_id
+        ));
+        $archived_ids = array_map('intval', $rows);
+    }
+
+    // If asking for archived conversations but the table doesn't exist, return empty
+    if ($archived && !$archive_table_exists) {
+        return array();
+    }
+
     // Get unique conversations with latest message
     $conversations = $wpdb->get_results($wpdb->prepare(
         "SELECT 
@@ -160,8 +193,19 @@ function mmgr_get_conversations_list($member_id) {
     // Get member details for each conversation
     $result = array();
     foreach ($conversations as $conv) {
+        $other_id = intval($conv['other_member_id']);
+
+        // Filter by archive status using the pre-fetched set (no extra query per row)
+        $is_archived = in_array($other_id, $archived_ids, true);
+        if ($archived && !$is_archived) {
+            continue; // Only want archived – skip non-archived
+        }
+        if (!$archived && $is_archived) {
+            continue; // Only want active – skip archived
+        }
+
         // Handle admin conversation (member_id = 0)
-        if ($conv['other_member_id'] == 0) {
+        if ($other_id == 0) {
             $other_member = array(
                 'id' => 0,
                 'name' => 'Admin / Support',
@@ -170,14 +214,14 @@ function mmgr_get_conversations_list($member_id) {
         } else {
             $other_member = $wpdb->get_row($wpdb->prepare(
                 "SELECT id, name, community_alias, photo_url FROM $members_table WHERE id = %d",
-                $conv['other_member_id']
+                $other_id
             ), ARRAY_A);
 
             // If the member no longer exists, use a placeholder so unread
             // messages from that conversation can still be marked as read.
             if (!$other_member) {
                 $other_member = array(
-                    'id'             => intval($conv['other_member_id']),
+                    'id'             => $other_id,
                     'name'           => 'Deleted Member',
                     'community_alias' => '',
                     'photo_url'      => null
@@ -370,6 +414,56 @@ function mmgr_get_blocked_members($member_id) {
          ORDER BY b.blocked_at DESC",
         $member_id
     ), ARRAY_A);
+}
+
+/**
+ * Archive a conversation for a member
+ */
+function mmgr_archive_conversation($member_id, $other_member_id) {
+    global $wpdb;
+    $archive_table = $wpdb->prefix . 'membership_conversation_archive';
+
+    $wpdb->query($wpdb->prepare(
+        "INSERT IGNORE INTO $archive_table (member_id, other_member_id, archived_at) VALUES (%d, %d, %s)",
+        $member_id,
+        $other_member_id,
+        current_time('mysql')
+    ));
+
+    return array('success' => true, 'message' => 'Conversation archived.');
+}
+
+/**
+ * Unarchive a conversation for a member
+ */
+function mmgr_unarchive_conversation($member_id, $other_member_id) {
+    global $wpdb;
+    $archive_table = $wpdb->prefix . 'membership_conversation_archive';
+
+    $wpdb->delete($archive_table, array(
+        'member_id'       => $member_id,
+        'other_member_id' => $other_member_id,
+    ));
+
+    return array('success' => true, 'message' => 'Conversation unarchived.');
+}
+
+/**
+ * Check if a conversation is archived by a member
+ */
+function mmgr_is_conversation_archived($member_id, $other_member_id) {
+    global $wpdb;
+    $archive_table = $wpdb->prefix . 'membership_conversation_archive';
+
+    if ($wpdb->get_var("SHOW TABLES LIKE '$archive_table'") !== $archive_table) {
+        return false;
+    }
+
+    return (bool) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $archive_table WHERE member_id = %d AND other_member_id = %d",
+        $member_id,
+        $other_member_id
+    ));
 }
 
 /**

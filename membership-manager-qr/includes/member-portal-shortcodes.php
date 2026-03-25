@@ -3132,8 +3132,11 @@ add_shortcode('mmgr_member_messages', function() {
         }
     }
     
-    // Get conversations list
-    $conversations = mmgr_get_conversations_list($member['id']);
+    // Get conversations list (active only - not archived)
+    $conversations = mmgr_get_conversations_list($member['id'], false);
+
+    // Get archived conversations
+    $archived_conversations = mmgr_get_conversations_list($member['id'], true);
     
     // Get contacts
     $contacts = mmgr_get_contacts($member['id']);
@@ -3151,6 +3154,8 @@ add_shortcode('mmgr_member_messages', function() {
 		$messages = array();
 		$other_member = null;
 		$total_messages = 0;
+		$is_other_blocked = false;
+		$is_conversation_archived = false;
 		if ($active_conversation !== null) {
 			// Get first 5 messages
 			$messages = mmgr_get_conversation($member['id'], $active_conversation, 5, 0);
@@ -3165,6 +3170,16 @@ add_shortcode('mmgr_member_messages', function() {
 				"SELECT id, name, community_alias, community_photo_url FROM {$wpdb->prefix}memberships WHERE id = %d",
 				$active_conversation
 			), ARRAY_A);
+
+            // Check if this member has blocked the other member
+            if ($other_member) {
+                $is_other_blocked = (bool) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$wpdb->prefix}membership_blocks WHERE member_id = %d AND blocked_member_id = %d",
+                    $member['id'],
+                    $active_conversation
+                ));
+                $is_conversation_archived = mmgr_is_conversation_archived($member['id'], $active_conversation);
+            }
 		}
         
         // Mark messages as read
@@ -3204,6 +3219,7 @@ add_shortcode('mmgr_member_messages', function() {
                 <div class="mmgr-tabs">
                     <button class="mmgr-tab active" onclick="showTab('conversations')">💬 Chats</button>
                     <button class="mmgr-tab" onclick="showTab('contacts')">👥 Contacts</button>
+                    <button class="mmgr-tab" onclick="showTab('archived')">📦 Archived<?php if (!empty($archived_conversations)): ?> <span class="mmgr-unread-badge" style="background:#999;"><?php echo count($archived_conversations); ?></span><?php endif; ?></button>
                 </div>
                 
                 <!-- Conversations Tab -->
@@ -3273,6 +3289,39 @@ add_shortcode('mmgr_member_messages', function() {
                         </button>
                     </div>
                 </div>
+
+                <!-- Archived Conversations Tab -->
+                <div id="archived-tab" class="mmgr-tab-content" style="display:none;">
+                    <?php if (empty($archived_conversations)): ?>
+                        <div style="padding:40px 20px;text-align:center;color:#999;">
+                            <p style="font-size:48px;margin:0;">📦</p>
+                            <p>No archived conversations</p>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($archived_conversations as $conv): ?>
+                            <div class="mmgr-conversation-item <?php echo ($active_conversation == $conv['member']['id']) ? 'active' : ''; ?>"
+                                 onclick="window.location.href='?chat=<?php echo $conv['member']['id']; ?>'">
+                                
+                                <?php if (!empty($conv['member']['photo_url'])): ?>
+                                    <img src="<?php echo esc_url($conv['member']['photo_url']); ?>" class="mmgr-conversation-avatar" alt="Avatar">
+                                <?php else: ?>
+                                    <div class="mmgr-avatar-placeholder">
+                                        <?php echo $conv['member']['id'] == 0 ? '🛡️' : '👤'; ?>
+                                    </div>
+                                <?php endif; ?>
+                                
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-weight:bold;color:#666;margin-bottom:3px;">
+                                        <?php echo esc_html(mmgr_get_display_name($conv['member'])); ?>
+                                    </div>
+                                    <div style="font-size:12px;color:#999;">
+                                        📦 <?php echo human_time_diff(strtotime($conv['last_message_time']), current_time('timestamp')) . ' ago'; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
             </div>
             
             <!-- Chat Area -->
@@ -3341,8 +3390,20 @@ add_shortcode('mmgr_member_messages', function() {
                                         <?php echo esc_html($cff_label); ?>
                                     </button>
                                     <?php endif; ?>
-                                    <button onclick="blockMember(<?php echo $other_member['id']; ?>)" style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#d00;">
-                                        🚫 Block Member
+                                    <button id="chat-block-btn"
+                                            onclick="toggleBlockMember(<?php echo intval($other_member['id']); ?>, this)"
+                                            data-blocked="<?php echo $is_other_blocked ? '1' : '0'; ?>"
+                                            data-nonce="<?php echo esc_attr(wp_create_nonce('mmgr_toggle_block')); ?>"
+                                            style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#d00;">
+                                        <?php echo $is_other_blocked ? '✅ Unblock Member' : '🚫 Block Member'; ?>
+                                    </button>
+                                    <button id="chat-archive-btn"
+                                            onclick="toggleArchiveConversation(<?php echo intval($other_member['id']); ?>, this)"
+                                            data-archived="<?php echo $is_conversation_archived ? '1' : '0'; ?>"
+                                            data-nonce-archive="<?php echo esc_attr(wp_create_nonce('mmgr_archive_conversation')); ?>"
+                                            data-nonce-unarchive="<?php echo esc_attr(wp_create_nonce('mmgr_unarchive_conversation')); ?>"
+                                            style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#555;">
+                                        <?php echo $is_conversation_archived ? '📤 Unarchive Chat' : '📦 Archive Chat'; ?>
                                     </button>
                                     <button onclick="deleteConversation(<?php echo $other_member['id']; ?>)" style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#666;">
                                         🗑️ Delete Chat
@@ -3454,6 +3515,9 @@ add_shortcode('mmgr_member_messages', function() {
         if (tab === 'conversations') {
             document.querySelectorAll('.mmgr-tab')[0].classList.add('active');
             document.getElementById('conversations-tab').style.display = 'block';
+        } else if (tab === 'archived') {
+            document.querySelectorAll('.mmgr-tab')[2].classList.add('active');
+            document.getElementById('archived-tab').style.display = 'block';
         } else {
             document.querySelectorAll('.mmgr-tab')[1].classList.add('active');
             document.getElementById('contacts-tab').style.display = 'block';
@@ -3599,21 +3663,50 @@ add_shortcode('mmgr_member_messages', function() {
         });
     }
     
-    function blockMember(memberId) {
-        if (!confirm('Block this member? They will no longer be able to message you.')) return;
+    function toggleBlockMember(memberId, button) {
+        const isBlocked = button.getAttribute('data-blocked') === '1';
+        const nonce = button.getAttribute('data-nonce');
+        const confirmMsg = isBlocked
+            ? 'Unblock this member? They will be able to message you again.'
+            : 'Block this member? They will no longer be able to message you.';
+        if (!confirm(confirmMsg)) return;
         
         fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: 'action=mmgr_block_member&member_id=' + memberId + '&nonce=<?php echo wp_create_nonce('mmgr_block_member'); ?>'
+            body: 'action=mmgr_toggle_block&member_id=' + memberId + '&nonce=' + encodeURIComponent(nonce)
         })
         .then(r => r.json())
         .then(d => {
             if (d.success) {
+                const nowBlocked = d.data.blocked;
+                button.setAttribute('data-blocked', nowBlocked ? '1' : '0');
+                button.textContent = nowBlocked ? '✅ Unblock Member' : '🚫 Block Member';
                 alert('✓ ' + d.data.message);
+            } else {
+                alert('✕ ' + (d.data.message || d.data));
+            }
+        });
+    }
+
+    function toggleArchiveConversation(memberId, button) {
+        const isArchived = button.getAttribute('data-archived') === '1';
+        const nonceArchive = button.getAttribute('data-nonce-archive');
+        const nonceUnarchive = button.getAttribute('data-nonce-unarchive');
+        const action = isArchived ? 'mmgr_unarchive_conversation' : 'mmgr_archive_conversation';
+        const nonce = isArchived ? nonceUnarchive : nonceArchive;
+
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'action=' + action + '&member_id=' + memberId + '&nonce=' + encodeURIComponent(nonce)
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) {
                 window.location.href = '<?php echo home_url('/member-messages/'); ?>?usercod=<?php echo rawurlencode($member['member_code']); ?>';
             } else {
-                alert('✕ ' + d.data.message);
+                alert('✕ ' + (d.data.message || d.data));
             }
         });
     }
@@ -3793,6 +3886,44 @@ add_action('wp_ajax_mmgr_delete_conversation', function() {
     $other_member_id = intval($_POST['member_id']);
     $result = mmgr_delete_conversation($member['id'], $other_member_id);
     
+    if ($result['success']) {
+        wp_send_json_success($result);
+    } else {
+        wp_send_json_error($result);
+    }
+});
+
+// AJAX: Archive conversation
+add_action('wp_ajax_mmgr_archive_conversation', function() {
+    check_ajax_referer('mmgr_archive_conversation', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Not logged in'));
+    }
+
+    $other_member_id = intval($_POST['member_id']);
+    $result = mmgr_archive_conversation($member['id'], $other_member_id);
+
+    if ($result['success']) {
+        wp_send_json_success($result);
+    } else {
+        wp_send_json_error($result);
+    }
+});
+
+// AJAX: Unarchive conversation
+add_action('wp_ajax_mmgr_unarchive_conversation', function() {
+    check_ajax_referer('mmgr_unarchive_conversation', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Not logged in'));
+    }
+
+    $other_member_id = intval($_POST['member_id']);
+    $result = mmgr_unarchive_conversation($member['id'], $other_member_id);
+
     if ($result['success']) {
         wp_send_json_success($result);
     } else {
