@@ -3164,6 +3164,7 @@ add_shortcode('mmgr_member_messages', function() {
 		// Get other member info
 		if ($active_conversation == 0) {
 			$other_member = $admin_contact;
+            $is_conversation_archived = mmgr_is_conversation_archived($member['id'], 0);
 		} else {
 			global $wpdb;
 			$other_member = $wpdb->get_row($wpdb->prepare(
@@ -3346,71 +3347,71 @@ add_shortcode('mmgr_member_messages', function() {
 							</h3>
 						</div>
                         
-                        <?php if ($other_member['id'] != 0): ?>
-                            <div class="dropdown" style="position:relative;">
-                                <button onclick="toggleDropdown()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:8px 12px;border-radius:6px;cursor:pointer;">
-                                    ⋮
+                        <div class="dropdown" style="position:relative;">
+                            <button onclick="toggleDropdown()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:8px 12px;border-radius:6px;cursor:pointer;">
+                                ⋮
+                            </button>
+                            <div id="chat-dropdown" style="display:none;position:absolute;right:0;top:100%;background:white;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.2);min-width:180px;margin-top:5px;z-index:100;">
+                                <?php if ($other_member['id'] != 0): ?>
+                                <?php
+                                $chat_friend_status = mmgr_get_friendship_status((int)$member['id'], (int)$other_member['id']);
+                                $chat_friend_nonce_req = wp_create_nonce('mmgr_friend_request');
+                                $chat_friend_nonce_res = wp_create_nonce('mmgr_friend_respond');
+                                $chat_friend_nonce_unf = wp_create_nonce('mmgr_unfriend');
+                                switch ($chat_friend_status) {
+                                    case 'none':
+                                        $cff_label  = '🤝 Add Friend';
+                                        $cff_action = 'request';
+                                        break;
+                                    case 'pending_sent':
+                                        $cff_label  = '⏳ Cancel Request';
+                                        $cff_action = 'cancel';
+                                        break;
+                                    case 'pending_received':
+                                        $cff_label  = '✅ Accept Friend';
+                                        $cff_action = 'accept';
+                                        break;
+                                    case 'accepted':
+                                        $cff_label  = '👥 Unfriend';
+                                        $cff_action = 'unfriend';
+                                        break;
+                                    default:
+                                        $cff_label  = '';
+                                        $cff_action = '';
+                                }
+                                if ($cff_label):
+                                ?>
+                                <button id="chat-friend-btn"
+                                        onclick="chatFriendAction(<?php echo intval($other_member['id']); ?>,'<?php echo esc_attr($cff_action); ?>')"
+                                        data-status="<?php echo esc_attr($chat_friend_status); ?>"
+                                        data-nonce-request="<?php echo esc_attr($chat_friend_nonce_req); ?>"
+                                        data-nonce-respond="<?php echo esc_attr($chat_friend_nonce_res); ?>"
+                                        data-nonce-unfriend="<?php echo esc_attr($chat_friend_nonce_unf); ?>"
+                                        style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#0073aa;">
+                                    <?php echo esc_html($cff_label); ?>
                                 </button>
-                                <div id="chat-dropdown" style="display:none;position:absolute;right:0;top:100%;background:white;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.2);min-width:180px;margin-top:5px;z-index:100;">
-                                    <?php
-                                    $chat_friend_status = mmgr_get_friendship_status((int)$member['id'], (int)$other_member['id']);
-                                    $chat_friend_nonce_req = wp_create_nonce('mmgr_friend_request');
-                                    $chat_friend_nonce_res = wp_create_nonce('mmgr_friend_respond');
-                                    $chat_friend_nonce_unf = wp_create_nonce('mmgr_unfriend');
-                                    switch ($chat_friend_status) {
-                                        case 'none':
-                                            $cff_label  = '🤝 Add Friend';
-                                            $cff_action = 'request';
-                                            break;
-                                        case 'pending_sent':
-                                            $cff_label  = '⏳ Cancel Request';
-                                            $cff_action = 'cancel';
-                                            break;
-                                        case 'pending_received':
-                                            $cff_label  = '✅ Accept Friend';
-                                            $cff_action = 'accept';
-                                            break;
-                                        case 'accepted':
-                                            $cff_label  = '👥 Unfriend';
-                                            $cff_action = 'unfriend';
-                                            break;
-                                        default:
-                                            $cff_label  = '';
-                                            $cff_action = '';
-                                    }
-                                    if ($cff_label):
-                                    ?>
-                                    <button id="chat-friend-btn"
-                                            onclick="chatFriendAction(<?php echo intval($other_member['id']); ?>,'<?php echo esc_attr($cff_action); ?>')"
-                                            data-status="<?php echo esc_attr($chat_friend_status); ?>"
-                                            data-nonce-request="<?php echo esc_attr($chat_friend_nonce_req); ?>"
-                                            data-nonce-respond="<?php echo esc_attr($chat_friend_nonce_res); ?>"
-                                            data-nonce-unfriend="<?php echo esc_attr($chat_friend_nonce_unf); ?>"
-                                            style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#0073aa;">
-                                        <?php echo esc_html($cff_label); ?>
-                                    </button>
-                                    <?php endif; ?>
-                                    <button id="chat-block-btn"
-                                            onclick="toggleBlockMember(<?php echo intval($other_member['id']); ?>, this)"
-                                            data-blocked="<?php echo $is_other_blocked ? '1' : '0'; ?>"
-                                            data-nonce="<?php echo esc_attr(wp_create_nonce('mmgr_toggle_block')); ?>"
-                                            style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#d00;">
-                                        <?php echo $is_other_blocked ? '✅ Unblock Member' : '🚫 Block Member'; ?>
-                                    </button>
-                                    <button id="chat-archive-btn"
-                                            onclick="toggleArchiveConversation(<?php echo intval($other_member['id']); ?>, this)"
-                                            data-archived="<?php echo $is_conversation_archived ? '1' : '0'; ?>"
-                                            data-nonce-archive="<?php echo esc_attr(wp_create_nonce('mmgr_archive_conversation')); ?>"
-                                            data-nonce-unarchive="<?php echo esc_attr(wp_create_nonce('mmgr_unarchive_conversation')); ?>"
-                                            style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#555;">
-                                        <?php echo $is_conversation_archived ? '📤 Unarchive Chat' : '📦 Archive Chat'; ?>
-                                    </button>
-                                    <button onclick="deleteConversation(<?php echo $other_member['id']; ?>)" style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#666;">
-                                        🗑️ Delete Chat
-                                    </button>
-                                </div>
+                                <?php endif; ?>
+                                <button id="chat-block-btn"
+                                        onclick="toggleBlockMember(<?php echo intval($other_member['id']); ?>, this)"
+                                        data-blocked="<?php echo $is_other_blocked ? '1' : '0'; ?>"
+                                        data-nonce="<?php echo esc_attr(wp_create_nonce('mmgr_toggle_block')); ?>"
+                                        style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#d00;">
+                                    <?php echo $is_other_blocked ? '✅ Unblock Member' : '🚫 Block Member'; ?>
+                                </button>
+                                <?php endif; ?>
+                                <button id="chat-archive-btn"
+                                        onclick="toggleArchiveConversation(<?php echo intval($other_member['id']); ?>, this)"
+                                        data-archived="<?php echo $is_conversation_archived ? '1' : '0'; ?>"
+                                        data-nonce-archive="<?php echo esc_attr(wp_create_nonce('mmgr_archive_conversation')); ?>"
+                                        data-nonce-unarchive="<?php echo esc_attr(wp_create_nonce('mmgr_unarchive_conversation')); ?>"
+                                        style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#555;">
+                                    <?php echo $is_conversation_archived ? '📤 Unarchive Chat' : '📦 Archive Chat'; ?>
+                                </button>
+                                <button onclick="deleteConversation(<?php echo intval($other_member['id']); ?>)" style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#666;">
+                                    🗑️ Delete Chat
+                                </button>
                             </div>
-                        <?php endif; ?>
+                        </div>
                     </div>
                     
 					<!-- Load Earlier Messages (above scroll box so always visible) -->

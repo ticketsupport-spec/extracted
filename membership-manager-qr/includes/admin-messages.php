@@ -98,6 +98,8 @@ function mmgr_admin_messages_page() {
             array('from_member_id' => $active_member_id, 'to_member_id' => 0)
         );
     }
+
+    $is_conversation_archived = $active_member_id ? mmgr_is_conversation_archived(0, $active_member_id) : false;
     
     ?>
     
@@ -168,6 +170,26 @@ function mmgr_admin_messages_page() {
                         <a href="<?php echo admin_url('admin.php?page=membership_add&id=' . $active_member['id']); ?>" class="button button-secondary" style="background:rgba(255,255,255,0.2);border:none;color:white;">
                             👤 View Profile
                         </a>
+                        
+                        <div class="dropdown" style="position:relative;margin-left:8px;">
+                            <button onclick="toggleDropdown()" style="background:rgba(255,255,255,0.2);border:none;color:white;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:18px;line-height:1;">
+                                ⋮
+                            </button>
+                            <div id="chat-dropdown" style="display:none;position:absolute;right:0;top:100%;background:white;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.2);min-width:180px;margin-top:5px;z-index:100;">
+                                <button id="admin-archive-btn"
+                                        onclick="archiveAdminConversation(<?php echo intval($active_member['id']); ?>, this)"
+                                        data-archived="<?php echo $is_conversation_archived ? '1' : '0'; ?>"
+                                        data-nonce-archive="<?php echo esc_attr(wp_create_nonce('mmgr_admin_archive_conversation')); ?>"
+                                        data-nonce-unarchive="<?php echo esc_attr(wp_create_nonce('mmgr_admin_unarchive_conversation')); ?>"
+                                        style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#555;">
+                                    <?php echo $is_conversation_archived ? '📤 Unarchive Chat' : '📦 Archive Chat'; ?>
+                                </button>
+                                <button onclick="deleteAdminConversation(<?php echo intval($active_member['id']); ?>)"
+                                        style="width:100%;padding:12px;border:none;background:none;text-align:left;cursor:pointer;color:#d63638;">
+                                    🗑️ Delete Chat
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     
                     <!-- Member Info Box -->
@@ -409,25 +431,94 @@ function blockMember(memberId) {
     });
 }
 
-function deleteConversation(memberId) {
+function archiveAdminConversation(memberId, button) {
+    const isArchived = button.getAttribute('data-archived') === '1';
+    const nonceArchive = button.getAttribute('data-nonce-archive');
+    const nonceUnarchive = button.getAttribute('data-nonce-unarchive');
+    const action = isArchived ? 'mmgr_admin_unarchive_conversation' : 'mmgr_admin_archive_conversation';
+    const nonce = isArchived ? nonceUnarchive : nonceArchive;
+
+    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'action=' + action + '&member_id=' + memberId + '&nonce=' + encodeURIComponent(nonce)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) {
+            window.location.href = '<?php echo admin_url('admin.php?page=membership_messages'); ?>';
+        } else {
+            alert('✕ ' + (d.data.message || d.data));
+        }
+    });
+}
+
+function deleteAdminConversation(memberId) {
     if (!confirm('Delete this conversation? Messages will be removed from your view only.')) return;
     
     fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'action=mmgr_delete_conversation&member_id=' + memberId + '&nonce=<?php echo wp_create_nonce('mmgr_delete_conversation'); ?>'
+        body: 'action=mmgr_admin_delete_conversation&member_id=' + memberId + '&nonce=<?php echo wp_create_nonce('mmgr_admin_delete_conversation'); ?>'
     })
     .then(r => r.json())
     .then(d => {
         if (d.success) {
             alert('✓ ' + d.data.message);
             window.location.href = '<?php echo admin_url('admin.php?page=membership_messages'); ?>';
+        } else {
+            alert('✕ ' + (d.data.message || d.data));
         }
     });
 }
 </script>
     <?php
 }
+
+// AJAX: Admin archive conversation
+add_action('wp_ajax_mmgr_admin_archive_conversation', function() {
+    check_ajax_referer('mmgr_admin_archive_conversation', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(array('message' => 'Unauthorized'));
+    }
+    $other_member_id = intval($_POST['member_id']);
+    $result = mmgr_archive_conversation(0, $other_member_id);
+    if ($result['success']) {
+        wp_send_json_success($result);
+    } else {
+        wp_send_json_error($result);
+    }
+});
+
+// AJAX: Admin unarchive conversation
+add_action('wp_ajax_mmgr_admin_unarchive_conversation', function() {
+    check_ajax_referer('mmgr_admin_unarchive_conversation', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(array('message' => 'Unauthorized'));
+    }
+    $other_member_id = intval($_POST['member_id']);
+    $result = mmgr_unarchive_conversation(0, $other_member_id);
+    if ($result['success']) {
+        wp_send_json_success($result);
+    } else {
+        wp_send_json_error($result);
+    }
+});
+
+// AJAX: Admin delete conversation
+add_action('wp_ajax_mmgr_admin_delete_conversation', function() {
+    check_ajax_referer('mmgr_admin_delete_conversation', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(array('message' => 'Unauthorized'));
+    }
+    $other_member_id = intval($_POST['member_id']);
+    $result = mmgr_delete_conversation(0, $other_member_id);
+    if ($result['success']) {
+        wp_send_json_success($result);
+    } else {
+        wp_send_json_error($result);
+    }
+});
 
 // Add unread count to admin menu
 add_action('admin_footer', function() {
