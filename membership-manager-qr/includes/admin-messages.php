@@ -49,7 +49,7 @@ function mmgr_admin_messages_page() {
     }
     
     // Get all conversations (members who have messaged admin)
-    $conversations = $wpdb->get_results(
+    $all_conversations = $wpdb->get_results(
         "SELECT 
             m.id as member_id,
             m.name,
@@ -69,6 +69,30 @@ function mmgr_admin_messages_page() {
          ORDER BY last_message_time DESC",
         ARRAY_A
     );
+
+    // Separate conversations into active and archived using the archive table (admin = member_id 0)
+    $archive_table = $wpdb->prefix . 'membership_conversation_archive';
+    $archived_member_ids = array();
+    if ($wpdb->get_var("SHOW TABLES LIKE '$archive_table'") === $archive_table) {
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT other_member_id FROM $archive_table WHERE member_id = %d",
+            0
+        ));
+        $archived_member_ids = array_map('intval', $rows);
+    }
+
+    $conversations = array();
+    $archived_conversations = array();
+    foreach ($all_conversations as $conv) {
+        if (in_array(intval($conv['member_id']), $archived_member_ids, true)) {
+            $archived_conversations[] = $conv;
+        } else {
+            $conversations[] = $conv;
+        }
+    }
+
+    // Determine active sidebar tab
+    $active_tab = (isset($_GET['tab']) && sanitize_key($_GET['tab']) === 'archived') ? 'archived' : 'conversations';
     
 		// Get messages for active conversation
 		$messages = array();
@@ -110,45 +134,92 @@ function mmgr_admin_messages_page() {
         <div class="mmgr-admin-messages-grid">
             <!-- Sidebar: Conversations List -->
             <div class="mmgr-admin-sidebar">
-                <div style="padding:15px;background:#f6f7f7;border-bottom:1px solid #ddd;font-weight:bold;">
-                    📬 Conversations (<?php echo count($conversations); ?>)
+                <!-- Sidebar Tabs -->
+                <div style="display:flex;border-bottom:1px solid #ddd;background:#f6f7f7;">
+                    <button id="admin-tab-conversations"
+                            onclick="adminShowTab('conversations')"
+                            style="flex:1;padding:12px 8px;border:none;background:<?php echo $active_tab === 'conversations' ? '#fff' : 'none'; ?>;font-weight:<?php echo $active_tab === 'conversations' ? 'bold' : 'normal'; ?>;cursor:pointer;border-bottom:<?php echo $active_tab === 'conversations' ? '2px solid #2271b1' : '2px solid transparent'; ?>;color:<?php echo $active_tab === 'conversations' ? '#2271b1' : '#555'; ?>;">
+                        💬 Active <?php if (!empty($conversations)): ?><span style="background:#2271b1;color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;margin-left:4px;"><?php echo count($conversations); ?></span><?php endif; ?>
+                    </button>
+                    <button id="admin-tab-archived"
+                            onclick="adminShowTab('archived')"
+                            style="flex:1;padding:12px 8px;border:none;background:<?php echo $active_tab === 'archived' ? '#fff' : 'none'; ?>;font-weight:<?php echo $active_tab === 'archived' ? 'bold' : 'normal'; ?>;cursor:pointer;border-bottom:<?php echo $active_tab === 'archived' ? '2px solid #2271b1' : '2px solid transparent'; ?>;color:<?php echo $active_tab === 'archived' ? '#2271b1' : '#555'; ?>;">
+                        📦 Archived <?php if (!empty($archived_conversations)): ?><span style="background:#999;color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;margin-left:4px;"><?php echo count($archived_conversations); ?></span><?php endif; ?>
+                    </button>
                 </div>
-                
-                <?php if (empty($conversations)): ?>
-                    <div style="padding:40px 20px;text-align:center;color:#666;">
-                        <p style="font-size:48px;margin:0;">💬</p>
-                        <p>No messages yet</p>
-                        <p style="font-size:13px;">Members can message you from their portal</p>
-                    </div>
-                <?php else: ?>
-                    <?php foreach ($conversations as $conv): ?>
-                        <div class="mmgr-admin-conv-item <?php echo ($active_member_id == $conv['member_id']) ? 'active' : ''; ?>" 
-                             onclick="window.location.href='?page=membership_messages&member=<?php echo $conv['member_id']; ?>'">
-                            
-                            <?php if (!empty($conv['photo_url'])): ?>
-                                <img src="<?php echo esc_url($conv['photo_url']); ?>" class="mmgr-admin-avatar" alt="Avatar">
-                            <?php else: ?>
-                                <div class="mmgr-admin-avatar-placeholder">👤</div>
-                            <?php endif; ?>
-                            
-                            <div style="flex:1;min-width:0;">
-                                <div style="font-weight:bold;color:#1d2327;margin-bottom:3px;">
-                                    <?php echo esc_html($conv['name']); ?>
+
+                <!-- Active Conversations -->
+                <div id="admin-conversations-panel" style="display:<?php echo $active_tab === 'conversations' ? 'block' : 'none'; ?>;">
+                    <?php if (empty($conversations)): ?>
+                        <div style="padding:40px 20px;text-align:center;color:#666;">
+                            <p style="font-size:48px;margin:0;">💬</p>
+                            <p>No messages yet</p>
+                            <p style="font-size:13px;">Members can message you from their portal</p>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($conversations as $conv): ?>
+                            <div class="mmgr-admin-conv-item <?php echo ($active_member_id == $conv['member_id']) ? 'active' : ''; ?>" 
+                                 onclick="window.location.href='?page=membership_messages&member=<?php echo $conv['member_id']; ?>'">
+                                
+                                <?php if (!empty($conv['photo_url'])): ?>
+                                    <img src="<?php echo esc_url($conv['photo_url']); ?>" class="mmgr-admin-avatar" alt="Avatar">
+                                <?php else: ?>
+                                    <div class="mmgr-admin-avatar-placeholder">👤</div>
+                                <?php endif; ?>
+                                
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-weight:bold;color:#1d2327;margin-bottom:3px;">
+                                        <?php echo esc_html($conv['name']); ?>
+                                    </div>
+                                    <div style="font-size:12px;color:#646970;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                        <?php echo esc_html($conv['email']); ?>
+                                    </div>
+                                    <div style="font-size:11px;color:#999;margin-top:2px;">
+                                        <?php echo human_time_diff(strtotime($conv['last_message_time']), current_time('timestamp')) . ' ago'; ?>
+                                    </div>
                                 </div>
-                                <div style="font-size:12px;color:#646970;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                                    <?php echo esc_html($conv['email']); ?>
-                                </div>
-                                <div style="font-size:11px;color:#999;margin-top:2px;">
-                                    <?php echo human_time_diff(strtotime($conv['last_message_time']), current_time('timestamp')) . ' ago'; ?>
+                                
+                                <?php if ($conv['unread_count'] > 0): ?>
+                                    <span class="mmgr-admin-unread-badge"><?php echo $conv['unread_count']; ?></span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Archived Conversations -->
+                <div id="admin-archived-panel" style="display:<?php echo $active_tab === 'archived' ? 'block' : 'none'; ?>;">
+                    <?php if (empty($archived_conversations)): ?>
+                        <div style="padding:40px 20px;text-align:center;color:#666;">
+                            <p style="font-size:48px;margin:0;">📦</p>
+                            <p>No archived conversations</p>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($archived_conversations as $conv): ?>
+                            <div class="mmgr-admin-conv-item <?php echo ($active_member_id == $conv['member_id']) ? 'active' : ''; ?>" 
+                                 onclick="window.location.href='?page=membership_messages&member=<?php echo $conv['member_id']; ?>&tab=archived'">
+                                
+                                <?php if (!empty($conv['photo_url'])): ?>
+                                    <img src="<?php echo esc_url($conv['photo_url']); ?>" class="mmgr-admin-avatar" alt="Avatar">
+                                <?php else: ?>
+                                    <div class="mmgr-admin-avatar-placeholder">👤</div>
+                                <?php endif; ?>
+                                
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-weight:bold;color:#1d2327;margin-bottom:3px;">
+                                        <?php echo esc_html($conv['name']); ?>
+                                    </div>
+                                    <div style="font-size:12px;color:#646970;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                        <?php echo esc_html($conv['email']); ?>
+                                    </div>
+                                    <div style="font-size:11px;color:#999;margin-top:2px;">
+                                        <?php echo human_time_diff(strtotime($conv['last_message_time']), current_time('timestamp')) . ' ago'; ?>
+                                    </div>
                                 </div>
                             </div>
-                            
-                            <?php if ($conv['unread_count'] > 0): ?>
-                                <span class="mmgr-admin-unread-badge"><?php echo $conv['unread_count']; ?></span>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
             </div>
             
             <!-- Chat Area -->
@@ -320,6 +391,22 @@ function showTab(tab) {
     }
 }
 
+function adminShowTab(tab) {
+    const isArchived = tab === 'archived';
+    document.getElementById('admin-conversations-panel').style.display = isArchived ? 'none' : 'block';
+    document.getElementById('admin-archived-panel').style.display   = isArchived ? 'block' : 'none';
+
+    [
+        { btn: document.getElementById('admin-tab-conversations'), active: !isArchived },
+        { btn: document.getElementById('admin-tab-archived'),      active: isArchived  }
+    ].forEach(function(item) {
+        item.btn.style.fontWeight   = item.active ? 'bold'              : 'normal';
+        item.btn.style.borderBottom = item.active ? '2px solid #2271b1' : '2px solid transparent';
+        item.btn.style.background   = item.active ? '#fff'              : 'none';
+        item.btn.style.color        = item.active ? '#2271b1'           : '#555';
+    });
+}
+
 function previewAdminImage(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -446,7 +533,10 @@ function archiveAdminConversation(memberId, button) {
     .then(r => r.json())
     .then(d => {
         if (d.success) {
-            window.location.href = '<?php echo admin_url('admin.php?page=membership_messages'); ?>';
+            // After archiving go to archived tab; after unarchiving go to active tab
+            const goToArchived = !isArchived; // if we just archived, go to archived tab
+            const baseUrl = '<?php echo admin_url('admin.php?page=membership_messages'); ?>';
+            window.location.href = goToArchived ? baseUrl + '&tab=archived' : baseUrl;
         } else {
             alert('✕ ' + (d.data.message || d.data));
         }
