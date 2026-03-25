@@ -973,7 +973,7 @@ add_shortcode('mmgr_member_dashboard', function() {
                 
                 <?php if (isset($member['paid']) && !$member['paid']): ?>
                     <div style="background:#fff3cd;border-left:4px solid #ff9800;padding:15px;margin-bottom:20px;border-radius:6px;">
-                        <h4 style="margin:0 0 5px 0;color:#ff9800;">⚠️ Membership Fees Due</h4>
+                        <h4 style="margin:0 0 5px 0;color:#ff9800;"><?php echo esc_html(get_option('mmgr_fees_due_heading', '⚠️ Membership Fees Due')); ?></h4>
                         <p style="margin:0;font-size:14px;"><?php echo esc_html(get_option('mmgr_fees_due_message', 'Please contact us to complete your payment and activate your membership.')); ?></p>
                     </div>
                 <?php endif; ?>
