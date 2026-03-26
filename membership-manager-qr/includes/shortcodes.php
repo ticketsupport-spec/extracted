@@ -963,7 +963,7 @@ add_shortcode('membership_code_of_conduct', function($atts){
             <!-- Navigation -->
             <?php echo mmgr_get_portal_navigation('coc'); ?>
             <div class="mmgr-portal-titlecc">
-                <h1>Code of Conduct 📜</h1>
+                <h1><?php echo esc_html(get_option('mmgr_portal_title_coc', 'Code of Conduct 📜')); ?></h1>
             </div>
             <div class="mmgr-portal-card">
                 <div class="mmgr-coc"></div>
@@ -1029,7 +1029,7 @@ add_shortcode('membership_code_of_conduct', function($atts){
         <!-- Navigation -->
         <?php echo mmgr_get_portal_navigation('coc'); ?>
         <div class="mmgr-portal-titlecc">
-            <h1>Code of Conduct 📜</h1>
+            <h1><?php echo esc_html(get_option('mmgr_portal_title_coc', 'Code of Conduct 📜')); ?></h1>
         </div>
         <div class="mmgr-portal-card">
             <div class="mmgr-coc"><?php echo $html; ?></div>

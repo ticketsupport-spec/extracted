@@ -198,6 +198,20 @@ function mmgr_settings_admin() {
         }
     }
     
+    // Portal page title/icon defaults – used in both the save handler and the UI below.
+    $portal_page_defaults = [
+        'dashboard' => ['nav' => '🏠 Dashboard',       'title' => 'Welcome back, {first_name}! 👋'],
+        'activity'  => ['nav' => '📊 Activity',         'title' => 'Activity 📊'],
+        'messages'  => ['nav' => '💬 Messages',         'title' => '💬 Messages'],
+        'profile'   => ['nav' => '👤 Profile',          'title' => 'Your Profile 👤'],
+        'community' => ['nav' => '👥 Community',        'title' => 'Community Forum 💬'],
+        'directory' => ['nav' => '📋 Directory',        'title' => 'Members Directory 👥'],
+        'events'    => ['nav' => '📅 Events',           'title' => '📅 Upcoming Events'],
+        'coc'       => ['nav' => '📜 Code of Conduct',  'title' => 'Code of Conduct 📜'],
+        'help'      => ['nav' => '❓ Help',             'title' => '❓ Help Center'],
+        'logout'    => ['nav' => '🚪 Logout',           'title' => null],
+    ];
+
     // Handle settings save
     if (isset($_POST['mmgr_save_settings']) && isset($_POST['mmgr_settings_nonce']) && wp_verify_nonce($_POST['mmgr_settings_nonce'], 'mmgr_settings')) {
         update_option('mmgr_code_of_conduct', wp_kses_post($_POST['mmgr_code_of_conduct']));
@@ -225,6 +239,14 @@ function mmgr_settings_admin() {
         }
         if (isset($_POST['mmgr_fees_due_message'])) {
             update_option('mmgr_fees_due_message', sanitize_textarea_field($_POST['mmgr_fees_due_message']));
+        }
+        foreach ($portal_page_defaults as $pg => $defaults) {
+            if (isset($_POST['mmgr_portal_nav_' . $pg])) {
+                update_option('mmgr_portal_nav_' . $pg, sanitize_text_field($_POST['mmgr_portal_nav_' . $pg]));
+            }
+            if ($defaults['title'] !== null && isset($_POST['mmgr_portal_title_' . $pg])) {
+                update_option('mmgr_portal_title_' . $pg, sanitize_text_field($_POST['mmgr_portal_title_' . $pg]));
+            }
         }
         
         echo '<div class="notice notice-success"><p>✓ Settings saved successfully!</p></div>';
@@ -411,6 +433,50 @@ function mmgr_settings_admin() {
                         <p class="description">Message shown on the member dashboard when membership fees are outstanding.</p>
                     </td>
                 </tr>
+            </table>
+
+            <h2>🏷️ Portal Page Titles &amp; Icons</h2>
+            <p class="description" style="margin-bottom:12px;">Customise the icon/emoji and label shown in the navigation bar and the heading displayed at the top of each portal page. Use <code>{first_name}</code> in the Dashboard page title to insert the member's first name.</p>
+            <table class="form-table">
+                <tr>
+                    <th style="width:140px;">Page</th>
+                    <th>Nav Label <span style="font-weight:normal;color:#666;">(navigation bar)</span></th>
+                    <th>Page Title <span style="font-weight:normal;color:#666;">(h1 heading)</span></th>
+                </tr>
+                <?php
+                $portal_page_labels = [
+                    'dashboard' => 'Dashboard',
+                    'activity'  => 'Activity',
+                    'messages'  => 'Messages',
+                    'profile'   => 'Profile',
+                    'community' => 'Community',
+                    'directory' => 'Directory',
+                    'events'    => 'Events',
+                    'coc'       => 'Code of Conduct',
+                    'help'      => 'Help',
+                    'logout'    => 'Logout',
+                ];
+                foreach ($portal_page_defaults as $pg => $defaults):
+                    $nav_val   = get_option('mmgr_portal_nav_' . $pg, $defaults['nav']);
+                    $title_val = $defaults['title'] !== null ? get_option('mmgr_portal_title_' . $pg, $defaults['title']) : null;
+                ?>
+                <tr>
+                    <th><?php echo esc_html($portal_page_labels[$pg]); ?></th>
+                    <td>
+                        <input name="mmgr_portal_nav_<?php echo esc_attr($pg); ?>" class="regular-text" value="<?php echo esc_attr($nav_val); ?>">
+                    </td>
+                    <td>
+                        <?php if ($title_val !== null): ?>
+                            <input name="mmgr_portal_title_<?php echo esc_attr($pg); ?>" class="regular-text" value="<?php echo esc_attr($title_val); ?>">
+                            <?php if ($pg === 'dashboard'): ?>
+                                <p class="description">Use <code>{first_name}</code> to include the member's first name.</p>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <em style="color:#999;">— no page heading —</em>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
             </table>
             
             <h2>📧 Welcome Email Settings</h2>
