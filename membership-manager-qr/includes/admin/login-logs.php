@@ -54,6 +54,7 @@ if (isset($_GET['export_login_logs_csv']) && current_user_can('manage_options'))
 // Filters
 $filter_success = isset($_GET['filter_success']) ? $_GET['filter_success'] : '';
 $filter_email   = isset($_GET['filter_email'])   ? sanitize_text_field($_GET['filter_email']) : '';
+$filter_type    = isset($_GET['filter_type'])    ? sanitize_text_field($_GET['filter_type'])  : '';
 
 // Pagination
 $per_page     = 50;
@@ -71,6 +72,11 @@ if ($filter_success !== '') {
 if ($filter_email !== '') {
     $where[]   = 'l.login_email LIKE %s';
     $prepare[] = '%' . $wpdb->esc_like($filter_email) . '%';
+}
+if ($filter_type === 'registration') {
+    $where[] = "l.failure_reason = 'new_registration'";
+} elseif ($filter_type === 'login') {
+    $where[] = "(l.failure_reason IS NULL OR l.failure_reason != 'new_registration')";
 }
 
 $where_sql = implode(' AND ', $where);
@@ -96,8 +102,9 @@ $logs = empty($prepare)
     : $wpdb->get_results($wpdb->prepare($logs_sql, $query_args), ARRAY_A);
 
 // Stats
-$total_success = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE success = 1");
-$total_failed  = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE success = 0");
+$total_registrations = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE failure_reason = 'new_registration'");
+$total_success  = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE success = 1 AND (failure_reason IS NULL OR failure_reason != 'new_registration')");
+$total_failed   = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE success = 0");
 $total_mismatch = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE email_match = 0");
 
 $base_url     = admin_url('admin.php?page=membership_login_logs');
@@ -110,10 +117,13 @@ if ($filter_success !== '') {
 if ($filter_email !== '') {
     $paged_base_url = add_query_arg('filter_email', $filter_email, $paged_base_url);
 }
+if ($filter_type !== '') {
+    $paged_base_url = add_query_arg('filter_type', $filter_type, $paged_base_url);
+}
 ?>
 
 <div class="wrap">
-    <h1 class="wp-heading-inline">🔐 Login Logs</h1>
+    <h1 class="wp-heading-inline">🔐 Login &amp; Registration Logs</h1>
     <a href="<?php echo wp_nonce_url($base_url . '&export_login_logs_csv=1', 'export_login_logs_csv'); ?>"
        class="page-title-action">📥 Export CSV</a>
     <a href="<?php echo wp_nonce_url($base_url . '&clear_login_logs=1', 'clear_login_logs'); ?>"
@@ -128,7 +138,7 @@ if ($filter_email !== '') {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;margin:20px 0;">
         <div style="background:#0073aa;color:white;padding:20px;border-radius:6px;">
             <h3 style="margin:0;font-size:28px;"><?php echo number_format($total_logs); ?></h3>
-            <p style="margin:5px 0 0;">Total Attempts</p>
+            <p style="margin:5px 0 0;">Total Records</p>
         </div>
         <div style="background:#00a32a;color:white;padding:20px;border-radius:6px;">
             <h3 style="margin:0;font-size:28px;"><?php echo number_format($total_success); ?></h3>
@@ -137,6 +147,10 @@ if ($filter_email !== '') {
         <div style="background:#d63638;color:white;padding:20px;border-radius:6px;">
             <h3 style="margin:0;font-size:28px;"><?php echo number_format($total_failed); ?></h3>
             <p style="margin:5px 0 0;">Failed Attempts</p>
+        </div>
+        <div style="background:#8e44ad;color:white;padding:20px;border-radius:6px;">
+            <h3 style="margin:0;font-size:28px;"><?php echo number_format($total_registrations); ?></h3>
+            <p style="margin:5px 0 0;">New Registrations</p>
         </div>
         <div style="background:#e67e22;color:white;padding:20px;border-radius:6px;">
             <h3 style="margin:0;font-size:28px;"><?php echo number_format($total_mismatch); ?></h3>
@@ -154,8 +168,13 @@ if ($filter_email !== '') {
             <option value="1" <?php selected($filter_success, '1'); ?>>Successful</option>
             <option value="0" <?php selected($filter_success, '0'); ?>>Failed</option>
         </select>
+        <select name="filter_type">
+            <option value="">All Types</option>
+            <option value="login" <?php selected($filter_type, 'login'); ?>>Logins Only</option>
+            <option value="registration" <?php selected($filter_type, 'registration'); ?>>Registrations Only</option>
+        </select>
         <button type="submit" class="button">Filter</button>
-        <?php if ($filter_success !== '' || $filter_email !== ''): ?>
+        <?php if ($filter_success !== '' || $filter_email !== '' || $filter_type !== ''): ?>
             <a href="<?php echo esc_url($base_url); ?>" class="button">Clear Filters</a>
         <?php endif; ?>
     </form>
@@ -240,7 +259,9 @@ if ($filter_email !== '') {
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?php if ($is_success): ?>
+                        <?php if ($log['failure_reason'] === 'new_registration'): ?>
+                            <span style="background:#8e44ad;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;">✨ Registered</span>
+                        <?php elseif ($is_success): ?>
                             <span style="background:#00a32a;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;">✔ Success</span>
                         <?php else: ?>
                             <span style="background:#d63638;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;">✘ Failed</span>
@@ -251,6 +272,7 @@ if ($filter_email !== '') {
                         $reason_labels = array(
                             'no_password'        => 'No password set',
                             'invalid_credentials'=> 'Wrong email/password',
+                            'new_registration'   => 'New account created',
                         );
                         $r = $log['failure_reason'] ?? '';
                         echo $r ? esc_html($reason_labels[$r] ?? $r) : '<em style="color:#999;">—</em>';
