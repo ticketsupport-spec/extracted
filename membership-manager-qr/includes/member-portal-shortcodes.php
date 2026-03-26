@@ -102,16 +102,16 @@ function mmgr_get_portal_navigation($active_page = '', $member = null) {
         </button>
         
         <div id="mmgr-nav-items" class="mmgr-nav-items-container">
-            <a href="<?php echo esc_url($dashboard_url); ?>" class="<?php echo $active_page === 'dashboard' ? 'active' : ''; ?>">🏠 Dashboard</a>
-            <a href="<?php echo esc_url($activity_url); ?>" class="<?php echo $active_page === 'activity' ? 'active' : ''; ?>">📊 Activity<?php if ($pending_fr_count > 0): ?> <span class="mmgr-nav-unread-badge" style="display:inline-block;"><?php echo $pending_fr_count; ?></span><?php endif; ?></a>
-            <a href="<?php echo esc_url($messages_url); ?>" class="<?php echo $active_page === 'messages' ? 'active' : ''; ?>">💬 Messages <span id="mmgr-messages-unread-badge" class="mmgr-nav-unread-badge" style="display:none;"></span></a>
-            <a href="<?php echo esc_url($profile_url); ?>" class="<?php echo $active_page === 'profile' ? 'active' : ''; ?>">👤 Profile</a>
-            <a href="<?php echo esc_url($community_url); ?>" class="<?php echo $active_page === 'community' ? 'active' : ''; ?>">👥 Community</a>
-			<a href="<?php echo esc_url($directory_url); ?>" class="<?php echo $active_page === 'directory' ? 'active' : ''; ?>">📋 Directory</a>
-			<a href="<?php echo esc_url($events_url); ?>" class="<?php echo $active_page === 'events' ? 'active' : ''; ?>">📅 Events</a>
-			<a href="<?php echo esc_url($coc_url); ?>" class="<?php echo $active_page === 'coc' ? 'active' : ''; ?>">📜 Code of Conduct</a>
-			<a href="<?php echo esc_url($help_url); ?>" class="<?php echo $active_page === 'help' ? 'active' : ''; ?>">❓ Help</a>
-			<a href="<?php echo esc_url($logout_url); ?>" class="logout">🚪 Logout</a>
+            <a href="<?php echo esc_url($dashboard_url); ?>" class="<?php echo $active_page === 'dashboard' ? 'active' : ''; ?>"><?php echo esc_html(get_option('mmgr_portal_nav_dashboard', '🏠 Dashboard')); ?></a>
+            <a href="<?php echo esc_url($activity_url); ?>" class="<?php echo $active_page === 'activity' ? 'active' : ''; ?>"><?php echo esc_html(get_option('mmgr_portal_nav_activity', '📊 Activity')); ?><?php if ($pending_fr_count > 0): ?> <span class="mmgr-nav-unread-badge" style="display:inline-block;"><?php echo $pending_fr_count; ?></span><?php endif; ?></a>
+            <a href="<?php echo esc_url($messages_url); ?>" class="<?php echo $active_page === 'messages' ? 'active' : ''; ?>"><?php echo esc_html(get_option('mmgr_portal_nav_messages', '💬 Messages')); ?> <span id="mmgr-messages-unread-badge" class="mmgr-nav-unread-badge" style="display:none;"></span></a>
+            <a href="<?php echo esc_url($profile_url); ?>" class="<?php echo $active_page === 'profile' ? 'active' : ''; ?>"><?php echo esc_html(get_option('mmgr_portal_nav_profile', '👤 Profile')); ?></a>
+            <a href="<?php echo esc_url($community_url); ?>" class="<?php echo $active_page === 'community' ? 'active' : ''; ?>"><?php echo esc_html(get_option('mmgr_portal_nav_community', '👥 Community')); ?></a>
+			<a href="<?php echo esc_url($directory_url); ?>" class="<?php echo $active_page === 'directory' ? 'active' : ''; ?>"><?php echo esc_html(get_option('mmgr_portal_nav_directory', '📋 Directory')); ?></a>
+			<a href="<?php echo esc_url($events_url); ?>" class="<?php echo $active_page === 'events' ? 'active' : ''; ?>"><?php echo esc_html(get_option('mmgr_portal_nav_events', '📅 Events')); ?></a>
+			<a href="<?php echo esc_url($coc_url); ?>" class="<?php echo $active_page === 'coc' ? 'active' : ''; ?>"><?php echo esc_html(get_option('mmgr_portal_nav_coc', '📜 Code of Conduct')); ?></a>
+			<a href="<?php echo esc_url($help_url); ?>" class="<?php echo $active_page === 'help' ? 'active' : ''; ?>"><?php echo esc_html(get_option('mmgr_portal_nav_help', '❓ Help')); ?></a>
+			<a href="<?php echo esc_url($logout_url); ?>" class="logout"><?php echo esc_html(get_option('mmgr_portal_nav_logout', '🚪 Logout')); ?></a>
         </div>
     </div>
     <?php
@@ -444,7 +444,7 @@ add_shortcode('mmgr_member_events', function() {
         <?php echo mmgr_get_portal_navigation('events', $member); ?>
 
         <div class="mmgr-portal-titlecc">
-            <h1>📅 Upcoming Events</h1>
+            <h1><?php echo esc_html(get_option('mmgr_portal_title_events', '📅 Upcoming Events')); ?></h1>
         </div>
 
         <?php if (empty($events)): ?>
@@ -922,7 +922,7 @@ add_shortcode('mmgr_member_dashboard', function() {
         
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
-            <h1>Welcome back, <?php echo esc_html($member['first_name']); ?>! 👋</h1>
+            <h1><?php echo esc_html(str_replace('{first_name}', $member['first_name'], get_option('mmgr_portal_title_dashboard', 'Welcome back, {first_name}! 👋'))); ?></h1>
             <?php
             $msgs_url     = esc_url(add_query_arg('usercod', $member['member_code'], home_url('/member-messages/')));
             $dir_url      = esc_url(add_query_arg('usercod', $member['member_code'], home_url('/members-directory/')));
@@ -1190,7 +1190,7 @@ add_shortcode('mmgr_member_activity', function() {
         
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
-            <h1>Activity 📊</h1>
+            <h1><?php echo esc_html(get_option('mmgr_portal_title_activity', 'Activity 📊')); ?></h1>
         </div>
         
         <!-- Main Grid - Responsive -->
@@ -1800,7 +1800,7 @@ add_shortcode('mmgr_member_profile', function() {
         
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
-            <h1>Your Profile 👤</h1>
+            <h1><?php echo esc_html(get_option('mmgr_portal_title_profile', 'Your Profile 👤')); ?></h1>
         </div>
         
         <?php if ($success): ?>
@@ -2426,7 +2426,7 @@ add_shortcode('mmgr_member_community', function() {
         
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
-            <h1>Community Forum 💬</h1>
+            <h1><?php echo esc_html(get_option('mmgr_portal_title_community', 'Community Forum 💬')); ?></h1>
         </div>
         
         <?php if ($success): ?>
@@ -3198,7 +3198,7 @@ add_shortcode('mmgr_member_messages', function() {
 <?php echo mmgr_get_portal_navigation('messages', $member); ?>
 
          <div class="mmgr-portal-titlecc">
-            <h1>💬 Messages</h1>
+            <h1><?php echo esc_html(get_option('mmgr_portal_title_messages', '💬 Messages')); ?></h1>
         </div>      
         
         <?php if ($success): ?>
@@ -4329,7 +4329,7 @@ add_shortcode('mmgr_members_directory', function() {
         
         <!-- Welcome -->
         <div class="mmgr-portal-titlecc">
-            <h1>Members Directory 👥</h1>
+            <h1><?php echo esc_html(get_option('mmgr_portal_title_directory', 'Members Directory 👥')); ?></h1>
         </div>
 
         <!-- Who's Online Today -->
@@ -6105,7 +6105,7 @@ add_shortcode('mmgr_member_help', function() {
         <!-- Navigation -->
         <?php echo mmgr_get_portal_navigation('help', $current_member); ?>
         <div class="mmgr-portal-titlecc">
-            <h1>❓ Help Center</h1>
+            <h1><?php echo esc_html(get_option('mmgr_portal_title_help', '❓ Help Center')); ?></h1>
             <p>Find answers to common questions. Use the search box below or browse by category.</p>
         </div>
         <div class="mmgr-portal-card">
