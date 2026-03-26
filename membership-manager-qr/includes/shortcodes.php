@@ -73,16 +73,21 @@ add_shortcode('membership_registration', function($atts){
                 // (prevents MySQL strict mode errors with DATE/DATETIME columns)
                 $data = array_filter($data, function($v) { return $v !== null; });
                 $wpdb->insert($tbl, $data);
+                $new_member_id = $wpdb->insert_id;
+
+                // Log the new account registration in the login audit log.
+                // success=1 marks the event as positive; failure_reason='new_registration'
+                // distinguishes it from actual logins in the admin display and stats.
+                mmgr_log_login_attempt($email, $new_member_id, $email, true, 'new_registration');
 				
-                
 				// Generate QR code file for email attachment
 				mmgr_generate_qr_file($code);
 				               
                 // Send welcome email
-                mmgr_send_welcome_email($wpdb->insert_id);
+                mmgr_send_welcome_email($new_member_id);
                 
 				// Send welcome private message
-				mmgr_send_welcome_pm($wpdb->insert_id);
+				mmgr_send_welcome_pm($new_member_id);
 				
 				
                 echo '<div class="mmgr-success">Registration successful! Check your email for login details.</div>';
