@@ -2207,3 +2207,15 @@ add_action('wp_footer', function() {
     </script>
     <?php
 });
+
+// Output admin-defined custom CSS after all built-in styles so it takes priority.
+add_action('wp_head', function() {
+    $custom_css = get_option('mmgr_custom_css', '');
+    if (!empty(trim($custom_css))) {
+        // Defensively strip any closing style tags to prevent style block injection.
+        $safe_css = str_ireplace('</style>', '', $custom_css);
+        echo '<style id="mmgr-custom-css">' . "\n";
+        echo $safe_css . "\n";
+        echo '</style>' . "\n";
+    }
+}, 20);
