@@ -233,6 +233,18 @@ add_action('admin_menu', function() {
         'mmgr_pages_overview'
     );
     
+	// Custom CSS
+	add_submenu_page(
+		'membership_manager',
+		'Custom CSS',
+		'Custom CSS',
+		'manage_options',
+		'membership_custom_css',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/custom-css.php';
+		}
+	);
+
     add_submenu_page(
         'membership_manager',
         'Settings',
