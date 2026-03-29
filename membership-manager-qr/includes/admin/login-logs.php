@@ -34,6 +34,22 @@ if (isset($_GET['export_login_logs_csv']) && current_user_can('manage_options'))
     $out = fopen('php://output', 'w');
     fputcsv($out, array('ID', 'Date/Time', 'Login Email', 'Member Name', 'Member Code', 'Profile Email', 'Email Match', 'Result', 'Failure Reason', 'IP Address'));
     foreach ($all_logs as $row) {
+        $csv_reason_labels = array(
+            'no_password'        => 'No password set',
+            'invalid_credentials'=> 'Wrong email/password',
+            'new_registration'   => 'New account created',
+            'portal_visit'       => 'Dashboard visit',
+        );
+        $r = $row['failure_reason'] ?? '';
+        if ($row['failure_reason'] === 'new_registration') {
+            $result_label = 'Registered';
+        } elseif ($row['failure_reason'] === 'portal_visit') {
+            $result_label = 'Visit';
+        } elseif ($row['success']) {
+            $result_label = 'Success';
+        } else {
+            $result_label = 'Failed';
+        }
         fputcsv($out, array(
             $row['id'],
             $row['logged_at'],
@@ -42,8 +58,8 @@ if (isset($_GET['export_login_logs_csv']) && current_user_can('manage_options'))
             $row['member_code'] ?: 'N/A',
             $row['member_email'] ?: 'N/A',
             $row['email_match'] === null ? 'N/A' : ($row['email_match'] ? 'Yes' : 'No'),
-            $row['success'] ? 'Success' : 'Failed',
-            $row['failure_reason'] ?: '',
+            $result_label,
+            $r ? ($csv_reason_labels[$r] ?? $r) : '',
             $row['ip_address'] ?: '',
         ));
     }
@@ -76,7 +92,9 @@ if ($filter_email !== '') {
 if ($filter_type === 'registration') {
     $where[] = "l.failure_reason = 'new_registration'";
 } elseif ($filter_type === 'login') {
-    $where[] = "(l.failure_reason IS NULL OR l.failure_reason != 'new_registration')";
+    $where[] = "(l.failure_reason IS NULL OR (l.failure_reason != 'new_registration' AND l.failure_reason != 'portal_visit'))";
+} elseif ($filter_type === 'visit') {
+    $where[] = "l.failure_reason = 'portal_visit'";
 }
 
 $where_sql = implode(' AND ', $where);
@@ -103,7 +121,8 @@ $logs = empty($prepare)
 
 // Stats
 $total_registrations = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE failure_reason = 'new_registration'");
-$total_success  = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE success = 1 AND (failure_reason IS NULL OR failure_reason != 'new_registration')");
+$total_visits        = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE failure_reason = 'portal_visit'");
+$total_success  = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE success = 1 AND (failure_reason IS NULL OR (failure_reason != 'new_registration' AND failure_reason != 'portal_visit'))");
 $total_failed   = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE success = 0");
 $total_mismatch = (int) $wpdb->get_var("SELECT COUNT(*) FROM `$logs_tbl` WHERE email_match = 0");
 
@@ -152,6 +171,10 @@ if ($filter_type !== '') {
             <h3 style="margin:0;font-size:28px;"><?php echo number_format($total_registrations); ?></h3>
             <p style="margin:5px 0 0;">New Registrations</p>
         </div>
+        <div style="background:#1d6fa4;color:white;padding:20px;border-radius:6px;">
+            <h3 style="margin:0;font-size:28px;"><?php echo number_format($total_visits); ?></h3>
+            <p style="margin:5px 0 0;">Portal Visits</p>
+        </div>
         <div style="background:#e67e22;color:white;padding:20px;border-radius:6px;">
             <h3 style="margin:0;font-size:28px;"><?php echo number_format($total_mismatch); ?></h3>
             <p style="margin:5px 0 0;">Email Mismatches</p>
@@ -172,6 +195,7 @@ if ($filter_type !== '') {
             <option value="">All Types</option>
             <option value="login" <?php selected($filter_type, 'login'); ?>>Logins Only</option>
             <option value="registration" <?php selected($filter_type, 'registration'); ?>>Registrations Only</option>
+            <option value="visit" <?php selected($filter_type, 'visit'); ?>>Visits Only</option>
         </select>
         <button type="submit" class="button">Filter</button>
         <?php if ($filter_success !== '' || $filter_email !== '' || $filter_type !== ''): ?>
@@ -261,6 +285,8 @@ if ($filter_type !== '') {
                     <td>
                         <?php if ($log['failure_reason'] === 'new_registration'): ?>
                             <span style="background:#8e44ad;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;">✨ Registered</span>
+                        <?php elseif ($log['failure_reason'] === 'portal_visit'): ?>
+                            <span style="background:#1d6fa4;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;">👁 Visit</span>
                         <?php elseif ($is_success): ?>
                             <span style="background:#00a32a;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;">✔ Success</span>
                         <?php else: ?>
@@ -273,6 +299,7 @@ if ($filter_type !== '') {
                             'no_password'        => 'No password set',
                             'invalid_credentials'=> 'Wrong email/password',
                             'new_registration'   => 'New account created',
+                            'portal_visit'       => 'Dashboard visit',
                         );
                         $r = $log['failure_reason'] ?? '';
                         echo $r ? esc_html($reason_labels[$r] ?? $r) : '<em style="color:#999;">—</em>';
