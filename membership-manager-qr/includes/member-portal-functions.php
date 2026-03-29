@@ -372,6 +372,48 @@ if (!function_exists('mmgr_event_attendee_display_name')) {
 }
 
 /**
+ * Log a portal visit to the audit log (once per day per member).
+ */
+if (!function_exists('mmgr_log_portal_visit')) {
+    function mmgr_log_portal_visit($member) {
+        global $wpdb;
+        $tbl = $wpdb->prefix . 'mmgr_login_logs';
+
+        // Guard: table may not exist on very first request before init runs.
+        if ($wpdb->get_var("SHOW TABLES LIKE '$tbl'") !== $tbl) {
+            return;
+        }
+
+        // Only log once per day per member to avoid flooding the logs.
+        $today       = current_time('Y-m-d');
+        $day_start   = $today . ' 00:00:00';
+        $day_end     = $today . ' 23:59:59';
+        $already_logged = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM `$tbl` WHERE member_id = %d AND failure_reason = 'portal_visit' AND logged_at >= %s AND logged_at <= %s LIMIT 1",
+            $member['id'],
+            $day_start,
+            $day_end
+        ));
+
+        if ($already_logged) {
+            return;
+        }
+
+        $wpdb->insert($tbl, array(
+            'login_email'    => $member['email'],
+            'member_id'      => $member['id'],
+            'member_email'   => $member['email'],
+            'email_match'    => 1,
+            'success'        => 1,
+            'failure_reason' => 'portal_visit',
+            'ip_address'     => isset($_SERVER['REMOTE_ADDR']) && filter_var($_SERVER['REMOTE_ADDR'], FILTER_VALIDATE_IP) ? $_SERVER['REMOTE_ADDR'] : '',
+            'user_agent'     => isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field(substr($_SERVER['HTTP_USER_AGENT'], 0, 255)) : '',
+            'logged_at'      => current_time('mysql'),
+        ));
+    }
+}
+
+/**
  * Log a login attempt to the audit log.
  */
 if (!function_exists('mmgr_log_login_attempt')) {

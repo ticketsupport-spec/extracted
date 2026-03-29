@@ -916,6 +916,11 @@ add_shortcode('mmgr_member_dashboard', function() {
         $is_expired = $today > $expire_date;
     }
     
+    // Log portal visit (once per day for authenticated members, not admin view-as-member).
+    if (!($admin_mode ?? false)) {
+        mmgr_log_portal_visit($member);
+    }
+
     ob_start();
     ?>
     <div class="mmgr-portal-container">
