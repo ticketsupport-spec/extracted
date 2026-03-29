@@ -732,16 +732,26 @@ add_shortcode('mmgr_member_login', function() {
         } else {
             $email = sanitize_email($_POST['email']);
             $password = $_POST['password'];
-            
+
+            // Pre-fetch member info so we can log the attempt regardless of outcome.
+            global $wpdb;
+            $member_for_log = $wpdb->get_row($wpdb->prepare(
+                "SELECT id, email FROM {$wpdb->prefix}memberships WHERE email = %s",
+                $email
+            ), ARRAY_A);
+
             $result = mmgr_verify_member_login($email, $password);
             
             if (is_array($result) && isset($result['error']) && $result['error'] === 'no_password') {
+                mmgr_log_login_attempt($email, $member_for_log ? $member_for_log['id'] : null, $member_for_log ? $member_for_log['email'] : null, false, 'no_password');
                 $error = 'You haven\'t set up your password yet. Please check your email for the setup link.';
             } elseif ($result) {
+                mmgr_log_login_attempt($email, $result['id'], $result['email'], true);
                 mmgr_create_member_session($result['id'], $email);
                 wp_redirect(add_query_arg('usercod', $result['member_code'], home_url('/member-dashboard/')));
                 exit;
             } else {
+                mmgr_log_login_attempt($email, $member_for_log ? $member_for_log['id'] : null, $member_for_log ? $member_for_log['email'] : null, false, 'invalid_credentials');
                 $error = 'Invalid email or password.';
             }
         }
