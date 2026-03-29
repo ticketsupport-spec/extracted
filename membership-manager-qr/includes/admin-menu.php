@@ -256,6 +256,16 @@ add_action('admin_menu', function() {
             mmgr_settings_admin();
         }
     );
+
+    // Admin PWA / App download page
+    add_submenu_page(
+        'membership_manager',
+        'Admin App (PWA)',
+        '📱 Admin App',
+        'manage_options',
+        'membership_admin_pwa',
+        'mmgr_admin_pwa_page'
+    );
 });
 
 /**

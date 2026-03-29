@@ -73,6 +73,21 @@ function mmgr_send_message($from_member_id, $to_member_id, $message, $image_url 
                 home_url('/member-messages/?chat=' . intval($from_member_id))
             );
         }
+
+        // Send push notification to admin devices when a member messages admin (to_member_id = 0)
+        if ($to_member_id === 0 && $from_member_id !== 0 && function_exists('mmgr_admin_pwa_send_push_to_admins')) {
+            $sender = $wpdb->get_row($wpdb->prepare(
+                "SELECT name, community_alias FROM {$wpdb->prefix}memberships WHERE id = %d",
+                $from_member_id
+            ), ARRAY_A);
+            $sender_name = $sender ? mmgr_get_display_name($sender) : 'Member';
+            $body = !empty($message) ? wp_trim_words($message, 10) : '[Image attached]';
+            mmgr_admin_pwa_send_push_to_admins(
+                'New message from ' . $sender_name,
+                $body,
+                admin_url('admin.php?page=membership_messages&member=' . intval($from_member_id))
+            );
+        }
         return array('success' => true, 'message' => 'Message sent!');
     }
 
