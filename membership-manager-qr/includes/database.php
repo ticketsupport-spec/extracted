@@ -314,6 +314,21 @@ function mmgr_create_tables() {
         INDEX idx_member_id (member_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    // ===================================
+    // ADMIN PWA PUSH SUBSCRIPTIONS TABLE
+    // ===================================
+    $admin_push_table = $wpdb->prefix . 'mmgr_admin_push_subscriptions';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$admin_push_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        wp_user_id BIGINT NOT NULL,
+        endpoint VARCHAR(700) NOT NULL,
+        p256dh VARCHAR(255) NOT NULL,
+        auth VARCHAR(100) NOT NULL,
+        created_at DATETIME NOT NULL,
+        UNIQUE KEY unique_endpoint (endpoint(700)),
+        INDEX idx_wp_user_id (wp_user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     // ===========================
     // COMMUNITY AWARDS TABLE
     // ===========================
