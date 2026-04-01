@@ -95,6 +95,12 @@ function mmgr_create_plugin_pages() {
             'slug' => 'member-help',
             'content' => '[mmgr_member_help]',
             'option' => 'mmgr_page_help'
+        ),
+        array(
+            'title' => 'Staff Check-In',
+            'slug' => 'staff-checkin',
+            'content' => '[mmgr_staff_checkin]',
+            'option' => 'mmgr_page_staff_checkin'
         )
     );
     
