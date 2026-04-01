@@ -20,20 +20,20 @@ add_shortcode('mmgr_staff_checkin', function() {
 
         <!-- Scanner mode switcher -->
         <div class="mmgr-staff-mode-switch" style="display:flex !important;gap:10px !important;margin-bottom:20px !important;flex-wrap:wrap !important;">
-            <button onclick="staffSwitchMode('hw')" id="staff-btn-hw" style="<?php echo esc_attr($btn_active); ?>">📱 Hardware Scanner</button>
-            <button onclick="staffSwitchMode('camera')" id="staff-btn-camera" style="<?php echo esc_attr($btn_base); ?>">📷 Camera Scanner</button>
+            <button onclick="staffSwitchMode('hw')" id="staff-btn-hw" style="<?php echo esc_attr($btn_base); ?>">📱 Hardware Scanner</button>
+            <button onclick="staffSwitchMode('camera')" id="staff-btn-camera" style="<?php echo esc_attr($btn_active); ?>">📷 Camera Scanner</button>
             <button onclick="staffSwitchMode('manual')" id="staff-btn-manual" style="<?php echo esc_attr($btn_base); ?>">⌨️ Manual Entry</button>
         </div>
 
         <!-- Hardware scanner input -->
-        <div id="staff-mode-hw" class="mmgr-staff-mode" style="display:block !important;">
-            <input type="text" id="staff-hw-input" placeholder="Scan staff QR code here..." autofocus
+        <div id="staff-mode-hw" class="mmgr-staff-mode" style="display:none !important;">
+            <input type="text" id="staff-hw-input" placeholder="Scan staff QR code here..."
                    style="width:100% !important;padding:15px !important;font-size:18px !important;border:2px solid #0073aa !important;border-radius:6px !important;box-sizing:border-box !important;">
             <p style="color:#666 !important;margin-top:10px !important;font-size:14px !important;">Focus this field and scan a QR code with your scanner</p>
         </div>
 
         <!-- Camera scanner -->
-        <div id="staff-mode-camera" class="mmgr-staff-mode" style="display:none !important;">
+        <div id="staff-mode-camera" class="mmgr-staff-mode" style="display:block !important;">
             <div id="staff-camera-view" style="max-width:500px !important;margin:0 auto 12px !important;"></div>
             <button onclick="staffStartCamera()" id="staff-start-camera-btn"
                     style="background:linear-gradient(135deg,#0073aa 0%,#005a87 100%) !important;color:#fff !important;padding:10px 20px !important;border:none !important;border-radius:20px !important;font-size:14px !important;font-weight:600 !important;cursor:pointer !important;">Start Camera</button>
@@ -141,13 +141,13 @@ add_shortcode('mmgr_staff_checkin', function() {
             html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">';
 
             // Clock In
-            html += '<button onclick="staffClockIn(' + staff.id + ',' + JSON.stringify(code) + ')" ' +
+            html += '<button onclick="staffClockIn(' + staff.id + ')" ' +
                 (isClockedIn ? 'disabled style="opacity:0.4;cursor:not-allowed;' : 'style="') +
                 'background:linear-gradient(135deg,#28a745,#1e7e34);color:#fff;padding:16px;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;width:100%;">' +
                 '⏱️ CLOCK IN</button>';
 
             // Clock Out
-            html += '<button onclick="staffClockOut(' + staff.id + ',' + JSON.stringify(code) + ')" ' +
+            html += '<button onclick="staffClockOut(' + staff.id + ')" ' +
                 (!isClockedIn ? 'disabled style="opacity:0.4;cursor:not-allowed;' : 'style="') +
                 'background:linear-gradient(135deg,#dc3545,#c82333);color:#fff;padding:16px;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;width:100%;">' +
                 '🛑 CLOCK OUT</button>';
@@ -155,7 +155,7 @@ add_shortcode('mmgr_staff_checkin', function() {
             html += '</div>';
 
             // Cleaning Log button
-            html += '<button onclick="staffShowCleaningLog(' + staff.id + ',' + JSON.stringify(code) + ')" ' +
+            html += '<button onclick="staffShowCleaningLog(' + staff.id + ')" ' +
                 'style="background:linear-gradient(135deg,#6f42c1,#5a32a3);color:#fff;padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;width:100%;margin-bottom:12px;">🧹 CLEANING LOG</button>';
 
             // Cleaning room list (hidden initially)
@@ -172,7 +172,7 @@ add_shortcode('mmgr_staff_checkin', function() {
         }
 
         // ── Clock In ─────────────────────────────────────────────────────────
-        window.staffClockIn = function(staffId, code) {
+        window.staffClockIn = function(staffId) {
             const fd = new FormData();
             fd.append('action', 'mmgr_staff_clock_in');
             fd.append('staff_id', staffId);
@@ -189,7 +189,7 @@ add_shortcode('mmgr_staff_checkin', function() {
         };
 
         // ── Clock Out ────────────────────────────────────────────────────────
-        window.staffClockOut = function(staffId, code) {
+        window.staffClockOut = function(staffId) {
             const fd = new FormData();
             fd.append('action', 'mmgr_staff_clock_out');
             fd.append('staff_id', staffId);
@@ -206,7 +206,7 @@ add_shortcode('mmgr_staff_checkin', function() {
         };
 
         // ── Cleaning Log ─────────────────────────────────────────────────────
-        window.staffShowCleaningLog = function(staffId, code) {
+        window.staffShowCleaningLog = function(staffId) {
             const container = document.getElementById('staff-cleaning-rooms-' + staffId);
             if (container.style.display !== 'none') {
                 container.style.display = 'none';
@@ -270,7 +270,7 @@ add_shortcode('mmgr_staff_checkin', function() {
             // Return to scan screen after 2.5 seconds
             setTimeout(function() {
                 result.innerHTML = '';
-                staffSwitchMode('hw');
+                staffSwitchMode('camera');
             }, 2500);
         }
 
@@ -289,6 +289,9 @@ add_shortcode('mmgr_staff_checkin', function() {
             d.textContent = String(str);
             return d.innerHTML;
         }
+
+        // Auto-start camera on page load since it is the default mode
+        staffStartCamera();
     })();
     </script>
     <?php
