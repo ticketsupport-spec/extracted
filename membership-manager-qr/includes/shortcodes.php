@@ -1064,6 +1064,7 @@ add_shortcode('mmgr_admin_quick_links', function($atts){
     $profile_url = get_permalink(get_option('mmgr_page_profile'));
     $community_url = get_permalink(get_option('mmgr_page_community'));
     $coc_url = get_permalink(get_option('mmgr_page_coc'));
+    $staff_checkin_url = get_permalink(get_option('mmgr_page_staff_checkin'));
     
     ob_start();
     ?>
@@ -1217,6 +1218,16 @@ add_shortcode('mmgr_admin_quick_links', function($atts){
                onmouseout="this.style.background='#34495e'">
                 📄 Plugin Pages
             </a>
+            
+            <?php if ($staff_checkin_url): ?>
+            <a href="<?php echo esc_url($staff_checkin_url); ?>" 
+               class="mmgr-quick-btn" 
+               style="display:block;background:#1e8449;color:white;text-decoration:none;padding:15px;border-radius:6px;text-align:center;font-weight:bold;transition:background 0.3s;"
+               onmouseover="this.style.background='#196f3d'"
+               onmouseout="this.style.background='#1e8449'">
+                🧑‍💼 Staff Check-In
+            </a>
+            <?php endif; ?>
             
         </div>
         
