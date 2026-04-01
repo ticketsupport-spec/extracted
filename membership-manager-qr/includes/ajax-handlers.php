@@ -854,11 +854,25 @@ function mmgr_handle_staff_get_rooms() {
     check_ajax_referer('mmgr_staff_get_rooms', 'nonce');
     global $wpdb;
 
-    $rooms_tbl = $wpdb->prefix . 'membership_rooms';
-    $rooms = $wpdb->get_results(
-        "SELECT id, room_name FROM `$rooms_tbl` WHERE active = 1 ORDER BY sort_order ASC, id ASC",
-        ARRAY_A
-    );
+    $rooms_tbl    = $wpdb->prefix . 'membership_rooms';
+    $cleaning_tbl = $wpdb->prefix . 'membership_cleaning_log';
+    $staff_tbl    = $wpdb->prefix . 'membership_staff';
+
+    $rooms = $wpdb->get_results("
+        SELECT r.id, r.room_name,
+               cl.cleaned_at AS last_cleaned_at,
+               s.name        AS last_cleaned_by
+        FROM `$rooms_tbl` r
+        LEFT JOIN (
+            SELECT room_id, MAX(id) AS last_id
+            FROM `$cleaning_tbl`
+            GROUP BY room_id
+        ) latest ON latest.room_id = r.id
+        LEFT JOIN `$cleaning_tbl` cl ON cl.id = latest.last_id
+        LEFT JOIN `$staff_tbl` s ON s.id = cl.staff_id
+        WHERE r.active = 1
+        ORDER BY r.sort_order ASC, r.id ASC
+    ", ARRAY_A);
 
     wp_send_json_success(array('rooms' => $rooms ?: array()));
 }

@@ -225,10 +225,28 @@ add_shortcode('mmgr_staff_checkin', function() {
                         let html = '<p style="font-weight:700;margin:0 0 10px;font-size:14px;color:#555;">Tap a room to log it as cleaned:</p>';
                         html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;">';
                         data.data.rooms.forEach(function(room) {
+                            let lastCleaned = '';
+                            if (room.last_cleaned_at) {
+                                const d = new Date(room.last_cleaned_at.replace(' ', 'T'));
+                                const now = new Date();
+                                const diffMs = now - d;
+                                const diffMins = Math.floor(diffMs / 60000);
+                                let ago;
+                                if (diffMins < 60) {
+                                    ago = diffMins <= 1 ? 'just now' : diffMins + 'm ago';
+                                } else if (diffMins < 1440) {
+                                    ago = Math.floor(diffMins / 60) + 'h ago';
+                                } else {
+                                    ago = Math.floor(diffMins / 1440) + 'd ago';
+                                }
+                                lastCleaned = '<span style="display:block;font-size:10px;font-weight:400;opacity:0.85;margin-top:4px;">🕒 ' + mmgrEsc(ago) + '<br>by ' + mmgrEsc(room.last_cleaned_by || 'Unknown') + '</span>';
+                            } else {
+                                lastCleaned = '<span style="display:block;font-size:10px;font-weight:400;opacity:0.75;margin-top:4px;">Never cleaned</span>';
+                            }
                             html += '<button onclick="staffLogCleaning(' + staffId + ',' + room.id + ',this)" ' +
                                 'data-room-id="' + room.id + '" ' +
                                 'style="background:#6f42c1;color:#fff;border:none;border-radius:6px;padding:12px 8px;font-size:13px;font-weight:600;cursor:pointer;text-align:center;">' +
-                                mmgrEsc(room.room_name) + '</button>';
+                                mmgrEsc(room.room_name) + lastCleaned + '</button>';
                         });
                         html += '</div>';
                         container.innerHTML = html;
