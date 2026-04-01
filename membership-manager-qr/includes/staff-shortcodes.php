@@ -51,6 +51,12 @@ add_shortcode('mmgr_staff_checkin', function() {
 
         <!-- Result area -->
         <div id="staff-scan-result" style="margin-top:30px !important;"></div>
+
+        <!-- Room cleaning status panel -->
+        <div id="mmgr-rooms-status-panel" style="margin-top:30px !important;">
+            <h3 style="font-size:1.1rem !important;font-weight:700 !important;color:#555 !important;margin:0 0 12px !important;border-bottom:2px solid #e0e0e0 !important;padding-bottom:8px !important;">🧹 Room Cleaning Status</h3>
+            <div id="mmgr-rooms-status-list"><p style="color:#999 !important;font-size:13px !important;">Loading…</p></div>
+        </div>
     </div>
 
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -310,6 +316,64 @@ add_shortcode('mmgr_staff_checkin', function() {
 
         // Auto-start camera on page load since it is the default mode
         staffStartCamera();
+
+        // ── Room cleaning status list ────────────────────────────────────────
+        const mmgrRoomsNonce = '<?php echo esc_js(wp_create_nonce('mmgr_staff_get_rooms')); ?>';
+
+        function mmgrLoadRoomsStatus() {
+            const fd = new FormData();
+            fd.append('action', 'mmgr_staff_get_rooms');
+            fd.append('nonce', mmgrRoomsNonce);
+            fetch(mmgrStaffAjax, { method:'POST', body:fd })
+                .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+                .then(data => {
+                    const list = document.getElementById('mmgr-rooms-status-list');
+                    if (!list) return;
+                    if (!data.success || !data.data.rooms || data.data.rooms.length === 0) {
+                        list.innerHTML = '<p style="color:#999;font-size:13px;">No rooms configured yet.</p>';
+                        return;
+                    }
+                    const now = new Date();
+                    let html = '<ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;">';
+                    data.data.rooms.forEach(function(room) {
+                        let bgColor = '#dc3545';
+                        let textColor = '#fff';
+                        let timeLabel = 'Never cleaned';
+                        if (room.last_cleaned_at) {
+                            const d = new Date(room.last_cleaned_at.replace(' ', 'T'));
+                            const diffMs = now - d;
+                            const diffMins = Math.floor(diffMs / 60000);
+                            if (diffMins < 120) {
+                                bgColor = '#28a745';
+                            }
+                            let ago;
+                            if (diffMins < 60) {
+                                ago = diffMins <= 1 ? 'just now' : diffMins + 'm ago';
+                            } else if (diffMins < 1440) {
+                                const hrs = Math.floor(diffMins / 60);
+                                const mins = diffMins % 60;
+                                ago = mins > 0 ? hrs + 'h ' + mins + 'm ago' : hrs + 'h ago';
+                            } else {
+                                ago = Math.floor(diffMins / 1440) + 'd ago';
+                            }
+                            timeLabel = ago + ' by ' + mmgrEsc(room.last_cleaned_by || 'Unknown');
+                        }
+                        html += '<li style="background:' + bgColor + ';color:' + textColor + ';border-radius:6px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;">' +
+                            '<span style="font-weight:700;">' + mmgrEsc(room.room_name) + '</span>' +
+                            '<span style="font-size:12px;opacity:0.9;">🕒 ' + timeLabel + '</span>' +
+                            '</li>';
+                    });
+                    html += '</ul>';
+                    list.innerHTML = html;
+                })
+                .catch(function() {
+                    const list = document.getElementById('mmgr-rooms-status-list');
+                    if (list) list.innerHTML = '<p style="color:#999;font-size:13px;">Could not load room status.</p>';
+                });
+        }
+
+        mmgrLoadRoomsStatus();
+        setInterval(mmgrLoadRoomsStatus, 60000);
     })();
     </script>
     <?php
