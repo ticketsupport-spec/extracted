@@ -279,6 +279,17 @@ add_action('admin_menu', function() {
 		}
 	);
 
+	add_submenu_page(
+		'membership_manager',
+		'Cleaning Log',
+		'Cleaning Log',
+		'manage_options',
+		'membership_cleaning_log',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/cleaning-log.php';
+		}
+	);
+
     add_submenu_page(
         'membership_manager',
         'Settings',
