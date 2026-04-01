@@ -89,11 +89,19 @@ add_shortcode('mmgr_staff_checkin', function() {
             if (v) { staffProcessScan(v); document.getElementById('staff-manual-input').value = ''; }
         };
 
+        // ── Helpers ─────────────────────────────────────────────────────────
+        function mmgrAbbrevName(name) {
+            if (!name) return name;
+            var parts = name.trim().split(/\s+/);
+            if (parts.length < 2) return name;
+            return parts[0] + ' ' + parts[parts.length - 1].charAt(0).toUpperCase() + '.';
+        }
+
         // ── Camera ──────────────────────────────────────────────────────────
         window.staffStartCamera = function() {
             staffQrCode = new Html5Qrcode('staff-camera-view');
             staffQrCode.start(
-                { facingMode: 'environment' },
+                { facingMode: 'user' },
                 { fps: 10, qrbox: 250 },
                 function(text) { staffProcessScan(text); staffQrCode.stop(); }
             );
@@ -245,7 +253,7 @@ add_shortcode('mmgr_staff_checkin', function() {
                                 } else {
                                     ago = Math.floor(diffMins / 1440) + 'd ago';
                                 }
-                                lastCleaned = '<span style="display:block;font-size:10px;font-weight:400;opacity:0.85;margin-top:4px;">🕒 ' + mmgrEsc(ago) + '<br>by ' + mmgrEsc(room.last_cleaned_by || 'Unknown') + '</span>';
+                                lastCleaned = '<span style="display:block;font-size:10px;font-weight:400;opacity:0.85;margin-top:4px;">🕒 ' + mmgrEsc(ago) + '<br>by ' + mmgrEsc(mmgrAbbrevName(room.last_cleaned_by || 'Unknown')) + '</span>';
                             } else {
                                 lastCleaned = '<span style="display:block;font-size:10px;font-weight:400;opacity:0.75;margin-top:4px;">Never cleaned</span>';
                             }
@@ -356,7 +364,7 @@ add_shortcode('mmgr_staff_checkin', function() {
                             } else {
                                 ago = Math.floor(diffMins / 1440) + 'd ago';
                             }
-                            timeLabel = ago + ' by ' + mmgrEsc(room.last_cleaned_by || 'Unknown');
+                            timeLabel = ago + ' by ' + mmgrEsc(mmgrAbbrevName(room.last_cleaned_by || 'Unknown'));
                         }
                         html += '<li style="background:' + bgColor + ';color:' + textColor + ';border-radius:6px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;">' +
                             '<span style="font-weight:700;">' + mmgrEsc(room.room_name) + '</span>' +
