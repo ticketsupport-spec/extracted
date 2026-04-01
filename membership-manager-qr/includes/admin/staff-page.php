@@ -114,6 +114,19 @@ if (isset($_GET['edit'])) {
                         <a href="<?php echo admin_url('admin.php?page=membership_staff'); ?>" class="button">Cancel</a>
                     <?php endif; ?>
                 </div>
+
+                <?php if ($editing): ?>
+                <div style="margin-top:20px;padding:14px;background:#f0f6fc;border:1px solid #c3d9f0;border-radius:4px;">
+                    <label style="display:block;font-weight:bold;margin-bottom:6px;color:#1d4d7a;">🔢 Manual Login Code (QR Code Number)</label>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <code style="font-size:18px;font-weight:700;letter-spacing:2px;color:#0073aa;background:#fff;border:1px solid #c3d9f0;padding:6px 14px;border-radius:4px;user-select:all;">
+                            <?php echo esc_html($editing['staff_code']); ?>
+                        </code>
+                        <button type="button" onclick="navigator.clipboard.writeText('<?php echo esc_js($editing['staff_code']); ?>').then(function(){var b=this;b.textContent='✅ Copied!';setTimeout(function(){b.textContent='📋 Copy';},2000);}.bind(this));" class="button button-small">📋 Copy</button>
+                    </div>
+                    <p style="margin:8px 0 0;font-size:12px;color:#555;">Staff can type this code manually on the check-in page if they don't have their QR badge.</p>
+                </div>
+                <?php endif; ?>
             </form>
         </div>
 
@@ -165,7 +178,7 @@ if (isset($_GET['edit'])) {
                                    style="color:#d63638;border-color:#d63638;"
                                    onclick="return confirm('Deactivate <?php echo esc_js($s['name']); ?>?');">Remove</a>
                                 <?php if ($qr_url): ?>
-                                    <button onclick="mmgrPrintStaffQR('<?php echo esc_js($s['name']); ?>','<?php echo esc_js($qr_url); ?>')"
+                                    <button onclick="mmgrPrintStaffQR('<?php echo esc_js($s['name']); ?>','<?php echo esc_js($qr_url); ?>','<?php echo esc_js($s['staff_code']); ?>')"
                                             class="button button-small" style="margin-top:4px;">🖨️ Print QR</button>
                                 <?php endif; ?>
                             </td>
@@ -201,9 +214,10 @@ if (isset($_GET['edit'])) {
 </style>
 
 <script>
-function mmgrPrintStaffQR(name, qrUrl) {
+function mmgrPrintStaffQR(name, qrUrl, staffCode) {
     document.getElementById('mmgr-print-staff-name').textContent = name;
     document.getElementById('mmgr-print-qr-img').src = qrUrl;
+    document.getElementById('mmgr-print-staff-code').textContent = 'Manual code: ' + staffCode;
     const modal = document.getElementById('mmgr-staff-qr-print-modal');
     modal.style.display = 'flex';
 }
