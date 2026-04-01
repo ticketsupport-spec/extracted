@@ -26,6 +26,7 @@ require_once MMGR_PLUGIN_DIR . 'includes/admin-messages.php';  // MUST be before
 add_action('plugins_loaded', function() {
     require_once MMGR_PLUGIN_DIR . 'includes/ajax-handlers.php';
     require_once MMGR_PLUGIN_DIR . 'includes/shortcodes.php';
+    require_once MMGR_PLUGIN_DIR . 'includes/staff-shortcodes.php';
     require_once MMGR_PLUGIN_DIR . 'includes/admin-menu.php';  // This needs the function to exist first
     require_once MMGR_PLUGIN_DIR . 'includes/styles.php';
     require_once MMGR_PLUGIN_DIR . 'includes/member-portal-shortcodes.php';

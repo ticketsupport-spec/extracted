@@ -441,6 +441,70 @@ function mmgr_create_tables() {
         INDEX idx_item_id (item_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    // ===========================
+    // STAFF TABLE
+    // ===========================
+    $staff_table = $wpdb->prefix . 'membership_staff';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$staff_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        staff_code VARCHAR(50) UNIQUE NOT NULL,
+        first_name VARCHAR(100) NOT NULL,
+        last_name VARCHAR(100) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        position VARCHAR(100),
+        active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_staff_code (staff_code),
+        INDEX idx_active (active)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // ===========================
+    // STAFF TIME LOGS TABLE
+    // ===========================
+    $staff_time_logs_table = $wpdb->prefix . 'membership_staff_time_logs';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$staff_time_logs_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        staff_id INT NOT NULL,
+        clock_in DATETIME NOT NULL,
+        clock_out DATETIME,
+        paid TINYINT(1) DEFAULT 0,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_staff_id (staff_id),
+        INDEX idx_clock_in (clock_in),
+        INDEX idx_paid (paid)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // ===========================
+    // ROOMS TABLE
+    // ===========================
+    $rooms_table = $wpdb->prefix . 'membership_rooms';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$rooms_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        room_name VARCHAR(100) NOT NULL,
+        sort_order INT DEFAULT 0,
+        active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_active (active),
+        INDEX idx_sort (sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // ===========================
+    // CLEANING LOG TABLE
+    // ===========================
+    $cleaning_log_table = $wpdb->prefix . 'membership_cleaning_log';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$cleaning_log_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        staff_id INT NOT NULL,
+        room_id INT NOT NULL,
+        cleaned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_staff_id (staff_id),
+        INDEX idx_room_id (room_id),
+        INDEX idx_cleaned_at (cleaned_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     // Update plugin version
     update_option('mmgr_db_version', '1.0.0');
     

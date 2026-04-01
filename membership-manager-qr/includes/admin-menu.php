@@ -245,6 +245,40 @@ add_action('admin_menu', function() {
 		}
 	);
 
+	// ── Staff Section ──────────────────────────────────────────────────────
+	add_submenu_page(
+		'membership_manager',
+		'Staff Management',
+		'— Staff —',
+		'manage_options',
+		'membership_staff',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/staff-page.php';
+		}
+	);
+
+	add_submenu_page(
+		'membership_manager',
+		'Payroll Hours',
+		'Payroll Hours',
+		'manage_options',
+		'membership_payroll_hours',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/payroll-hours.php';
+		}
+	);
+
+	add_submenu_page(
+		'membership_manager',
+		'Rooms',
+		'Rooms',
+		'manage_options',
+		'membership_rooms',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/rooms-page.php';
+		}
+	);
+
     add_submenu_page(
         'membership_manager',
         'Settings',

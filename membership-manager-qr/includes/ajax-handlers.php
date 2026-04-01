@@ -679,3 +679,211 @@ function mmgr_ajax_checkin_collect_fee() {
         'expire_date' => date( 'M d, Y', strtotime( $new_expire ) ),
     ) );
 }
+// ============================================================
+// STAFF SYSTEM AJAX HANDLERS
+// ============================================================
+
+/**
+ * Helper: round minutes to nearest 15-minute interval.
+ */
+function mmgr_round_minutes_15($minutes) {
+    return (int) (round($minutes / 15) * 15);
+}
+
+/**
+ * Helper: format a decimal-minutes value as "Xh Ym".
+ */
+function mmgr_format_hours($minutes) {
+    $minutes = (int) $minutes;
+    $h = intdiv($minutes, 60);
+    $m = $minutes % 60;
+    if ($h > 0 && $m > 0) return $h . 'h ' . $m . 'm';
+    if ($h > 0)            return $h . 'h';
+    return $m . 'm';
+}
+
+/**
+ * Get total unpaid minutes for a staff member (rounded to 15 min per entry).
+ */
+function mmgr_staff_get_unpaid_minutes($staff_id) {
+    global $wpdb;
+    $tbl = $wpdb->prefix . 'membership_staff_time_logs';
+    $logs = $wpdb->get_results($wpdb->prepare(
+        "SELECT clock_in, clock_out FROM `$tbl` WHERE staff_id = %d AND paid = 0 AND clock_out IS NOT NULL",
+        $staff_id
+    ), ARRAY_A);
+
+    $total = 0;
+    foreach ($logs as $log) {
+        $diff    = (strtotime($log['clock_out']) - strtotime($log['clock_in'])) / 60;
+        $total  += mmgr_round_minutes_15($diff);
+    }
+    return $total;
+}
+
+// ── mmgr_staff_scan ──────────────────────────────────────────────────────────
+add_action('wp_ajax_mmgr_staff_scan',        'mmgr_handle_staff_scan');
+add_action('wp_ajax_nopriv_mmgr_staff_scan', 'mmgr_handle_staff_scan');
+
+function mmgr_handle_staff_scan() {
+    check_ajax_referer('mmgr_staff_scan', 'nonce');
+    global $wpdb;
+
+    $code = isset($_POST['code']) ? sanitize_text_field($_POST['code']) : '';
+    if (empty($code)) {
+        wp_send_json_error(array('message' => 'No code provided.'));
+    }
+
+    $staff_tbl = $wpdb->prefix . 'membership_staff';
+    $staff = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM `$staff_tbl` WHERE staff_code = %s AND active = 1",
+        $code
+    ), ARRAY_A);
+
+    if (!$staff) {
+        wp_send_json_error(array('message' => '❌ Staff member not found. Code: ' . esc_html($code)));
+    }
+
+    // Is the staff member currently clocked in (has an open log entry)?
+    $time_tbl   = $wpdb->prefix . 'membership_staff_time_logs';
+    $open_entry = $wpdb->get_row($wpdb->prepare(
+        "SELECT id FROM `$time_tbl` WHERE staff_id = %d AND clock_out IS NULL ORDER BY clock_in DESC LIMIT 1",
+        $staff['id']
+    ), ARRAY_A);
+
+    $is_clocked_in = !empty($open_entry);
+
+    // Unpaid hours for current pay period
+    $unpaid_minutes = mmgr_staff_get_unpaid_minutes($staff['id']);
+    $hours_text     = mmgr_format_hours($unpaid_minutes);
+
+    wp_send_json_success(array(
+        'staff'           => array(
+            'id'       => (int) $staff['id'],
+            'name'     => $staff['name'],
+            'position' => $staff['position'],
+        ),
+        'is_clocked_in'   => $is_clocked_in,
+        'hours_this_period' => $hours_text,
+    ));
+}
+
+// ── mmgr_staff_clock_in ──────────────────────────────────────────────────────
+add_action('wp_ajax_mmgr_staff_clock_in',        'mmgr_handle_staff_clock_in');
+add_action('wp_ajax_nopriv_mmgr_staff_clock_in', 'mmgr_handle_staff_clock_in');
+
+function mmgr_handle_staff_clock_in() {
+    check_ajax_referer('mmgr_staff_clock_in', 'nonce');
+    global $wpdb;
+
+    $staff_id = isset($_POST['staff_id']) ? intval($_POST['staff_id']) : 0;
+    if (!$staff_id) {
+        wp_send_json_error(array('message' => 'Invalid staff ID.'));
+    }
+
+    $staff_tbl = $wpdb->prefix . 'membership_staff';
+    $staff = $wpdb->get_row($wpdb->prepare("SELECT id, name FROM `$staff_tbl` WHERE id = %d AND active = 1", $staff_id), ARRAY_A);
+    if (!$staff) {
+        wp_send_json_error(array('message' => 'Staff member not found.'));
+    }
+
+    // Prevent double clock-in
+    $time_tbl   = $wpdb->prefix . 'membership_staff_time_logs';
+    $open_entry = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM `$time_tbl` WHERE staff_id = %d AND clock_out IS NULL",
+        $staff_id
+    ));
+    if ($open_entry) {
+        wp_send_json_error(array('message' => esc_html($staff['name']) . ' is already clocked in.'));
+    }
+
+    $wpdb->insert($time_tbl, array(
+        'staff_id' => $staff_id,
+        'clock_in' => current_time('mysql'),
+    ));
+
+    wp_send_json_success(array('message' => esc_html($staff['name']) . ' clocked in at ' . date('g:i A', current_time('timestamp'))));
+}
+
+// ── mmgr_staff_clock_out ─────────────────────────────────────────────────────
+add_action('wp_ajax_mmgr_staff_clock_out',        'mmgr_handle_staff_clock_out');
+add_action('wp_ajax_nopriv_mmgr_staff_clock_out', 'mmgr_handle_staff_clock_out');
+
+function mmgr_handle_staff_clock_out() {
+    check_ajax_referer('mmgr_staff_clock_out', 'nonce');
+    global $wpdb;
+
+    $staff_id = isset($_POST['staff_id']) ? intval($_POST['staff_id']) : 0;
+    if (!$staff_id) {
+        wp_send_json_error(array('message' => 'Invalid staff ID.'));
+    }
+
+    $staff_tbl = $wpdb->prefix . 'membership_staff';
+    $staff = $wpdb->get_row($wpdb->prepare("SELECT id, name FROM `$staff_tbl` WHERE id = %d AND active = 1", $staff_id), ARRAY_A);
+    if (!$staff) {
+        wp_send_json_error(array('message' => 'Staff member not found.'));
+    }
+
+    $time_tbl   = $wpdb->prefix . 'membership_staff_time_logs';
+    $open_entry = $wpdb->get_row($wpdb->prepare(
+        "SELECT id, clock_in FROM `$time_tbl` WHERE staff_id = %d AND clock_out IS NULL ORDER BY clock_in DESC LIMIT 1",
+        $staff_id
+    ), ARRAY_A);
+
+    if (!$open_entry) {
+        wp_send_json_error(array('message' => esc_html($staff['name']) . ' is not currently clocked in.'));
+    }
+
+    $clock_out_time = current_time('mysql');
+    $wpdb->update($time_tbl, array('clock_out' => $clock_out_time), array('id' => $open_entry['id']));
+
+    // Calculate duration for this session (rounded)
+    $diff    = (strtotime($clock_out_time) - strtotime($open_entry['clock_in'])) / 60;
+    $rounded = mmgr_round_minutes_15($diff);
+
+    wp_send_json_success(array(
+        'message' => esc_html($staff['name']) . ' clocked out at ' . date('g:i A', current_time('timestamp')) . '. Session: ' . mmgr_format_hours($rounded),
+    ));
+}
+
+// ── mmgr_staff_get_rooms ─────────────────────────────────────────────────────
+add_action('wp_ajax_mmgr_staff_get_rooms',        'mmgr_handle_staff_get_rooms');
+add_action('wp_ajax_nopriv_mmgr_staff_get_rooms', 'mmgr_handle_staff_get_rooms');
+
+function mmgr_handle_staff_get_rooms() {
+    check_ajax_referer('mmgr_staff_get_rooms', 'nonce');
+    global $wpdb;
+
+    $rooms_tbl = $wpdb->prefix . 'membership_rooms';
+    $rooms = $wpdb->get_results(
+        "SELECT id, room_name FROM `$rooms_tbl` WHERE active = 1 ORDER BY sort_order ASC, id ASC",
+        ARRAY_A
+    );
+
+    wp_send_json_success(array('rooms' => $rooms ?: array()));
+}
+
+// ── mmgr_staff_log_cleaning ──────────────────────────────────────────────────
+add_action('wp_ajax_mmgr_staff_log_cleaning',        'mmgr_handle_staff_log_cleaning');
+add_action('wp_ajax_nopriv_mmgr_staff_log_cleaning', 'mmgr_handle_staff_log_cleaning');
+
+function mmgr_handle_staff_log_cleaning() {
+    check_ajax_referer('mmgr_staff_log_cleaning', 'nonce');
+    global $wpdb;
+
+    $staff_id = isset($_POST['staff_id']) ? intval($_POST['staff_id']) : 0;
+    $room_id  = isset($_POST['room_id'])  ? intval($_POST['room_id'])  : 0;
+
+    if (!$staff_id || !$room_id) {
+        wp_send_json_error(array('message' => 'Invalid staff or room ID.'));
+    }
+
+    $cleaning_tbl = $wpdb->prefix . 'membership_cleaning_log';
+    $wpdb->insert($cleaning_tbl, array(
+        'staff_id'   => $staff_id,
+        'room_id'    => $room_id,
+        'cleaned_at' => current_time('mysql'),
+    ));
+
+    wp_send_json_success(array('message' => 'Room cleaning logged.'));
+}
