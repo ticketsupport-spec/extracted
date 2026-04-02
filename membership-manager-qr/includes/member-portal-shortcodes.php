@@ -2665,7 +2665,7 @@ add_shortcode('mmgr_member_community', function() {
                                         💬 Comments (<span id="comment-count-<?php echo $post['id']; ?>"><?php echo $comment_count_val; ?></span>)
                                     </button>
 
-                                    <div id="comments-section-<?php echo $post['id']; ?>" style="display:none;margin-top:12px;">
+                                    <div id="comments-section-<?php echo $post['id']; ?>" style="display:block;margin-top:12px;">
                                         <div id="comments-list-<?php echo $post['id']; ?>" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
                                             <?php if (empty($post_comments)): ?>
                                                 <p id="no-comments-<?php echo $post['id']; ?>" style="color:#999;font-size:13px;margin:0;">No comments yet. Be the first!</p>
