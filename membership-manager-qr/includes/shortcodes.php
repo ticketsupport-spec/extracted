@@ -39,13 +39,13 @@ add_shortcode('membership_registration', function($atts){
             $existing = null;
             if (!empty($email)) {
                 $existing = $wpdb->get_row($wpdb->prepare(
-                    "SELECT * FROM $tbl WHERE email = %s LIMIT 1",
+                    "SELECT id, email, first_name, password_hash FROM $tbl WHERE email = %s LIMIT 1",
                     $email
                 ), ARRAY_A);
             }
             if (!$existing && !empty($phone)) {
                 $existing = $wpdb->get_row($wpdb->prepare(
-                    "SELECT * FROM $tbl WHERE phone = %s LIMIT 1",
+                    "SELECT id, email, first_name, password_hash FROM $tbl WHERE phone = %s LIMIT 1",
                     $phone
                 ), ARRAY_A);
             }
