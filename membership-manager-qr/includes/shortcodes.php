@@ -35,7 +35,29 @@ add_shortcode('membership_registration', function($atts){
             $partner_sex = isset($_POST['partner_sex']) ? sanitize_text_field($_POST['partner_sex']) : '';
             $partner_dob = isset($_POST['partner_dob']) ? sanitize_text_field($_POST['partner_dob']) : '';
             
-            if (!mmgr_validate_age($dob)) {
+            // Check for an existing account with the same email or phone number.
+            $existing = null;
+            if (!empty($email)) {
+                $existing = $wpdb->get_row($wpdb->prepare(
+                    "SELECT * FROM $tbl WHERE email = %s LIMIT 1",
+                    $email
+                ), ARRAY_A);
+            }
+            if (!$existing && !empty($phone)) {
+                $existing = $wpdb->get_row($wpdb->prepare(
+                    "SELECT * FROM $tbl WHERE phone = %s LIMIT 1",
+                    $phone
+                ), ARRAY_A);
+            }
+
+            if ($existing) {
+                mmgr_send_duplicate_registration_email($existing);
+                echo '<div class="mmgr-error">'
+                   . 'An account already exists with that email address or phone number. '
+                   . 'We have sent a password reminder to <strong>' . esc_html($existing['email']) . '</strong>. '
+                   . 'Please check your inbox (and your junk/spam folder if you do not receive it within a few minutes).'
+                   . '</div>';
+            } elseif (!mmgr_validate_age($dob)) {
                 echo '<div class="mmgr-error">You must be 18 or older to register.</div>';
             } elseif ($level === 'Couple' && $partner_dob && !mmgr_validate_age($partner_dob)) {
                 echo '<div class="mmgr-error">Partner must be 18 or older.</div>';
