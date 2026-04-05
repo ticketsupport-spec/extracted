@@ -360,6 +360,62 @@ See you on the courts! 🎾
     }
 }
 
+/**
+ * Send an email when a duplicate registration is attempted.
+ *
+ * If the existing account has no password set, a new password-setup link is sent.
+ * If a password is already set, a reminder to use the login page is sent.
+ *
+ * @param  array $member  Full member row from the memberships table.
+ * @return bool           Whether the email was sent successfully.
+ */
+function mmgr_send_duplicate_registration_email( $member ) {
+    $site_name  = get_bloginfo( 'name' );
+    $login_url  = home_url( '/member-login/' );
+    $from_name  = get_option( 'mmgr_email_from_name', $site_name );
+    $from_email = get_option( 'mmgr_email_from_email', get_option( 'admin_email' ) );
+    $headers    = array(
+        'Content-Type: text/html; charset=UTF-8',
+        'From: ' . $from_name . ' <' . $from_email . '>',
+    );
+
+    $enable_portal = get_option( 'mmgr_enable_member_portal', 1 );
+
+    if ( empty( $member['password_hash'] ) && $enable_portal ) {
+        // No password yet – send a fresh setup link.
+        $token     = bin2hex( random_bytes( 32 ) );
+        set_transient( 'mmgr_portal_token_' . $member['id'], $token, 7 * DAY_IN_SECONDS );
+        $setup_url = home_url( '/member-setup/?token=' . $token );
+
+        $subject = 'Set Up Your ' . $site_name . ' Member Portal Password';
+        $body    = 'Hi ' . esc_html( $member['first_name'] ) . ',<br><br>'
+                 . 'It looks like you already have an account with us! You haven\'t set up a password yet.<br><br>'
+                 . 'Click the link below to create your password and access the member portal:<br><br>'
+                 . '<a href="' . esc_url( $setup_url ) . '">' . esc_url( $setup_url ) . '</a><br><br>'
+                 . 'This link will expire in 7 days.<br><br>'
+                 . 'If you did not request this, please ignore this email.<br><br>'
+                 . '— ' . esc_html( $site_name );
+    } else {
+        // Password already set – send a reminder to log in.
+        $subject = 'You Already Have a ' . $site_name . ' Account';
+        $body    = 'Hi ' . esc_html( $member['first_name'] ) . ',<br><br>'
+                 . 'It looks like you already have a ' . esc_html( $site_name ) . ' account registered with this email address or phone number.<br><br>'
+                 . 'Please log in using your existing password at:<br><br>'
+                 . '<a href="' . esc_url( $login_url ) . '">' . esc_url( $login_url ) . '</a><br><br>'
+                 . 'If you have forgotten your password, please contact us and we can reset it for you.<br><br>'
+                 . '— ' . esc_html( $site_name );
+    }
+
+    $html_body = '<html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background-color:#f4f4f4;">'
+               . '<div style="font-family:Arial,sans-serif;max-width:600px;margin:20px auto;padding:30px;background-color:#ffffff;color:#333333;line-height:1.6;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">'
+               . $body
+               . '</div></body></html>';
+
+    $sent = wp_mail( $member['email'], $subject, $html_body, $headers );
+    mmgr_log_email( $member['id'], $member['email'], $subject, $sent );
+    return $sent;
+}
+
 // AJAX: Resend password setup link
 add_action('wp_ajax_mmgr_resend_setup_link', function() {
     check_ajax_referer('mmgr_resend_setup', 'nonce');
