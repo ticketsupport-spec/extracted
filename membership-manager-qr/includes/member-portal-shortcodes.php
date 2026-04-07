@@ -1922,7 +1922,7 @@ add_shortcode('mmgr_member_profile', function() {
                             </button>
                         <?php endif; ?>
                     </div>
-                    <input type="file" name="community_photo" accept="image/*" id="community-photo-input" style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;" onchange="previewCommunityPhoto(this)">
+                    <input type="file" name="community_photo" accept="image/*" id="community-photo-input" style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;box-sizing:border-box;" onchange="previewCommunityPhoto(this)">
                     <p style="margin:5px 0 0 0;font-size:13px;color:#999;">Profile picture for community posts (optional)</p>
                 </div>
 
@@ -2019,7 +2019,7 @@ add_shortcode('mmgr_member_profile', function() {
                                     <input type="url" name="bio_field_<?php echo $cf_id; ?>"
                                            value="<?php echo esc_attr($cf_val); ?>"
                                            placeholder="<?php echo $cf_ph ?: 'https://'; ?>"
-                                           style="width:100%;padding:12px;border:2px solid #ddd;border-radius:6px;font-size:16px;">
+                                           style="width:100%;padding:12px;border:2px solid #ddd;border-radius:6px;font-size:16px;box-sizing:border-box;">
                                 <?php elseif ($cf['field_type'] === 'textarea'): ?>
                                     <textarea name="bio_field_<?php echo $cf_id; ?>" rows="4"
                                               placeholder="<?php echo $cf_ph; ?>"
@@ -2036,7 +2036,7 @@ add_shortcode('mmgr_member_profile', function() {
                                         </div>
                                     <?php endif; ?>
                                     <input type="file" name="bio_field_img_<?php echo $cf_id; ?>" accept="image/*"
-                                           style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;">
+                                           style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;box-sizing:border-box;">
                                     <p style="margin:5px 0 0 0;font-size:13px;color:#999;">Upload a new image to replace the current one.</p>
                                 <?php endif; ?>
                             </div>

@@ -409,6 +409,8 @@ add_action('wp_head', function() {
     .mmgr-field input[type="email"],
     .mmgr-field input[type="tel"],
     .mmgr-field input[type="date"],
+    .mmgr-field input[type="url"],
+    .mmgr-field input[type="file"],
     .mmgr-field select,
     .mmgr-field textarea {
         width: 100%;
