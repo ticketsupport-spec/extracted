@@ -505,6 +505,52 @@ function mmgr_create_tables() {
         INDEX idx_cleaned_at (cleaned_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+    // ===========================
+    // CHEMISTRY TRAITS TABLE
+    // ===========================
+    $chemistry_traits_table = $wpdb->prefix . 'membership_chemistry_traits';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$chemistry_traits_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        trait_name VARCHAR(100) NOT NULL,
+        description VARCHAR(255) DEFAULT '',
+        sort_order INT DEFAULT 0,
+        active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_active (active),
+        INDEX idx_sort (sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // ===========================
+    // CHEMISTRY QUESTIONS TABLE
+    // ===========================
+    $chemistry_questions_table = $wpdb->prefix . 'membership_chemistry_questions';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$chemistry_questions_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        trait_id INT NOT NULL,
+        question_text VARCHAR(500) NOT NULL,
+        sort_order INT DEFAULT 0,
+        active TINYINT(1) DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_trait_id (trait_id),
+        INDEX idx_active (active),
+        INDEX idx_sort (sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // ===========================
+    // CHEMISTRY ANSWERS TABLE
+    // ===========================
+    $chemistry_answers_table = $wpdb->prefix . 'membership_chemistry_answers';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$chemistry_answers_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        question_id INT NOT NULL,
+        answer_value TINYINT UNSIGNED NOT NULL DEFAULT 50,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_member_question (member_id, question_id),
+        INDEX idx_member_id (member_id),
+        INDEX idx_question_id (question_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
     // Update plugin version
     update_option('mmgr_db_version', '1.0.0');
     
@@ -789,11 +835,248 @@ function mmgr_migrate_archive_table() {
 }
 
 /**
+ * Create chemistry analysis tables and seed default traits/questions.
+ * Called as part of the 1.8.0 migration. Safe to call repeatedly.
+ */
+function mmgr_migrate_chemistry_tables() {
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $traits_tbl    = $wpdb->prefix . 'membership_chemistry_traits';
+    $questions_tbl = $wpdb->prefix . 'membership_chemistry_questions';
+    $answers_tbl   = $wpdb->prefix . 'membership_chemistry_answers';
+    $members_tbl   = $wpdb->prefix . 'memberships';
+
+    // Traits table
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$traits_tbl'" ) !== $traits_tbl ) {
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS `$traits_tbl` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            trait_name VARCHAR(100) NOT NULL,
+            description VARCHAR(255) DEFAULT '',
+            sort_order INT DEFAULT 0,
+            active TINYINT(1) DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_active (active),
+            INDEX idx_sort (sort_order)
+        ) ENGINE=InnoDB $charset_collate" );
+    }
+
+    // Questions table
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$questions_tbl'" ) !== $questions_tbl ) {
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS `$questions_tbl` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            trait_id INT NOT NULL,
+            question_text VARCHAR(500) NOT NULL,
+            sort_order INT DEFAULT 0,
+            active TINYINT(1) DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_trait_id (trait_id),
+            INDEX idx_active (active),
+            INDEX idx_sort (sort_order)
+        ) ENGINE=InnoDB $charset_collate" );
+    }
+
+    // Answers table
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$answers_tbl'" ) !== $answers_tbl ) {
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS `$answers_tbl` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            member_id INT NOT NULL,
+            question_id INT NOT NULL,
+            answer_value TINYINT UNSIGNED NOT NULL DEFAULT 50,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_member_question (member_id, question_id),
+            INDEX idx_member_id (member_id),
+            INDEX idx_question_id (question_id)
+        ) ENGINE=InnoDB $charset_collate" );
+    }
+
+    // chemistry_privacy column on memberships table
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$members_tbl'" ) === $members_tbl ) {
+        if ( ! $wpdb->get_row( "SHOW COLUMNS FROM `$members_tbl` LIKE 'chemistry_privacy'" ) ) {
+            $wpdb->query( "ALTER TABLE `$members_tbl` ADD COLUMN `chemistry_privacy` VARCHAR(20) NOT NULL DEFAULT 'everyone'" );
+        }
+    }
+
+    // Seed default traits and questions only if no traits exist yet
+    $trait_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$traits_tbl`" );
+    if ( $trait_count > 0 ) {
+        return;
+    }
+
+    $defaults = array(
+        array(
+            'trait'       => 'Switch',
+            'description' => 'Enjoys both dominant and submissive roles',
+            'sort'        => 10,
+            'questions'   => array(
+                'How much do you enjoy switching between dominant and submissive roles?',
+                'How often do you prefer to alternate between giving and receiving control?',
+            ),
+        ),
+        array(
+            'trait'       => 'Dominant',
+            'description' => 'Enjoys taking control and directing encounters',
+            'sort'        => 20,
+            'questions'   => array(
+                'How much do you enjoy taking control during intimate encounters?',
+                'How much do you enjoy directing or guiding your partner(s)?',
+            ),
+        ),
+        array(
+            'trait'       => 'Submissive',
+            'description' => 'Enjoys surrendering control to a partner',
+            'sort'        => 30,
+            'questions'   => array(
+                'How much do you enjoy surrendering control to a partner?',
+                'How much do you enjoy following your partner\'s lead or instructions?',
+            ),
+        ),
+        array(
+            'trait'       => 'Voyeur',
+            'description' => 'Enjoys watching others during intimate moments',
+            'sort'        => 40,
+            'questions'   => array(
+                'How much do you enjoy watching others during intimate moments?',
+                'How aroused do you become from observing others?',
+            ),
+        ),
+        array(
+            'trait'       => 'Exhibitionist',
+            'description' => 'Enjoys being watched during intimate moments',
+            'sort'        => 50,
+            'questions'   => array(
+                'How much do you enjoy being watched during intimate moments?',
+                'How much do you enjoy performing or showing off for others?',
+            ),
+        ),
+        array(
+            'trait'       => 'Experimentalist',
+            'description' => 'Open to trying new and varied experiences',
+            'sort'        => 60,
+            'questions'   => array(
+                'How open are you to trying new sexual activities or experiences?',
+                'How much do you enjoy exploring unfamiliar territory in intimate situations?',
+            ),
+        ),
+        array(
+            'trait'       => 'Sadist',
+            'description' => 'Enjoys giving consensual pain or intense sensations',
+            'sort'        => 70,
+            'questions'   => array(
+                'How much do you enjoy giving consensual pain or intense sensations to a partner?',
+                'How much pleasure do you derive from seeing your partner\'s reactions to sensation?',
+            ),
+        ),
+        array(
+            'trait'       => 'Masochist',
+            'description' => 'Enjoys receiving consensual pain or intense sensations',
+            'sort'        => 80,
+            'questions'   => array(
+                'How much do you enjoy receiving consensual pain or intense sensations?',
+                'How much do you enjoy the release that comes from intense sensory experiences?',
+            ),
+        ),
+        array(
+            'trait'       => 'Rigger',
+            'description' => 'Enjoys tying or restraining a partner',
+            'sort'        => 90,
+            'questions'   => array(
+                'How much do you enjoy tying or restraining a partner?',
+                'How much satisfaction do you get from creating rope bondage or restraint?',
+            ),
+        ),
+        array(
+            'trait'       => 'Rope Bunny',
+            'description' => 'Enjoys being tied or restrained',
+            'sort'        => 100,
+            'questions'   => array(
+                'How much do you enjoy being tied or physically restrained by a partner?',
+                'How much do you enjoy the feeling of bondage or restraint?',
+            ),
+        ),
+        array(
+            'trait'       => 'Primal (Hunter)',
+            'description' => 'Raw, instinctual expression as the pursuer',
+            'sort'        => 110,
+            'questions'   => array(
+                'How much do you enjoy the chase or pursuit dynamic in intimate situations?',
+                'How much do you enjoy raw, instinctual dominant expressions?',
+            ),
+        ),
+        array(
+            'trait'       => 'Primal (Prey)',
+            'description' => 'Raw, instinctual expression as the pursued',
+            'sort'        => 120,
+            'questions'   => array(
+                'How much do you enjoy being chased or pursued in intimate situations?',
+                'How much do you enjoy raw, instinctual submissive expressions?',
+            ),
+        ),
+        array(
+            'trait'       => 'Vanilla',
+            'description' => 'Enjoys traditional or standard intimate encounters',
+            'sort'        => 130,
+            'questions'   => array(
+                'How much do you prefer traditional or standard sexual encounters?',
+                'How much do you prefer encounters without kink or power exchange elements?',
+            ),
+        ),
+        array(
+            'trait'       => 'Non-monogamist',
+            'description' => 'Comfortable with multiple partners or group encounters',
+            'sort'        => 140,
+            'questions'   => array(
+                'How comfortable are you with having multiple concurrent sexual or romantic partners?',
+                'How much do you enjoy participating in group encounters or sharing partners?',
+            ),
+        ),
+        array(
+            'trait'       => 'Brat',
+            'description' => 'Enjoys playful defiance and teasing',
+            'sort'        => 150,
+            'questions'   => array(
+                'How much do you enjoy playfully defying or teasing your partner?',
+                'How much do you enjoy pushing boundaries in a playful, non-serious way?',
+            ),
+        ),
+        array(
+            'trait'       => 'Brat Tamer',
+            'description' => 'Enjoys disciplining or managing a playfully defiant partner',
+            'sort'        => 160,
+            'questions'   => array(
+                'How much do you enjoy disciplining or handling a playfully defiant partner?',
+                'How much do you enjoy the challenge of managing a brat\'s behaviour?',
+            ),
+        ),
+    );
+
+    foreach ( $defaults as $d ) {
+        $wpdb->insert( $traits_tbl, array(
+            'trait_name'  => $d['trait'],
+            'description' => $d['description'],
+            'sort_order'  => $d['sort'],
+            'active'      => 1,
+        ) );
+        $tid = (int) $wpdb->insert_id;
+        $qsort = 0;
+        foreach ( $d['questions'] as $qtext ) {
+            $qsort += 10;
+            $wpdb->insert( $questions_tbl, array(
+                'trait_id'      => $tid,
+                'question_text' => $qtext,
+                'sort_order'    => $qsort,
+                'active'        => 1,
+            ) );
+        }
+    }
+}
+
+/**
  * Check and update database schema on plugin load
  */
 function mmgr_check_database() {
     $current_version = get_option('mmgr_db_version', '0.0.0');
-    $required_version = '1.7.0';
+    $required_version = '1.8.0';
     
     if (version_compare($current_version, $required_version, '<')) {
         mmgr_create_tables();
@@ -804,7 +1087,8 @@ function mmgr_check_database() {
         mmgr_migrate_first_visit_columns();
         mmgr_migrate_orientation_tables();
         mmgr_migrate_archive_table();
-        update_option( 'mmgr_db_version', '1.7.0' );
+        mmgr_migrate_chemistry_tables();
+        update_option( 'mmgr_db_version', '1.8.0' );
     }
 }
 
