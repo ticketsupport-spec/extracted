@@ -1631,6 +1631,7 @@ add_shortcode('mmgr_member_activity', function() {
  * Member Profile Page - Update Info
  */
 add_shortcode('mmgr_member_profile', function() {
+    global $wpdb;
     nocache_headers();
     // Check if member is logged in
     $member = mmgr_get_current_member();
@@ -1654,7 +1655,6 @@ add_shortcode('mmgr_member_profile', function() {
         if (!isset($_POST['profile_nonce']) || !wp_verify_nonce($_POST['profile_nonce'], 'mmgr_update_profile')) {
             $error = 'Security check failed.';
         } else {
-            global $wpdb;
             $tbl = $wpdb->prefix . 'memberships';
             
             $phone = sanitize_text_field($_POST['phone']);
