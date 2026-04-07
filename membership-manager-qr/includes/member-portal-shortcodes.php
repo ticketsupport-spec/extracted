@@ -2026,6 +2026,146 @@ add_shortcode('mmgr_member_profile', function() {
             <?php endif; ?>
         </div>
 
+        <!-- Chemistry Profile Section -->
+        <?php
+        $chem_traits_tbl     = $wpdb->prefix . 'membership_chemistry_traits';
+        $chem_questions_tbl  = $wpdb->prefix . 'membership_chemistry_questions';
+        $chem_answers_tbl    = $wpdb->prefix . 'membership_chemistry_answers';
+        $has_chem = $wpdb->get_var("SHOW TABLES LIKE '$chem_traits_tbl'") === $chem_traits_tbl;
+        if ($has_chem):
+            $chem_traits = $wpdb->get_results(
+                "SELECT * FROM `$chem_traits_tbl` WHERE active = 1 ORDER BY sort_order ASC, id ASC",
+                ARRAY_A
+            );
+            if (!empty($chem_traits)):
+                $trait_ids      = array_map('intval', array_column($chem_traits, 'id'));
+                $placeholders   = implode(',', array_fill(0, count($trait_ids), '%d'));
+                $all_questions  = $wpdb->get_results(
+                    $wpdb->prepare(
+                        "SELECT * FROM `$chem_questions_tbl` WHERE active = 1 AND trait_id IN ($placeholders) ORDER BY trait_id ASC, sort_order ASC",
+                        ...$trait_ids
+                    ),
+                    ARRAY_A
+                );
+                $questions_by_trait = array();
+                foreach ($all_questions as $q) {
+                    $questions_by_trait[$q['trait_id']][] = $q;
+                }
+                $q_ids = array_map('intval', array_column($all_questions, 'id'));
+                $existing_answers = array();
+                if (!empty($q_ids)) {
+                    $q_placeholders = implode(',', array_fill(0, count($q_ids), '%d'));
+                    $answer_rows = $wpdb->get_results(
+                        $wpdb->prepare(
+                            "SELECT question_id, answer_value FROM `$chem_answers_tbl` WHERE member_id = %d AND question_id IN ($q_placeholders)",
+                            array_merge(array($member['id']), $q_ids)
+                        ),
+                        ARRAY_A
+                    );
+                    foreach ($answer_rows as $ar) {
+                        $existing_answers[$ar['question_id']] = (int) $ar['answer_value'];
+                    }
+                }
+                $chemistry_privacy = isset($member['chemistry_privacy']) ? $member['chemistry_privacy'] : 'everyone';
+        ?>
+        <div class="mmgr-portal-card" style="margin-top:30px;" id="chemistry-profile-card">
+            <h3>🧪 Chemistry Profile</h3>
+            <p style="color:#666;font-size:14px;margin-top:0;">
+                Use the sliders to express your preferences (0% = not at all, 100% = absolutely). Your results appear as a bar chart on your community profile so others can see how you identify.
+            </p>
+
+            <div style="margin-bottom:24px;">
+                <label style="display:block;font-weight:bold;margin-bottom:6px;">Privacy Setting</label>
+                <select id="chemistry-privacy" style="padding:10px 14px;border:2px solid #ddd;border-radius:6px;font-size:15px;max-width:320px;">
+                    <option value="everyone" <?php echo $chemistry_privacy === 'everyone' ? 'selected' : ''; ?>>Visible to all members</option>
+                    <option value="nobody"   <?php echo $chemistry_privacy === 'nobody'   ? 'selected' : ''; ?>>Keep private (only you can see)</option>
+                </select>
+            </div>
+
+            <?php foreach ($chem_traits as $trait):
+                $tid             = intval($trait['id']);
+                $trait_questions = isset($questions_by_trait[$tid]) ? $questions_by_trait[$tid] : array();
+                if (empty($trait_questions)) continue;
+            ?>
+            <div style="margin-bottom:28px;padding:16px;background:#f9f9f9;border-radius:8px;border-left:3px solid #FF2197;">
+                <h4 style="margin:0 0 6px 0;font-size:15px;color:#333;">
+                    <?php echo esc_html($trait['trait_name']); ?>
+                    <?php if (!empty($trait['description'])): ?>
+                        <span style="font-size:12px;font-weight:normal;color:#888;"> — <?php echo esc_html($trait['description']); ?></span>
+                    <?php endif; ?>
+                </h4>
+                <?php foreach ($trait_questions as $q):
+                    $qid = intval($q['id']);
+                    $val = isset($existing_answers[$qid]) ? $existing_answers[$qid] : 50;
+                ?>
+                <div style="margin-top:12px;">
+                    <label style="display:block;font-size:14px;color:#444;margin-bottom:5px;"><?php echo esc_html($q['question_text']); ?></label>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <span style="font-size:12px;color:#888;min-width:20px;">0%</span>
+                        <input type="range" min="0" max="100" value="<?php echo esc_attr($val); ?>"
+                               id="chem-q-<?php echo $qid; ?>"
+                               oninput="document.getElementById('chem-v-<?php echo $qid; ?>').textContent = this.value + '%'"
+                               style="flex:1;accent-color:#FF2197;cursor:pointer;">
+                        <span style="font-size:12px;color:#888;min-width:28px;">100%</span>
+                        <span id="chem-v-<?php echo $qid; ?>" style="min-width:44px;font-weight:bold;color:#FF2197;text-align:right;"><?php echo esc_html($val); ?>%</span>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endforeach; ?>
+
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                <button type="button" onclick="saveChemistryProfile()"
+                        style="background:#FF2197;color:white;padding:12px 30px;border:none;border-radius:6px;font-size:16px;font-weight:bold;cursor:pointer;">
+                    💾 Save Chemistry Profile
+                </button>
+                <span id="chemistry-save-status" style="font-size:14px;display:none;"></span>
+            </div>
+        </div>
+        <script>
+        function saveChemistryProfile() {
+            var status = document.getElementById('chemistry-save-status');
+            status.style.display = 'none';
+            var answers = {};
+            document.querySelectorAll('[id^="chem-q-"]').forEach(function(el) {
+                var qid = el.id.replace('chem-q-', '');
+                answers[qid] = el.value;
+            });
+            var privacy = document.getElementById('chemistry-privacy').value;
+            var params = new URLSearchParams();
+            params.append('action',  'mmgr_save_chemistry_answers');
+            params.append('nonce',   '<?php echo esc_js(wp_create_nonce('mmgr_chemistry')); ?>');
+            params.append('answers', JSON.stringify(answers));
+            params.append('privacy', privacy);
+            fetch('<?php echo esc_js(admin_url('admin-ajax.php')); ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString()
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                status.style.display = 'inline';
+                if (data.success) {
+                    status.style.color = '#00a32a';
+                    status.textContent = '✅ Saved!';
+                } else {
+                    status.style.color = '#d63638';
+                    status.textContent = '⚠️ ' + (data.data && data.data.message ? data.data.message : 'Failed to save');
+                }
+                setTimeout(function() { status.style.display = 'none'; }, 3000);
+            })
+            .catch(function(err) {
+                status.style.display = 'inline';
+                status.style.color = '#d63638';
+                status.textContent = '⚠️ Error: ' + err.message;
+            });
+        }
+        </script>
+        <?php
+            endif; // !empty($chem_traits)
+        endif; // $has_chem
+        ?>
+
         <!-- Change Password -->
         <div class="mmgr-portal-card" style="margin-top:30px;">
             <h3>🔒 Change Password</h3>
@@ -5178,6 +5318,69 @@ add_shortcode('mmgr_member_community_profile', function() {
             </div>
         </div>
         <?php endif; ?>
+
+        <!-- Chemistry Profile Display -->
+        <?php
+        $cp_traits_tbl    = $wpdb->prefix . 'membership_chemistry_traits';
+        $cp_questions_tbl = $wpdb->prefix . 'membership_chemistry_questions';
+        $cp_answers_tbl   = $wpdb->prefix . 'membership_chemistry_answers';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$cp_traits_tbl'") === $cp_traits_tbl):
+            // Determine visibility
+            $cp_privacy = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT chemistry_privacy FROM `{$wpdb->prefix}memberships` WHERE id = %d",
+                $profile_member_id
+            ));
+            if ($cp_privacy === '') $cp_privacy = 'everyone';
+            $is_own_profile = ($profile_member_id === (int) $current_member['id']);
+            $show_chem = $is_own_profile || $cp_privacy === 'everyone';
+
+            if ($show_chem):
+                $cp_scores = $wpdb->get_results($wpdb->prepare(
+                    "SELECT t.trait_name,
+                            ROUND(AVG(a.answer_value)) AS score,
+                            COUNT(a.id) AS answered_count
+                     FROM `$cp_traits_tbl` t
+                     JOIN `$cp_questions_tbl` q ON q.trait_id = t.id AND q.active = 1
+                     LEFT JOIN `$cp_answers_tbl` a ON a.question_id = q.id AND a.member_id = %d
+                     WHERE t.active = 1
+                     GROUP BY t.id, t.trait_name
+                     HAVING answered_count > 0
+                     ORDER BY score DESC",
+                    $profile_member_id
+                ), ARRAY_A);
+
+                if (!empty($cp_scores)):
+        ?>
+        <div class="mmgr-portal-card" style="margin-top:20px;">
+            <h2>🧪 Chemistry Profile</h2>
+            <?php if ($is_own_profile && $cp_privacy === 'nobody'): ?>
+                <p style="font-size:13px;color:#888;margin-top:0;">
+                    🔒 Your chemistry results are currently private. Change your privacy setting on the <a href="<?php echo esc_url(home_url('/member-profile/?usercod=' . rawurlencode($current_member['member_code']))); ?>#chemistry-profile-card">Profile page</a>.
+                </p>
+            <?php endif; ?>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:15px;">
+                <?php foreach ($cp_scores as $ts):
+                    $score = (int) $ts['score'];
+                    if ($score >= 70)     { $bar_color = '#00a32a'; }
+                    elseif ($score >= 40) { $bar_color = '#dba617'; }
+                    else                  { $bar_color = '#d63638'; }
+                ?>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span style="min-width:42px;text-align:right;font-weight:bold;color:<?php echo $bar_color; ?>;font-size:14px;"><?php echo $score; ?>%</span>
+                    <div style="flex:1;background:#f0f0f0;border-radius:4px;height:10px;overflow:hidden;">
+                        <div style="width:<?php echo $score; ?>%;background:<?php echo $bar_color; ?>;height:100%;border-radius:4px;"></div>
+                    </div>
+                    <span style="min-width:130px;font-size:14px;color:#333;"><?php echo esc_html($ts['trait_name']); ?></span>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php
+                endif; // !empty($cp_scores)
+            endif; // $show_chem
+        endif; // table exists
+        ?>
+
     </div>
     
     <script>

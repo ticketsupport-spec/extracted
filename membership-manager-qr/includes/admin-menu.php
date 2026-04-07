@@ -203,6 +203,18 @@ add_action('admin_menu', function() {
 		}
 	);
 
+	// Chemistry Profile Traits
+	add_submenu_page(
+		'membership_manager',
+		'Chemistry Profile',
+		'🧪 Chemistry Profile',
+		'manage_options',
+		'membership_chemistry',
+		function() {
+			require_once MMGR_PLUGIN_DIR . 'includes/admin/chemistry-traits.php';
+		}
+	);
+
 	// Orientation Checklist
 	add_submenu_page(
 		'membership_manager',

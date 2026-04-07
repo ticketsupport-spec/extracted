@@ -850,8 +850,7 @@ function mmgr_handle_staff_clock_out() {
 add_action('wp_ajax_mmgr_staff_get_rooms',        'mmgr_handle_staff_get_rooms');
 add_action('wp_ajax_nopriv_mmgr_staff_get_rooms', 'mmgr_handle_staff_get_rooms');
 
-function mmgr_handle_staff_get_rooms() {
-    check_ajax_referer('mmgr_staff_get_rooms', 'nonce');
+function mmgr_handle_staff_get_rooms() {    check_ajax_referer('mmgr_staff_get_rooms', 'nonce');
     global $wpdb;
 
     $rooms_tbl    = $wpdb->prefix . 'membership_rooms';
@@ -901,3 +900,58 @@ function mmgr_handle_staff_log_cleaning() {
 
     wp_send_json_success(array('message' => 'Room cleaning logged.'));
 }
+
+// ── Chemistry: Save member answers ──────────────────────────────────────────
+add_action('wp_ajax_nopriv_mmgr_save_chemistry_answers', function() { do_action('wp_ajax_mmgr_save_chemistry_answers'); });
+add_action('wp_ajax_mmgr_save_chemistry_answers', function() {
+    check_ajax_referer('mmgr_chemistry', 'nonce');
+
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Not logged in.'));
+    }
+
+    global $wpdb;
+    $answers_tbl   = $wpdb->prefix . 'membership_chemistry_answers';
+    $questions_tbl = $wpdb->prefix . 'membership_chemistry_questions';
+    $members_tbl   = $wpdb->prefix . 'memberships';
+
+    if ($wpdb->get_var("SHOW TABLES LIKE '$answers_tbl'") !== $answers_tbl) {
+        wp_send_json_error(array('message' => 'Chemistry tables not found.'));
+    }
+
+    // Privacy
+    $privacy = isset($_POST['privacy']) ? sanitize_text_field($_POST['privacy']) : 'everyone';
+    if (!in_array($privacy, array('everyone', 'nobody'), true)) {
+        $privacy = 'everyone';
+    }
+
+    // Answers JSON
+    $answers_raw = isset($_POST['answers']) ? wp_unslash($_POST['answers']) : '{}';
+    $answers = json_decode($answers_raw, true);
+    if (!is_array($answers)) {
+        wp_send_json_error(array('message' => 'Invalid answer data.'));
+    }
+
+    // Build a whitelist of active question IDs to prevent arbitrary inserts
+    $active_ids = $wpdb->get_col("SELECT id FROM `$questions_tbl` WHERE active = 1");
+    $active_ids = array_map('intval', $active_ids);
+
+    foreach ($answers as $q_id_raw => $value_raw) {
+        $q_id = intval($q_id_raw);
+        $val  = max(0, min(100, intval($value_raw)));
+        if (!$q_id || !in_array($q_id, $active_ids, true)) {
+            continue;
+        }
+        $wpdb->replace($answers_tbl, array(
+            'member_id'    => (int) $member['id'],
+            'question_id'  => $q_id,
+            'answer_value' => $val,
+        ));
+    }
+
+    // Save privacy setting
+    $wpdb->update($members_tbl, array('chemistry_privacy' => $privacy), array('id' => (int) $member['id']));
+
+    wp_send_json_success(array('message' => 'Chemistry profile saved!'));
+});
