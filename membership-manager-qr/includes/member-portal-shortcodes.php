@@ -1771,6 +1771,28 @@ add_shortcode('mmgr_member_profile', function() {
                     }
                 }
 
+                // Save sexual orientation selections
+                $orient_opts_tbl = $wpdb->prefix . 'membership_sexual_orientations';
+                $orient_sel_tbl  = $wpdb->prefix . 'membership_member_orientations';
+                if (
+                    $wpdb->get_var("SHOW TABLES LIKE '$orient_opts_tbl'") === $orient_opts_tbl &&
+                    $wpdb->get_var("SHOW TABLES LIKE '$orient_sel_tbl'") === $orient_sel_tbl
+                ) {
+                    $raw_orient_ids = isset($_POST['sexual_orientation']) ? (array) $_POST['sexual_orientation'] : array();
+                    $selected_orient_ids = array_map('intval', $raw_orient_ids);
+                    $active_orient_ids   = $wpdb->get_col("SELECT id FROM `$orient_opts_tbl` WHERE active = 1");
+                    $active_orient_ids   = array_map('intval', $active_orient_ids);
+                    $valid_orient_ids    = array_intersect($selected_orient_ids, $active_orient_ids);
+
+                    $wpdb->delete($orient_sel_tbl, array('member_id' => (int) $member['id']));
+                    foreach ($valid_orient_ids as $oid) {
+                        $wpdb->replace($orient_sel_tbl, array(
+                            'member_id'      => (int) $member['id'],
+                            'orientation_id' => $oid,
+                        ));
+                    }
+                }
+
                 if ($updated !== false) {
                     // PRG: redirect to avoid re-submission on refresh and to load fresh data
                     wp_redirect(esc_url_raw(add_query_arg('profile_updated', '1')));
@@ -1903,6 +1925,58 @@ add_shortcode('mmgr_member_profile', function() {
                     <input type="file" name="community_photo" accept="image/*" id="community-photo-input" style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;" onchange="previewCommunityPhoto(this)">
                     <p style="margin:5px 0 0 0;font-size:13px;color:#999;">Profile picture for community posts (optional)</p>
                 </div>
+
+                <?php
+                // Sexual Orientation section
+                $orient_opts_tbl = $wpdb->prefix . 'membership_sexual_orientations';
+                $orient_sel_tbl  = $wpdb->prefix . 'membership_member_orientations';
+                if (
+                    $wpdb->get_var("SHOW TABLES LIKE '$orient_opts_tbl'") === $orient_opts_tbl &&
+                    $wpdb->get_var("SHOW TABLES LIKE '$orient_sel_tbl'") === $orient_sel_tbl
+                ) {
+                    $orient_options = $wpdb->get_results(
+                        "SELECT id, label, category FROM `$orient_opts_tbl` WHERE active = 1 ORDER BY sort_order, id",
+                        ARRAY_A
+                    );
+                    $my_orient_ids = $wpdb->get_col($wpdb->prepare(
+                        "SELECT orientation_id FROM `$orient_sel_tbl` WHERE member_id = %d",
+                        $member['id']
+                    ));
+                    $my_orient_ids = array_map('intval', $my_orient_ids);
+                    if (!empty($orient_options)) {
+                        $orient_by_cat = array();
+                        foreach ($orient_options as $opt) {
+                            $orient_by_cat[$opt['category']][] = $opt;
+                        }
+                        $cat_labels = array(
+                            'sexual'       => 'Sexual Orientation',
+                            'romantic'     => 'Romantic Orientation',
+                            'relationship' => 'Relationship Style',
+                        );
+                        ?>
+                        <div class="mmgr-field" style="margin-bottom:20px;">
+                            <label style="display:block;font-weight:bold;margin-bottom:8px;">Orientation <span style="font-weight:normal;font-size:13px;color:#999;">(select all that apply)</span></label>
+                            <?php foreach ($orient_by_cat as $cat => $opts): ?>
+                            <div style="margin-bottom:12px;">
+                                <p style="font-size:13px;font-weight:600;color:#666;margin:0 0 6px 0;"><?php echo esc_html($cat_labels[$cat] ?? ucfirst($cat)); ?></p>
+                                <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                                    <?php foreach ($opts as $opt): ?>
+                                    <label style="display:inline-flex;align-items:center;gap:5px;background:#f5f5f5;padding:6px 12px;border-radius:20px;cursor:pointer;font-size:14px;border:2px solid <?php echo in_array((int)$opt['id'], $my_orient_ids) ? '#FF2197' : '#ddd'; ?>;">
+                                        <input type="checkbox" name="sexual_orientation[]" value="<?php echo intval($opt['id']); ?>"
+                                               <?php checked(in_array((int)$opt['id'], $my_orient_ids)); ?>
+                                               onchange="this.closest('label').style.borderColor=this.checked?'#FF2197':'#ddd';"
+                                               style="accent-color:#FF2197;">
+                                        <?php echo esc_html($opt['label']); ?>
+                                    </label>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php
+                    }
+                }
+                ?>
 
                 <?php
                 // Custom BIO Fields
@@ -5029,6 +5103,23 @@ add_shortcode('mmgr_member_community_profile', function() {
         ));
     
     ob_start();
+
+    // Load profile member's orientations for display
+    $cp_orient_labels = array();
+    $cp_orient_opts_tbl = $wpdb->prefix . 'membership_sexual_orientations';
+    $cp_orient_sel_tbl  = $wpdb->prefix . 'membership_member_orientations';
+    if (
+        $wpdb->get_var("SHOW TABLES LIKE '$cp_orient_opts_tbl'") === $cp_orient_opts_tbl &&
+        $wpdb->get_var("SHOW TABLES LIKE '$cp_orient_sel_tbl'") === $cp_orient_sel_tbl
+    ) {
+        $cp_orient_labels = $wpdb->get_col($wpdb->prepare(
+            "SELECT o.label FROM `$cp_orient_opts_tbl` o
+             JOIN `$cp_orient_sel_tbl` s ON s.orientation_id = o.id
+             WHERE s.member_id = %d AND o.active = 1
+             ORDER BY o.sort_order, o.id",
+            $profile_member_id
+        ));
+    }
     ?>
     <div class="mmgr-portal-container">
         <!-- Navigation -->
@@ -5062,6 +5153,13 @@ add_shortcode('mmgr_member_community_profile', function() {
                 <div style="background:#f9f9f9;padding:15px 20px;border-radius:8px;margin-bottom:20px;text-align:left;font-size:15px;color:#444;line-height:1.6;">
                     <?php echo nl2br(esc_html($profile_member['community_bio'])); ?>
                 </div>
+            <?php endif; ?>
+
+            <?php if (!empty($cp_orient_labels)): ?>
+                <!-- Orientation display -->
+                <p style="margin:0 0 16px 0;font-size:15px;color:#555;">
+                    <strong>Orientation:</strong> <?php echo esc_html(implode(', ', $cp_orient_labels)); ?>
+                </p>
             <?php endif; ?>
 
             <?php
@@ -5379,6 +5477,304 @@ add_shortcode('mmgr_member_community_profile', function() {
                 endif; // !empty($cp_scores)
             endif; // $show_chem
         endif; // table exists
+        ?>
+
+        <!-- Chemistry Compatibility & Matches -->
+        <?php
+        $cc_traits_tbl    = $wpdb->prefix . 'membership_chemistry_traits';
+        $cc_questions_tbl = $wpdb->prefix . 'membership_chemistry_questions';
+        $cc_answers_tbl   = $wpdb->prefix . 'membership_chemistry_answers';
+        $cc_dismiss_tbl   = $wpdb->prefix . 'membership_dismissed_matches';
+        $cc_orient_opts   = $wpdb->prefix . 'membership_sexual_orientations';
+        $cc_orient_sel    = $wpdb->prefix . 'membership_member_orientations';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$cc_traits_tbl'") === $cc_traits_tbl):
+            // Fetch all active traits (ordered)
+            $cc_traits = $wpdb->get_results(
+                "SELECT id, trait_name FROM `$cc_traits_tbl` WHERE active = 1 ORDER BY sort_order ASC, id ASC",
+                ARRAY_A
+            );
+            if (!empty($cc_traits)):
+                $cc_trait_ids = array_map('intval', array_column($cc_traits, 'id'));
+                $cc_ph = implode(',', array_fill(0, count($cc_trait_ids), '%d'));
+
+                // Compute average score per trait for a given member ID (returns assoc array trait_id => score)
+                $cc_get_scores = function($mid) use ($wpdb, $cc_traits_tbl, $cc_questions_tbl, $cc_answers_tbl, $cc_trait_ids, $cc_ph) {
+                    $rows = $wpdb->get_results(
+                        $wpdb->prepare(
+                            "SELECT t.id AS trait_id,
+                                    ROUND(AVG(a.answer_value)) AS score,
+                                    COUNT(a.id) AS answered
+                             FROM `$cc_traits_tbl` t
+                             JOIN `$cc_questions_tbl` q ON q.trait_id = t.id AND q.active = 1
+                             LEFT JOIN `$cc_answers_tbl` a ON a.question_id = q.id AND a.member_id = %d
+                             WHERE t.active = 1
+                             GROUP BY t.id
+                             HAVING answered > 0",
+                            $mid
+                        ),
+                        ARRAY_A
+                    );
+                    $out = array();
+                    foreach ($rows as $r) {
+                        $out[(int)$r['trait_id']] = (int)$r['score'];
+                    }
+                    return $out;
+                };
+
+                // Compute overall compatibility % between two score arrays (0–100)
+                $cc_compat_score = function($scores_a, $scores_b) {
+                    $shared = array_intersect_key($scores_a, $scores_b);
+                    if (empty($shared)) return null;
+                    $total = 0;
+                    foreach (array_keys($shared) as $tid) {
+                        $total += 100 - abs($scores_a[$tid] - $scores_b[$tid]);
+                    }
+                    return (int) round($total / count($shared));
+                };
+
+                // Current member's scores
+                $my_scores = $cc_get_scores((int) $current_member['id']);
+
+                // ── Head-to-head comparison (viewing another member) ──────────────
+                if (!$is_own_profile && !empty($my_scores)):
+                    $their_scores = $cc_get_scores($profile_member_id);
+                    if (!empty($their_scores)):
+                        $compared_traits = array();
+                        $total_compat = 0;
+                        $compared_count = 0;
+                        foreach ($cc_traits as $trait) {
+                            $tid = (int) $trait['id'];
+                            if (!isset($my_scores[$tid]) || !isset($their_scores[$tid])) continue;
+                            $my_s    = $my_scores[$tid];
+                            $their_s = $their_scores[$tid];
+                            $compat  = 100 - abs($my_s - $their_s);
+                            $compared_traits[] = array(
+                                'name'    => $trait['trait_name'],
+                                'my'      => $my_s,
+                                'their'   => $their_s,
+                                'compat'  => $compat,
+                            );
+                            $total_compat += $compat;
+                            $compared_count++;
+                        }
+                        if (!empty($compared_traits)):
+                            $overall_compat = (int) round($total_compat / $compared_count);
+                            if ($overall_compat >= 75)      { $oc_color = '#00a32a'; $oc_label = 'Great Match'; }
+                            elseif ($overall_compat >= 50)  { $oc_color = '#dba617'; $oc_label = 'Good Match'; }
+                            else                            { $oc_color = '#d63638'; $oc_label = 'Low Match'; }
+        ?>
+        <div class="mmgr-portal-card" style="margin-top:20px;">
+            <h2>⚗️ Chemistry Compatibility</h2>
+            <p style="color:#666;font-size:14px;margin-top:0;">
+                Comparing your chemistry profile with <?php echo esc_html(mmgr_unescape_alias($profile_member['community_alias'])); ?>.
+            </p>
+            <!-- Overall score -->
+            <div style="text-align:center;margin-bottom:24px;">
+                <div style="display:inline-block;width:90px;height:90px;border-radius:50%;border:5px solid <?php echo $oc_color; ?>;line-height:80px;font-size:26px;font-weight:bold;color:<?php echo $oc_color; ?>;">
+                    <?php echo $overall_compat; ?>%
+                </div>
+                <p style="margin:8px 0 0 0;font-weight:bold;color:<?php echo $oc_color; ?>;font-size:16px;"><?php echo $oc_label; ?></p>
+            </div>
+
+            <?php
+            // Orientation compatibility note
+            if ($wpdb->get_var("SHOW TABLES LIKE '$cc_orient_opts'") === $cc_orient_opts) {
+                $my_orient    = $wpdb->get_col($wpdb->prepare("SELECT orientation_id FROM `$cc_orient_sel` WHERE member_id = %d", (int)$current_member['id']));
+                $their_orient = $wpdb->get_col($wpdb->prepare("SELECT orientation_id FROM `$cc_orient_sel` WHERE member_id = %d", $profile_member_id));
+                $shared_orient = array_intersect($my_orient, $their_orient);
+                if (!empty($shared_orient)) {
+                    $shared_orient_ids = array_map('intval', array_values($shared_orient));
+                    $shared_labels = $wpdb->get_col($wpdb->prepare(
+                        "SELECT label FROM `$cc_orient_opts` WHERE id IN (" . implode(',', array_fill(0, count($shared_orient_ids), '%d')) . ") ORDER BY sort_order",
+                        ...$shared_orient_ids
+                    ));
+                    echo '<p style="text-align:center;font-size:14px;color:#555;margin-bottom:16px;">🏳️‍🌈 Shared orientation: <strong>' . esc_html(implode(', ', $shared_labels)) . '</strong></p>';
+                }
+            }
+            ?>
+
+            <!-- Trait breakdown -->
+            <div style="display:flex;flex-direction:column;gap:14px;">
+                <?php foreach ($compared_traits as $ct):
+                    if ($ct['compat'] >= 75)     { $ct_color = '#00a32a'; }
+                    elseif ($ct['compat'] >= 50) { $ct_color = '#dba617'; }
+                    else                         { $ct_color = '#d63638'; }
+                ?>
+                <div style="background:#f9f9f9;padding:12px 14px;border-radius:8px;border-left:3px solid <?php echo $ct_color; ?>;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <strong style="font-size:14px;color:#333;"><?php echo esc_html($ct['name']); ?></strong>
+                        <span style="font-weight:bold;font-size:14px;color:<?php echo $ct_color; ?>;"><?php echo $ct['compat']; ?>%</span>
+                    </div>
+                    <div style="display:flex;gap:10px;align-items:center;font-size:12px;color:#666;">
+                        <span>You: <strong><?php echo $ct['my']; ?>%</strong></span>
+                        <div style="flex:1;background:#e0e0e0;border-radius:4px;height:6px;overflow:hidden;">
+                            <div style="width:<?php echo $ct['compat']; ?>%;background:<?php echo $ct_color; ?>;height:100%;border-radius:4px;"></div>
+                        </div>
+                        <span>Them: <strong><?php echo $ct['their']; ?>%</strong></span>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php
+                        endif; // !empty($compared_traits)
+                    endif; // !empty($their_scores)
+                endif; // !$is_own_profile
+
+                // ── My Chemistry Matches ──────────────────────────────────────────
+                if ($wpdb->get_var("SHOW TABLES LIKE '$cc_dismiss_tbl'") === $cc_dismiss_tbl):
+                    // Dismissed member IDs
+                    $dismissed_ids = $wpdb->get_col($wpdb->prepare(
+                        "SELECT dismissed_member_id FROM `$cc_dismiss_tbl` WHERE member_id = %d",
+                        (int) $current_member['id']
+                    ));
+                    $dismissed_ids = array_map('intval', $dismissed_ids);
+
+                    // All active members (except self) who have answered at least one chemistry question
+                    $exclude_ids   = array_merge(array((int)$current_member['id']), $dismissed_ids);
+                    $excl_ph       = implode(',', array_fill(0, count($exclude_ids), '%d'));
+
+                    $candidate_ids = $wpdb->get_col(
+                        $wpdb->prepare(
+                            "SELECT DISTINCT a.member_id FROM `$cc_answers_tbl` a
+                             JOIN `{$wpdb->prefix}memberships` m ON m.id = a.member_id AND m.active = 1
+                             WHERE a.member_id NOT IN ($excl_ph)
+                               AND (m.chemistry_privacy IS NULL OR m.chemistry_privacy != 'nobody')",
+                            ...$exclude_ids
+                        )
+                    );
+                    $candidate_ids = array_map('intval', $candidate_ids);
+
+                    // Compute compatibility for each candidate and pick top 10
+                    $match_scores = array();
+                    if (!empty($my_scores) && !empty($candidate_ids)) {
+                        foreach ($candidate_ids as $cid) {
+                            $c_scores = $cc_get_scores($cid);
+                            $score    = $cc_compat_score($my_scores, $c_scores);
+                            if ($score !== null) {
+                                $match_scores[$cid] = $score;
+                            }
+                        }
+                        arsort($match_scores);
+                        $match_scores = array_slice($match_scores, 0, 10, true);
+                    }
+
+                    if (!empty($match_scores)):
+                        // Fetch member info for matched IDs
+                        $match_ids = array_keys($match_scores);
+                        $m_ph      = implode(',', array_fill(0, count($match_ids), '%d'));
+                        $match_members = $wpdb->get_results(
+                            $wpdb->prepare(
+                                "SELECT id, community_alias, community_photo_url, level
+                                 FROM `{$wpdb->prefix}memberships`
+                                 WHERE id IN ($m_ph)",
+                                ...$match_ids
+                            ),
+                            ARRAY_A
+                        );
+                        $match_by_id = array();
+                        foreach ($match_members as $mm) {
+                            $match_by_id[(int)$mm['id']] = $mm;
+                        }
+
+                        // Orientation labels for matched members (batch)
+                        $match_orientations = array();
+                        if ($wpdb->get_var("SHOW TABLES LIKE '$cc_orient_opts'") === $cc_orient_opts) {
+                            foreach ($match_ids as $mid) {
+                                $labels = $wpdb->get_col($wpdb->prepare(
+                                    "SELECT o.label FROM `$cc_orient_opts` o
+                                     JOIN `$cc_orient_sel` s ON s.orientation_id = o.id
+                                     WHERE s.member_id = %d AND o.active = 1
+                                     ORDER BY o.sort_order",
+                                    $mid
+                                ));
+                                $match_orientations[$mid] = $labels;
+                            }
+                        }
+        ?>
+        <div class="mmgr-portal-card" style="margin-top:20px;" id="chemistry-matches-card">
+            <h2>💞 My Chemistry Matches</h2>
+            <p style="color:#666;font-size:14px;margin-top:0;">
+                Members most compatible with you based on chemistry profile and orientation.
+                Click ✕ next to a match to remove them from this list.
+            </p>
+            <div id="chemistry-matches-list" style="display:flex;flex-direction:column;gap:12px;margin-top:16px;">
+                <?php foreach ($match_scores as $match_id => $score):
+                    if (!isset($match_by_id[$match_id])) continue;
+                    $mm     = $match_by_id[$match_id];
+                    $m_alias = esc_html(mmgr_unescape_alias($mm['community_alias'] ?: 'Member'));
+                    $m_photo = $mm['community_photo_url'];
+                    $m_level = esc_html($mm['level']);
+                    $m_url   = esc_url(home_url('/member-community-profile/?id=' . $match_id . '&usercod=' . rawurlencode($current_member['member_code'])));
+                    $m_orients = $match_orientations[$match_id] ?? array();
+                    if ($score >= 75)     { $sc_color = '#00a32a'; }
+                    elseif ($score >= 50) { $sc_color = '#dba617'; }
+                    else                  { $sc_color = '#d63638'; }
+                ?>
+                <div id="match-row-<?php echo $match_id; ?>" style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:#f9f9f9;border-radius:10px;border-left:4px solid <?php echo $sc_color; ?>;">
+                    <?php if (!empty($m_photo)): ?>
+                        <img src="<?php echo esc_url($m_photo); ?>" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #ddd;flex-shrink:0;">
+                    <?php else: ?>
+                        <div style="width:52px;height:52px;border-radius:50%;background:#e8e8e8;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;">👤</div>
+                    <?php endif; ?>
+                    <div style="flex:1;min-width:0;">
+                        <a href="<?php echo $m_url; ?>" style="font-weight:bold;color:#0073aa;text-decoration:none;font-size:15px;"><?php echo $m_alias; ?></a>
+                        <div style="font-size:12px;color:#888;margin-top:2px;"><?php echo $m_level; ?></div>
+                        <?php if (!empty($m_orients)): ?>
+                        <div style="font-size:12px;color:#666;margin-top:2px;"><?php echo esc_html(implode(', ', $m_orients)); ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <div style="text-align:center;flex-shrink:0;">
+                        <div style="font-size:20px;font-weight:bold;color:<?php echo $sc_color; ?>;"><?php echo $score; ?>%</div>
+                        <div style="font-size:11px;color:#999;">match</div>
+                    </div>
+                    <button onclick="dismissChemMatch(<?php echo $match_id; ?>)"
+                            title="Remove this match"
+                            aria-label="Remove this match"
+                            style="background:none;border:none;cursor:pointer;color:#bbb;font-size:20px;padding:4px 6px;border-radius:50%;flex-shrink:0;"
+                            onmouseover="this.style.color='#d63638';this.style.background='#fff0f0';"
+                            onmouseout="this.style.color='#bbb';this.style.background='none';">✕</button>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <script>
+        function dismissChemMatch(memberId) {
+            var row = document.getElementById('match-row-' + memberId);
+            if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
+            var params = new URLSearchParams();
+            params.append('action',             'mmgr_dismiss_chemistry_match');
+            params.append('nonce',              '<?php echo esc_js(wp_create_nonce('mmgr_dismiss_match')); ?>');
+            params.append('dismissed_member_id', memberId);
+            fetch('<?php echo esc_js(admin_url('admin-ajax.php')); ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString()
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success && row) {
+                    row.style.transition = 'all 0.3s';
+                    row.style.opacity = '0';
+                    row.style.maxHeight = '0';
+                    row.style.overflow = 'hidden';
+                    row.style.padding = '0';
+                    setTimeout(function() { if (row.parentNode) row.parentNode.removeChild(row); }, 320);
+                } else if (row) {
+                    row.style.opacity = '1';
+                    row.style.pointerEvents = 'auto';
+                }
+            })
+            .catch(function() {
+                if (row) { row.style.opacity = '1'; row.style.pointerEvents = 'auto'; }
+            });
+        }
+        </script>
+        <?php
+                    endif; // !empty($match_scores)
+                endif; // dismiss table exists
+            endif; // !empty($cc_traits)
+        endif; // cc_traits_tbl exists
         ?>
 
     </div>

@@ -955,3 +955,79 @@ add_action('wp_ajax_mmgr_save_chemistry_answers', function() {
 
     wp_send_json_success(array('message' => 'Chemistry profile saved!'));
 });
+
+/**
+ * AJAX: Save member sexual orientation selections.
+ */
+add_action('wp_ajax_mmgr_save_orientations', function() {
+    global $wpdb;
+    if (!check_ajax_referer('mmgr_save_orientations', 'nonce', false)) {
+        wp_send_json_error(array('message' => 'Security check failed.'));
+    }
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Not logged in.'));
+    }
+
+    $opts_tbl = $wpdb->prefix . 'membership_sexual_orientations';
+    $sel_tbl  = $wpdb->prefix . 'membership_member_orientations';
+
+    $raw_ids = isset($_POST['orientation_ids']) ? $_POST['orientation_ids'] : array();
+    if (!is_array($raw_ids)) {
+        $raw_ids = array();
+    }
+    $selected_ids = array_map('intval', $raw_ids);
+
+    // Validate against active orientation IDs
+    $active_ids = $wpdb->get_col("SELECT id FROM `$opts_tbl` WHERE active = 1");
+    $active_ids = array_map('intval', $active_ids);
+    $valid_ids  = array_intersect($selected_ids, $active_ids);
+
+    // Replace selections: delete existing, insert valid
+    $wpdb->delete($sel_tbl, array('member_id' => (int) $member['id']));
+    foreach ($valid_ids as $oid) {
+        $wpdb->replace($sel_tbl, array(
+            'member_id'      => (int) $member['id'],
+            'orientation_id' => $oid,
+        ));
+    }
+
+    wp_send_json_success(array('message' => 'Orientation saved!'));
+});
+
+/**
+ * AJAX: Dismiss a chemistry match.
+ */
+add_action('wp_ajax_mmgr_dismiss_chemistry_match', function() {
+    global $wpdb;
+    if (!check_ajax_referer('mmgr_dismiss_match', 'nonce', false)) {
+        wp_send_json_error(array('message' => 'Security check failed.'));
+    }
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Not logged in.'));
+    }
+
+    $dismiss_member_id = intval($_POST['dismissed_member_id'] ?? 0);
+    if ($dismiss_member_id <= 0 || $dismiss_member_id === (int) $member['id']) {
+        wp_send_json_error(array('message' => 'Invalid member ID.'));
+    }
+
+    // Verify the dismissed member actually exists and is active
+    $members_tbl = $wpdb->prefix . 'memberships';
+    $exists = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM `$members_tbl` WHERE id = %d AND active = 1",
+        $dismiss_member_id
+    ));
+    if (!$exists) {
+        wp_send_json_error(array('message' => 'Member not found.'));
+    }
+
+    $dismiss_tbl = $wpdb->prefix . 'membership_dismissed_matches';
+    $wpdb->replace($dismiss_tbl, array(
+        'member_id'          => (int) $member['id'],
+        'dismissed_member_id' => $dismiss_member_id,
+    ));
+
+    wp_send_json_success(array('message' => 'Match dismissed.'));
+});
