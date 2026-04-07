@@ -1072,11 +1072,94 @@ function mmgr_migrate_chemistry_tables() {
 }
 
 /**
+ * Create sexual orientation option table and member-orientation mapping table.
+ * Safe to call repeatedly – each step is guarded by SHOW TABLES / SHOW COLUMNS.
+ */
+function mmgr_migrate_sexual_orientation_fields() {
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $opts_tbl    = $wpdb->prefix . 'membership_sexual_orientations';
+    $sel_tbl     = $wpdb->prefix . 'membership_member_orientations';
+    $dismiss_tbl = $wpdb->prefix . 'membership_dismissed_matches';
+
+    // Orientation options table
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$opts_tbl'" ) !== $opts_tbl ) {
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS `$opts_tbl` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            label VARCHAR(100) NOT NULL,
+            category VARCHAR(50) NOT NULL DEFAULT 'sexual',
+            sort_order INT NOT NULL DEFAULT 0,
+            active TINYINT(1) NOT NULL DEFAULT 1,
+            INDEX idx_active (active),
+            INDEX idx_category (category),
+            INDEX idx_sort (sort_order)
+        ) ENGINE=InnoDB $charset_collate" );
+
+        // Seed default orientation options
+        $defaults = array(
+            array( 'Heterosexual',    'sexual',       10 ),
+            array( 'Homosexual',      'sexual',       20 ),
+            array( 'Bisexual',        'sexual',       30 ),
+            array( 'Pansexual',       'sexual',       40 ),
+            array( 'Heteroflexible',  'sexual',       50 ),
+            array( 'Homoflexible',    'sexual',       60 ),
+            array( 'Queer',           'sexual',       70 ),
+            array( 'Asexual',         'sexual',       80 ),
+            array( 'Demisexual',      'sexual',       90 ),
+            array( 'Fluid',           'sexual',      100 ),
+            array( 'Heteroromantic',  'romantic',    110 ),
+            array( 'Homoromantic',    'romantic',    120 ),
+            array( 'Biromantic',      'romantic',    130 ),
+            array( 'Panromantic',     'romantic',    140 ),
+            array( 'Aromantic',       'romantic',    150 ),
+            array( 'Monogamous',      'relationship', 160 ),
+            array( 'Polyamorous',     'relationship', 170 ),
+            array( 'Open',            'relationship', 180 ),
+            array( 'Swinger',         'relationship', 190 ),
+            array( 'Curious',         'relationship', 200 ),
+        );
+        foreach ( $defaults as $d ) {
+            $wpdb->insert( $opts_tbl, array(
+                'label'      => $d[0],
+                'category'   => $d[1],
+                'sort_order' => $d[2],
+                'active'     => 1,
+            ) );
+        }
+    }
+
+    // Member orientation selections table
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$sel_tbl'" ) !== $sel_tbl ) {
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS `$sel_tbl` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            member_id INT NOT NULL,
+            orientation_id INT NOT NULL,
+            UNIQUE KEY uniq_member_orientation (member_id, orientation_id),
+            INDEX idx_member_id (member_id),
+            INDEX idx_orientation_id (orientation_id)
+        ) ENGINE=InnoDB $charset_collate" );
+    }
+
+    // Dismissed chemistry matches table
+    if ( $wpdb->get_var( "SHOW TABLES LIKE '$dismiss_tbl'" ) !== $dismiss_tbl ) {
+        $wpdb->query( "CREATE TABLE IF NOT EXISTS `$dismiss_tbl` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            member_id INT NOT NULL,
+            dismissed_member_id INT NOT NULL,
+            dismissed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uniq_dismiss (member_id, dismissed_member_id),
+            INDEX idx_member_id (member_id)
+        ) ENGINE=InnoDB $charset_collate" );
+    }
+}
+
+/**
  * Check and update database schema on plugin load
  */
 function mmgr_check_database() {
     $current_version = get_option('mmgr_db_version', '0.0.0');
-    $required_version = '1.8.0';
+    $required_version = '1.9.0';
     
     if (version_compare($current_version, $required_version, '<')) {
         mmgr_create_tables();
@@ -1088,7 +1171,8 @@ function mmgr_check_database() {
         mmgr_migrate_orientation_tables();
         mmgr_migrate_archive_table();
         mmgr_migrate_chemistry_tables();
-        update_option( 'mmgr_db_version', '1.8.0' );
+        mmgr_migrate_sexual_orientation_fields();
+        update_option( 'mmgr_db_version', '1.9.0' );
     }
 }
 
