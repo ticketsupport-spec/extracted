@@ -198,6 +198,18 @@ function mmgr_create_portal_tables() {
         INDEX idx_photo_id (photo_id)
     ) $charset_collate");
 
+    // Forum post photos table (up to 10 photos per post)
+    $forum_post_photos_tbl = $wpdb->prefix . 'membership_forum_post_photos';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$forum_post_photos_tbl` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        post_id INT NOT NULL,
+        photo_url VARCHAR(500) NOT NULL,
+        sort_order INT DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_post_id (post_id),
+        INDEX idx_sort (post_id, sort_order)
+    ) $charset_collate");
+
     // Card requests table
     $card_requests_tbl = $wpdb->prefix . 'mmgr_card_requests';
     $sql_card = "CREATE TABLE IF NOT EXISTS $card_requests_tbl (
