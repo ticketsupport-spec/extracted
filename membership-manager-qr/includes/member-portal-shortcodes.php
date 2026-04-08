@@ -2541,26 +2541,48 @@ add_shortcode('mmgr_member_community', function() {
             } else {
                 $topic_id  = intval($_POST['topic_id']);
                 $message   = sanitize_textarea_field($_POST['message']);
-                $photo_url = '';
-                
-                // Handle photo upload
-                if (!empty($_FILES['photo']['name'])) {
-                    $upload = wp_handle_upload($_FILES['photo'], array('test_form' => false));
-                    if (!isset($upload['error'])) {
-                        $photo_url = $upload['url'];
-                    } else {
-                        $error = 'Photo upload failed: ' . $upload['error'];
+
+                // Handle multiple photo uploads (up to 10)
+                $uploaded_photo_urls = array();
+                $forum_post_photos_tbl = $wpdb->prefix . 'membership_forum_post_photos';
+                if (!empty($_FILES['photos']['name'][0])) {
+                    $files = $_FILES['photos'];
+                    $file_count = min(count($files['name']), 10);
+                    for ($i = 0; $i < $file_count; $i++) {
+                        if (empty($files['name'][$i])) continue;
+                        $single_file = array(
+                            'name'     => $files['name'][$i],
+                            'type'     => $files['type'][$i],
+                            'tmp_name' => $files['tmp_name'][$i],
+                            'error'    => $files['error'][$i],
+                            'size'     => $files['size'][$i],
+                        );
+                        $upload = wp_handle_upload($single_file, array('test_form' => false));
+                        if (!isset($upload['error'])) {
+                            $uploaded_photo_urls[] = $upload['url'];
+                        } else {
+                            $error = 'Photo upload failed: ' . $upload['error'];
+                            break;
+                        }
                     }
                 }
-                
+
                 if (empty($error) && !empty($message)) {
                     $wpdb->insert($posts_tbl, array(
                         'member_id' => $member['id'],
                         'topic_id'  => $topic_id,
                         'message'   => $message,
-                        'photo_url' => $photo_url,
+                        'photo_url' => '',
                         'posted_at' => current_time('mysql')
                     ));
+                    $new_post_id = $wpdb->insert_id;
+                    foreach ($uploaded_photo_urls as $sort => $photo_url) {
+                        $wpdb->insert($forum_post_photos_tbl, array(
+                            'post_id'    => $new_post_id,
+                            'photo_url'  => $photo_url,
+                            'sort_order' => $sort,
+                        ));
+                    }
                     $success = 'Post submitted successfully!';
                 } elseif (empty($message)) {
                     $error = 'Please enter a message.';
@@ -2623,6 +2645,7 @@ add_shortcode('mmgr_member_community', function() {
 
     // Fetch all comments for currently visible posts (one query for all posts)
     $comments_by_post = array();
+    $photos_by_post   = array();
     if (!empty($posts)) {
         $post_ids     = array_map('intval', array_column($posts, 'id'));
         $placeholders = implode(',', array_fill(0, count($post_ids), '%d'));
@@ -2644,6 +2667,21 @@ add_shortcode('mmgr_member_community', function() {
         );
         foreach ($all_comments as $c) {
             $comments_by_post[$c['post_id']][] = $c;
+        }
+
+        // Fetch photos from the new post photos table
+        $forum_post_photos_tbl = $wpdb->prefix . 'membership_forum_post_photos';
+        $all_post_photos = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, post_id, photo_url FROM `$forum_post_photos_tbl` WHERE post_id IN ($placeholders) ORDER BY sort_order ASC, id ASC",
+                ...$post_ids
+            ),
+            ARRAY_A
+        );
+        if ($all_post_photos) {
+            foreach ($all_post_photos as $pp) {
+                $photos_by_post[intval($pp['post_id'])][] = $pp;
+            }
         }
     }
 
@@ -2709,8 +2747,10 @@ add_shortcode('mmgr_member_community', function() {
                 </div>
                 
                 <div class="mmgr-field" style="margin-bottom:15px;">
-                    <label style="display:block;font-weight:bold;margin-bottom:5px;">📷 Add Photo (Optional)</label>
-                    <input type="file" name="photo" accept="image/*" style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;">
+                    <label style="display:block;font-weight:bold;margin-bottom:5px;">📷 Add Photos (Optional, up to 10)</label>
+                    <input type="file" name="photos[]" accept="image/*" multiple style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;" onchange="mmgrPreviewPostPhotos(this)">
+                    <div id="mmgr-post-photo-previews" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
+                    <p style="font-size:12px;color:#888;margin:4px 0 0 0;">Select up to 10 images. Only the first 10 will be uploaded.</p>
                 </div>
                 
                 <button type="submit" name="submit_post" style="background:#FF2197;color:white;padding:12px 30px;border:none;border-radius:6px;font-size:16px;font-weight:bold;cursor:pointer;">
@@ -2810,21 +2850,33 @@ add_shortcode('mmgr_member_community', function() {
                                 </div>
                                 <?php endif; ?>
                                 
-                                <!-- Post Photo (thumbnail → lightbox) -->
-                                <?php if (!empty($post['photo_url'])): ?>
+                                <!-- Post Photos (thumbnail grid → lightbox) -->
+                                <?php
+                                $post_photos = isset($photos_by_post[$post['id']]) ? $photos_by_post[$post['id']] : array();
+                                // Backward compat: old posts may have photo_url on the post row itself
+                                if (empty($post_photos) && !empty($post['photo_url'])) {
+                                    $post_photos = array(array('id' => 0, 'photo_url' => $post['photo_url']));
+                                }
+                                if (!empty($post_photos)): ?>
                                     <div id="post-photo-<?php echo $post['id']; ?>" style="margin-top:15px;">
-                                        <img src="<?php echo esc_url($post['photo_url']); ?>"
-                                             alt="Post photo"
-                                             onclick="openPhotoLightbox('<?php echo esc_js($post['photo_url']); ?>')"
-                                             style="max-width:150px;max-height:150px;object-fit:cover;border-radius:8px;border:2px solid #e0e0e0;cursor:pointer;">
-                                        <?php if ($is_moderator): ?>
-                                        <div style="margin-top:6px;">
-                                            <button onclick="removePostPhoto(<?php echo $post['id']; ?>)"
-                                                    style="background:white;color:#d00;border:2px solid #d00;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;">
-                                                🗑 Remove Photo
-                                            </button>
+                                        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                                            <?php foreach ($post_photos as $pp):
+                                                $pp_url = esc_url($pp['photo_url']);
+                                                $pp_id  = intval($pp['id']);
+                                            ?>
+                                            <div <?php if ($pp_id > 0) echo 'id="forum-photo-' . esc_attr($pp_id) . '"'; ?> style="position:relative;display:inline-block;">
+                                                <img src="<?php echo $pp_url; ?>"
+                                                     alt="Post photo"
+                                                     onclick="openPhotoLightbox('<?php echo esc_js($pp['photo_url']); ?>')"
+                                                     style="width:100px;height:100px;object-fit:cover;border-radius:8px;border:2px solid #e0e0e0;cursor:pointer;display:block;">
+                                                <?php if ($is_moderator && $pp_id > 0): ?>
+                                                <button onclick="removePostPhotoById(<?php echo $pp_id; ?>, <?php echo $post['id']; ?>)"
+                                                        title="Remove this photo"
+                                                        style="position:absolute;top:3px;right:3px;background:rgba(200,0,0,0.85);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>
+                                                <?php endif; ?>
+                                            </div>
+                                            <?php endforeach; ?>
                                         </div>
-                                        <?php endif; ?>
                                     </div>
                                 <?php endif; ?>
                                 
@@ -3233,7 +3285,51 @@ add_shortcode('mmgr_member_community', function() {
         });
     }
 
-    // Moderator: Remove photo from a post
+    // Preview selected photos before submitting
+    function mmgrPreviewPostPhotos(input) {
+        const container = document.getElementById('mmgr-post-photo-previews');
+        container.innerHTML = '';
+        const files = Array.from(input.files).slice(0, 10);
+        files.forEach(function(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;border:2px solid #e0e0e0;';
+                container.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // Moderator: Remove a single photo from a post (by photo ID)
+    function removePostPhotoById(photoId, postId) {
+        if (!confirm('Remove this photo from the post?')) return;
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'action=mmgr_forum_remove_photo&photo_id=' + photoId
+                + '&post_id=' + postId
+                + '&topic_id=<?php echo $selected_topic_id; ?>'
+                + '&nonce=<?php echo wp_create_nonce('mmgr_forum_mod_action'); ?>'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const el = document.getElementById('forum-photo-' + photoId);
+                if (el) el.remove();
+                // If no photos remain, remove the whole container
+                const container = document.getElementById('post-photo-' + postId);
+                if (container && container.querySelectorAll('div[id^="forum-photo-"]').length === 0) {
+                    container.remove();
+                }
+            } else {
+                alert('❌ ' + (data.data ? data.data.message : 'Failed to remove photo.'));
+            }
+        });
+    }
+
+    // Moderator: Remove photo from a post (legacy – kept for backward compat)
     function removePostPhoto(postId) {
         if (!confirm('Remove this photo from the post?')) return;
         fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
@@ -6512,9 +6608,11 @@ add_action('wp_ajax_mmgr_forum_remove_photo', function() {
 
     global $wpdb;
     $post_id  = intval($_POST['post_id']);
+    $photo_id = isset($_POST['photo_id']) ? intval($_POST['photo_id']) : 0;
     $topic_id = intval($_POST['topic_id']);
     $posts_tbl = $wpdb->prefix . 'membership_forum_posts';
     $mods_tbl  = $wpdb->prefix . 'membership_forum_topic_mods';
+    $forum_post_photos_tbl = $wpdb->prefix . 'membership_forum_post_photos';
 
     // Verify moderator
     $is_mod = $wpdb->get_var($wpdb->prepare(
@@ -6530,7 +6628,13 @@ add_action('wp_ajax_mmgr_forum_remove_photo', function() {
     ));
     if (!$post_exists) wp_send_json_error(array('message' => 'Post not found.'));
 
-    $wpdb->update($posts_tbl, array('photo_url' => ''), array('id' => $post_id));
+    if ($photo_id > 0) {
+        // Remove a specific photo from the new photos table
+        $wpdb->delete($forum_post_photos_tbl, array('id' => $photo_id, 'post_id' => $post_id), array('%d', '%d'));
+    } else {
+        // Legacy: clear the photo_url on the post row
+        $wpdb->update($posts_tbl, array('photo_url' => ''), array('id' => $post_id));
+    }
     wp_send_json_success(array('message' => 'Photo removed.'));
 });
 
