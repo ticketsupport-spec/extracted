@@ -2676,7 +2676,7 @@ add_shortcode('mmgr_member_community', function() {
             <div style="display:flex;flex-wrap:wrap;gap:10px;">
                 <?php foreach ($topics as $topic): ?>
                     <a href="?topic=<?php echo $topic['id']; ?>" 
-                       style="padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;transition:all 0.3s;<?php echo $topic['id'] == $selected_topic_id ? 'background:#FF2197;color:white;' : 'background:#f0f0f0;color:#333;'; ?>">
+                       style="padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;transition:all 0.3s;<?php echo $topic['id'] == $selected_topic_id ? 'background:#FF2197;color:white;' : 'background:#eec2ff;color:#333;'; ?>">
                         <?php echo esc_html($topic['topic_name']); ?>
                     </a>
                 <?php endforeach; ?>
