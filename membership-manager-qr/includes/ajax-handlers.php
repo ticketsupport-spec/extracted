@@ -34,7 +34,7 @@ function mmgr_handle_checkin() {
     $admin_notes = array();
     if (current_user_can('manage_options')) {
         $member_notes_tbl = $wpdb->prefix . 'membership_member_notes';
-        if ($wpdb->get_var("SHOW TABLES LIKE '$member_notes_tbl'") === $member_notes_tbl) {
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($member_notes_tbl))) === $member_notes_tbl) {
             $admin_notes = $wpdb->get_results($wpdb->prepare(
                 "SELECT note, created_at FROM `$member_notes_tbl` WHERE member_id = %d ORDER BY created_at DESC, id DESC",
                 $member['id']

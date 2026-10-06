@@ -124,16 +124,7 @@ function mmgr_create_tables() {
     // ===========================
     // ADMIN MEMBER NOTES TABLE
     // ===========================
-    $member_notes_table = $wpdb->prefix . 'membership_member_notes';
-    $wpdb->query("CREATE TABLE IF NOT EXISTS `$member_notes_table` (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        member_id INT NOT NULL,
-        note TEXT NOT NULL,
-        created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
-        created_at DATETIME NOT NULL,
-        INDEX idx_member_id (member_id),
-        INDEX idx_created_at (created_at)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    mmgr_ensure_member_notes_table();
     
     // ===========================
     // EMAIL LOG TABLE
@@ -1169,6 +1160,32 @@ function mmgr_migrate_sexual_orientation_fields() {
 }
 
 /**
+ * Ensure member notes use the current site's WordPress database and table prefix.
+ */
+function mmgr_ensure_member_notes_table() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'membership_member_notes';
+    $exists_query = $wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table));
+
+    if ($wpdb->get_var($exists_query) === $table) {
+        return true;
+    }
+
+    $charset_collate = $wpdb->get_charset_collate();
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        note TEXT NOT NULL,
+        created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL,
+        INDEX idx_member_id (member_id),
+        INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB $charset_collate");
+
+    return $wpdb->get_var($exists_query) === $table;
+}
+
+/**
  * Check and update database schema on plugin load
  */
 function mmgr_check_database() {
@@ -1188,6 +1205,9 @@ function mmgr_check_database() {
         mmgr_migrate_sexual_orientation_fields();
         update_option( 'mmgr_db_version', '1.10.0' );
     }
+
+    // Repair missing notes tables even when the schema version is already current.
+    mmgr_ensure_member_notes_table();
 }
 
 // Hook to check database on admin init
