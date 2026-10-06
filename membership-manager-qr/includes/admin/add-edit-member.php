@@ -398,7 +398,7 @@ if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', 
         </p>
     </form>
     
-    <?php if ($editing && $member): ?>
+    <?php if ($editing && $member && $unsaved_note === ''): ?>
         <hr>
         <h2>Member Code & QR Code</h2>
         <p><strong>Member Code:</strong> <code style="font-size:18px;color:#d00;"><?php echo esc_html($member['member_code']); ?></code></p>

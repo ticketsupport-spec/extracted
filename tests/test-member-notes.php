@@ -164,6 +164,7 @@ $html = render_member_form(false, 'Retry on created member');
 expect(str_contains($html, 'action="https://example.com/wp-admin/admin.php?page=membership_add&amp;id=42"'), 'New member note failure retries on the created account');
 expect(str_contains($html, 'rows="4">Retry on created member</textarea>'), 'New member failed note is preserved');
 expect(!str_contains($html, 'Member added successfully!'), 'New member note failure suppresses overall success');
+expect(!str_contains($html, 'name="mmgr_regenerate_qr"'), 'Separate QR forms cannot discard a pending note after creation');
 
 foreach (array(true, false) as $editing) {
     $wpdb = new NotesDatabase();
