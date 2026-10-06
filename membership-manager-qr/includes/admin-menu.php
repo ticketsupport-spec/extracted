@@ -421,6 +421,26 @@ function mmgr_members_page() {
     // Get all members
     $members = $wpdb->get_results("SELECT * FROM $tbl ORDER BY paid ASC, id DESC", ARRAY_A);
     $total = count($members);
+
+    $fetlife_names = array();
+    $bio_fields_tbl = $wpdb->prefix . 'membership_bio_fields';
+    $bio_values_tbl = $wpdb->prefix . 'membership_bio_field_values';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$bio_fields_tbl'") === $bio_fields_tbl &&
+        $wpdb->get_var("SHOW TABLES LIKE '$bio_values_tbl'") === $bio_values_tbl) {
+        $fetlife_rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT v.member_id, v.field_value
+             FROM $bio_values_tbl v
+             INNER JOIN $bio_fields_tbl f ON f.id = v.field_id
+             WHERE f.active = 1 AND LOWER(TRIM(f.field_name)) = %s
+             ORDER BY f.sort_order, f.id",
+            'fetlife name'
+        ), ARRAY_A);
+        foreach ($fetlife_rows as $row) {
+            if (trim((string) $row['field_value']) !== '' && !isset($fetlife_names[$row['member_id']])) {
+                $fetlife_names[$row['member_id']] = $row['field_value'];
+            }
+        }
+    }
     
     // Count unpaid members
     $unpaid_count = $wpdb->get_var("SELECT COUNT(*) FROM $tbl WHERE paid = 0");
@@ -521,6 +541,9 @@ function mmgr_members_page() {
                                     <?php echo esc_html($member['name']); ?>
                                 </a>
                             </strong>
+                            <?php if (isset($fetlife_names[$member['id']])): ?>
+                                <br><span style="color:#666;font-size:12px;">Fetlife Name: <?php echo esc_html($fetlife_names[$member['id']]); ?></span>
+                            <?php endif; ?>
                             <?php if (!empty($member['partner_name'])): ?>
                                 <br><span style="color:#666;font-size:12px;">+ <?php echo esc_html($member['partner_name']); ?></span>
                             <?php endif; ?>
@@ -733,4 +756,3 @@ function mmgr_special_fees_page() {
 function mmgr_pages_overview() {
     require_once MMGR_PLUGIN_DIR . 'includes/admin/pages-overview.php';
 }
-

@@ -114,6 +114,12 @@ function mmgr_get_portal_navigation($active_page = '', $member = null) {
 			<a href="<?php echo esc_url($logout_url); ?>" class="logout"><?php echo esc_html(get_option('mmgr_portal_nav_logout', '🚪 Logout')); ?></a>
         </div>
     </div>
+    <?php if ($member && $active_page !== 'profile' &&
+        (empty($member['community_alias']) || empty($member['community_bio']) || empty($member['community_photo_url']))): ?>
+        <div class="mmgr-profile-reminder" role="status" style="background:#fff3cd;border-left:4px solid #ff9800;padding:15px;margin-bottom:20px;border-radius:6px;">
+            Please fill in your <a href="<?php echo esc_url($profile_url); ?>"><strong>PROFILE</strong></a>. Add a community alias, bio and photo.
+        </div>
+    <?php endif; ?>
     <?php
     return ob_get_clean();
 }
@@ -307,6 +313,7 @@ add_shortcode('mmgr_upcoming_events', function($atts) {
 /**
  * AJAX: Toggle event RSVP ("Mark as Going")
  */
+add_action('wp_ajax_nopriv_mmgr_toggle_event_rsvp', function() { do_action('wp_ajax_mmgr_toggle_event_rsvp'); });
 add_action('wp_ajax_mmgr_toggle_event_rsvp', function() {
     check_ajax_referer('mmgr_toggle_event_rsvp', 'nonce');
 
@@ -961,9 +968,6 @@ add_shortcode('mmgr_member_dashboard', function() {
             }
             echo '</p>';
             ?>
-            <?php if (empty($member['community_alias']) || empty($member['community_bio']) || empty($member['community_photo_url'])): ?>
-            <p>Set up your community profile. Add a Photo, Bio and an Alias - <a href="<?php echo esc_url(add_query_arg('usercod', $member['member_code'], home_url('/member-profile/'))); ?>">Click Here</a></p>
-            <?php endif; ?>
         </div>
         
         <div class="mmgr-portal-grid">
