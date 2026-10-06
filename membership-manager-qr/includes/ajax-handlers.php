@@ -29,11 +29,27 @@ function mmgr_handle_checkin() {
         wp_send_json_error(array('message' => '❌ Member not found. Code: ' . esc_html($code)));
         return;
     }
+
+    // Admin notes are only returned to WordPress administrators.
+    $admin_notes = array();
+    if (current_user_can('manage_options')) {
+        $member_notes_tbl = $wpdb->prefix . 'membership_member_notes';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$member_notes_tbl'") === $member_notes_tbl) {
+            $admin_notes = $wpdb->get_results($wpdb->prepare(
+                "SELECT note, created_at FROM `$member_notes_tbl` WHERE member_id = %d ORDER BY created_at DESC, id DESC",
+                $member['id']
+            ), ARRAY_A);
+        }
+    }
     
     // Check if banned
     if (!empty($member['banned']) && $member['banned'] == 1) {
         $ban_reason = !empty($member['banned_reason']) ? $member['banned_reason'] : 'No reason provided';
-        wp_send_json_error(array('message' => '⛔ Access Denied: ' . esc_html($member['name']) . ' is banned. Reason: ' . esc_html($ban_reason)));
+        wp_send_json_error(array(
+            'message' => '⛔ Access Denied: ' . esc_html($member['name']) . ' is banned. Reason: ' . esc_html($ban_reason),
+            'member_name' => $member['name'],
+            'admin_notes' => $admin_notes,
+        ));
         return;
     }
     
@@ -49,7 +65,11 @@ function mmgr_handle_checkin() {
     ));
     
     if ($existing_visit > 0) {
-        wp_send_json_error(array('message' => '⚠️ ' . esc_html($member['name']) . ' has already checked in today!'));
+        wp_send_json_error(array(
+            'message' => '⚠️ ' . esc_html($member['name']) . ' has already checked in today!',
+            'member_name' => $member['name'],
+            'admin_notes' => $admin_notes,
+        ));
         return;
     }
     
@@ -107,18 +127,6 @@ function mmgr_handle_checkin() {
             if ( $pending ) {
                 $pending_orientation_items = $pending;
             }
-        }
-    }
-
-    // Admin notes are only returned to WordPress administrators.
-    $admin_notes = array();
-    if (current_user_can('manage_options')) {
-        $member_notes_tbl = $wpdb->prefix . 'membership_member_notes';
-        if ($wpdb->get_var("SHOW TABLES LIKE '$member_notes_tbl'") === $member_notes_tbl) {
-            $admin_notes = $wpdb->get_results($wpdb->prepare(
-                "SELECT note, created_at FROM `$member_notes_tbl` WHERE member_id = %d ORDER BY created_at DESC, id DESC",
-                $member['id']
-            ), ARRAY_A);
         }
     }
 

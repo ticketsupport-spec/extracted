@@ -431,15 +431,22 @@ add_shortcode('membership_checkin', function($atts){
         .then(r => r.json())
         .then(data => {
             const result = document.getElementById('checkin-result');
+
+            const adminNotes = data.data && data.data.member
+                ? data.data.member.admin_notes
+                : (data.data ? data.data.admin_notes : []);
+            if (Array.isArray(adminNotes) && adminNotes.length) {
+                const notesText = adminNotes.map(note =>
+                    note.created_at + '\n' + note.note
+                ).join('\n\n');
+                const memberName = data.data.member
+                    ? data.data.member.name
+                    : data.data.member_name;
+                window.alert('ADMIN NOTES — ' + memberName + '\n\n' + notesText);
+            }
             
             if (data.success && data.data && data.data.member) {
                 const member   = data.data.member;
-                if (Array.isArray(member.admin_notes) && member.admin_notes.length) {
-                    const notesText = member.admin_notes.map(note =>
-                        note.created_at + '\n' + note.note
-                    ).join('\n\n');
-                    window.alert('ADMIN NOTES — ' + member.name + '\n\n' + notesText);
-                }
                 const dailyFee = data.data.daily_fee || 0;
                 const isFirst  = member.is_first_visit;
 
