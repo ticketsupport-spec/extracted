@@ -120,6 +120,20 @@ function mmgr_create_tables() {
         INDEX idx_member_id (member_id),
         INDEX idx_visit_time (visit_time)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // ===========================
+    // ADMIN MEMBER NOTES TABLE
+    // ===========================
+    $member_notes_table = $wpdb->prefix . 'membership_member_notes';
+    $wpdb->query("CREATE TABLE IF NOT EXISTS `$member_notes_table` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        member_id INT NOT NULL,
+        note TEXT NOT NULL,
+        created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL,
+        INDEX idx_member_id (member_id),
+        INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     
     // ===========================
     // EMAIL LOG TABLE
@@ -1159,7 +1173,7 @@ function mmgr_migrate_sexual_orientation_fields() {
  */
 function mmgr_check_database() {
     $current_version = get_option('mmgr_db_version', '0.0.0');
-    $required_version = '1.9.0';
+    $required_version = '1.10.0';
     
     if (version_compare($current_version, $required_version, '<')) {
         mmgr_create_tables();
@@ -1172,7 +1186,7 @@ function mmgr_check_database() {
         mmgr_migrate_archive_table();
         mmgr_migrate_chemistry_tables();
         mmgr_migrate_sexual_orientation_fields();
-        update_option( 'mmgr_db_version', '1.9.0' );
+        update_option( 'mmgr_db_version', '1.10.0' );
     }
 }
 

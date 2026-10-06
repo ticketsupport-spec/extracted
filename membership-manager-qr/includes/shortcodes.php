@@ -434,6 +434,12 @@ add_shortcode('membership_checkin', function($atts){
             
             if (data.success && data.data && data.data.member) {
                 const member   = data.data.member;
+                if (Array.isArray(member.admin_notes) && member.admin_notes.length) {
+                    const notesText = member.admin_notes.map(note =>
+                        note.created_at + '\n' + note.note
+                    ).join('\n\n');
+                    window.alert('ADMIN NOTES — ' + member.name + '\n\n' + notesText);
+                }
                 const dailyFee = data.data.daily_fee || 0;
                 const isFirst  = member.is_first_visit;
 

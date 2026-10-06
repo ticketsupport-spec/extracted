@@ -110,6 +110,18 @@ function mmgr_handle_checkin() {
         }
     }
 
+    // Admin notes are only returned to WordPress administrators.
+    $admin_notes = array();
+    if (current_user_can('manage_options')) {
+        $member_notes_tbl = $wpdb->prefix . 'membership_member_notes';
+        if ($wpdb->get_var("SHOW TABLES LIKE '$member_notes_tbl'") === $member_notes_tbl) {
+            $admin_notes = $wpdb->get_results($wpdb->prepare(
+                "SELECT note, created_at FROM `$member_notes_tbl` WHERE member_id = %d ORDER BY created_at DESC, id DESC",
+                $member['id']
+            ), ARRAY_A);
+        }
+    }
+
     // ── Membership fee due check ──────────────────────────────────────────
     $levels_tbl            = $wpdb->prefix . 'membership_levels';
     $membership_fee_due    = false;
@@ -162,6 +174,7 @@ function mmgr_handle_checkin() {
             'is_first_visit' => $is_first_visit,
             'orientation_done' => !empty($member['orientation_done']) ? (bool) $member['orientation_done'] : false,
             'id_verified' => !empty($member['id_verified']) ? (bool) $member['id_verified'] : false,
+            'admin_notes' => $admin_notes,
         ),
         'daily_fee'                 => floatval($daily_fee),
         'pending_orientation_items' => $pending_orientation_items,

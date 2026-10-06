@@ -3,6 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 global $wpdb;
 $tbl = $wpdb->prefix . 'memberships';
+$member_notes_tbl = $wpdb->prefix . 'membership_member_notes';
 
 // Check if editing
 $editing = isset($_GET['id']);
@@ -77,6 +78,16 @@ if (isset($_POST['mmgr_save_member'])) {
         
         if ($editing) {
             $wpdb->update($tbl, $data, array('id' => intval($_GET['id'])));
+
+            $admin_note = isset($_POST['admin_note']) ? sanitize_textarea_field($_POST['admin_note']) : '';
+            if ($admin_note !== '') {
+                $wpdb->insert($member_notes_tbl, array(
+                    'member_id' => intval($_GET['id']),
+                    'note' => $admin_note,
+                    'created_by' => get_current_user_id(),
+                    'created_at' => current_time('mysql'),
+                ));
+            }
             
             // Handle password management
             if (isset($_POST['member_password']) && !empty($_POST['member_password'])) {
@@ -99,6 +110,16 @@ if (isset($_POST['mmgr_save_member'])) {
             
             // Generate QR code file
             mmgr_generate_qr_file($data['member_code']);
+
+            $admin_note = isset($_POST['admin_note']) ? sanitize_textarea_field($_POST['admin_note']) : '';
+            if ($admin_note !== '') {
+                $wpdb->insert($member_notes_tbl, array(
+                    'member_id' => $new_id,
+                    'note' => $admin_note,
+                    'created_by' => get_current_user_id(),
+                    'created_at' => current_time('mysql'),
+                ));
+            }
             
             // Set password if provided
             if (isset($_POST['member_password']) && !empty($_POST['member_password'])) {
@@ -121,6 +142,13 @@ if (isset($_POST['mmgr_save_member'])) {
 
 // Get membership levels
 $levels = $wpdb->get_results("SELECT level_name, price FROM {$wpdb->prefix}membership_levels ORDER BY level_name", ARRAY_A);
+$member_notes = array();
+if ($editing && $member && $wpdb->get_var("SHOW TABLES LIKE '$member_notes_tbl'") === $member_notes_tbl) {
+    $member_notes = $wpdb->get_results($wpdb->prepare(
+        "SELECT note, created_by, created_at FROM `$member_notes_tbl` WHERE member_id = %d ORDER BY created_at DESC, id DESC",
+        intval($member['id'])
+    ), ARRAY_A);
+}
 
 ?>
 <div class="wrap">
@@ -221,6 +249,36 @@ $levels = $wpdb->get_results("SELECT level_name, price FROM {$wpdb->prefix}membe
             <tr>
                 <th><label for="expire_date">Expiration Date *</label></th>
                 <td><input type="date" name="expire_date" id="expire_date" value="<?php echo esc_attr($member['expire_date'] ?? date('Y-m-d', strtotime('+1 year'))); ?>" required></td>
+            </tr>
+
+            <tr>
+                <th colspan="2"><h2 style="margin:20px 0 0 0;">Admin Notes</h2></th>
+            </tr>
+            <tr>
+                <th><label for="admin_note">Add a note</label></th>
+                <td>
+                    <textarea name="admin_note" id="admin_note" class="large-text" rows="4"></textarea>
+                    <p class="description">Notes are private to administrators and are saved as dated entries in the member note log.</p>
+                    <?php if (!empty($member_notes)): ?>
+                        <h3>Note Log</h3>
+                        <ul>
+                            <?php foreach ($member_notes as $note): ?>
+                                <li>
+                                    <strong><?php echo esc_html(date_i18n('M j, Y g:i A', strtotime($note['created_at']))); ?></strong>
+                                    <?php
+                                    $note_author = !empty($note['created_by']) ? get_userdata((int) $note['created_by']) : false;
+                                    if ($note_author) {
+                                        echo ' — ' . esc_html($note_author->display_name);
+                                    }
+                                    ?>
+                                    <br><?php echo nl2br(esc_html($note['note'])); ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php elseif ($editing): ?>
+                        <p class="description">No notes have been added.</p>
+                    <?php endif; ?>
+                </td>
             </tr>
             
             <tr>
