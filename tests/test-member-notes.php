@@ -42,6 +42,10 @@ class NotesDatabase {
     public $prefix = 'site_2_';
     public $insert_id = 0;
     public $table_exists = false;
+    public $legacy_schema = array();
+    public $legacy_notes = array();
+    public $rename_fails = false;
+    public $renames = 0;
     public $creation_fails = false;
     public $note_fails = false;
     public $member_fails = false;
@@ -65,10 +69,26 @@ class NotesDatabase {
     public function get_charset_collate() { return 'DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'; }
     public function get_var($query) {
         $this->checks[] = $query;
-        return $this->table_exists ? $this->prefix . 'membership_member_notes' : null;
+        if (str_contains($query, 'membership\\\\_admin\\\\_notes')) {
+            return $this->table_exists ? $this->prefix . 'membership_admin_notes' : null;
+        }
+        return $this->legacy_schema ? $this->prefix . 'membership_member_notes' : null;
     }
+    public function get_col($query) { return $this->legacy_schema; }
     public function query($query) {
-        expect(str_contains($query, 'CREATE TABLE IF NOT EXISTS `' . $this->prefix . 'membership_member_notes`'), 'Creates the active site notes table only');
+        if (str_starts_with($query, 'RENAME TABLE')) {
+            expect($query === "RENAME TABLE `{$this->prefix}membership_member_notes` TO `{$this->prefix}membership_admin_notes`", 'Migration renames only the current site legacy admin table');
+            $this->renames++;
+            if ($this->rename_fails) {
+                return false;
+            }
+            $this->table_exists = true;
+            $this->notes = $this->legacy_notes;
+            $this->legacy_schema = array();
+            $this->legacy_notes = array();
+            return 1;
+        }
+        expect(str_contains($query, 'CREATE TABLE IF NOT EXISTS `' . $this->prefix . 'membership_admin_notes`'), 'Creates the active site admin notes table only');
         expect(str_contains($query, $this->get_charset_collate()), 'Uses the WordPress database charset');
         $this->creates++;
         $this->table_exists = !$this->creation_fails;
@@ -76,7 +96,7 @@ class NotesDatabase {
     }
     public function get_row($query, $format) { return $this->member; }
     public function get_results($query, $format) {
-        return str_contains($query, 'membership_member_notes') ? $this->notes : array();
+        return str_contains($query, 'membership_admin_notes') ? $this->notes : array();
     }
     public function update($table, $data, $where) {
         $this->member_writes++;
@@ -92,7 +112,7 @@ class NotesDatabase {
             $this->member = array_merge($this->member, $data, array('id' => 42));
             return 1;
         }
-        expect($table === $this->prefix . 'membership_member_notes', 'Note insert uses the checked table');
+        expect($table === $this->prefix . 'membership_admin_notes', 'Note insert uses the checked admin table');
         if (!$this->table_exists || $this->note_fails) {
             return false;
         }
@@ -107,7 +127,7 @@ require __DIR__ . '/../membership-manager-qr/includes/database.php';
 $wpdb = new NotesDatabase();
 mmgr_check_database();
 expect($wpdb->table_exists, 'Current-version installations repair missing notes tables');
-expect(str_contains($wpdb->checks[0], 'site\\\\_2\\\\_membership\\\\_member\\\\_notes'), 'Existence check escapes LIKE wildcards in the exact site table name');
+expect(str_contains($wpdb->checks[0], 'site\\\\_2\\\\_membership\\\\_admin\\\\_notes'), 'Existence check escapes LIKE wildcards in the exact site table name');
 expect(mmgr_ensure_member_notes_table(), 'Existing table passes verification');
 expect($wpdb->creates === 1, 'Existing notes table is not recreated');
 $wpdb->table_exists = false;
@@ -131,6 +151,37 @@ function render_member_form($editing, $note) {
     include __DIR__ . '/../membership-manager-qr/includes/admin/add-edit-member.php';
     return ob_get_clean();
 }
+
+$wpdb = new NotesDatabase();
+$wpdb->legacy_schema = array('id', 'viewer_member_id', 'profile_member_id', 'note', 'updated_at');
+$private_note = array('id' => 1, 'viewer_member_id' => 2, 'profile_member_id' => 7, 'note' => 'Private profile note', 'updated_at' => current_time('mysql'));
+$wpdb->legacy_notes = array($private_note);
+$html = render_member_form(true, 'Admin only note');
+expect(str_contains($html, 'Member updated successfully!'), 'Admin notes save when the legacy table has the private profile schema');
+expect($wpdb->renames === 0 && $wpdb->legacy_notes === array($private_note), 'Private profile notes are neither moved nor changed');
+expect(count($wpdb->notes) === 1 && $wpdb->notes[0]['note'] === 'Admin only note', 'Admin notes use separate storage');
+expect(!str_contains($html, 'Private profile note'), 'Private profile notes do not appear in the admin note log');
+
+$wpdb = new NotesDatabase();
+$wpdb->legacy_schema = array('id', 'member_id', 'note', 'created_by', 'created_at');
+$old_note = array('id' => 10, 'member_id' => 7, 'note' => 'Existing admin history', 'created_by' => 3, 'created_at' => current_time('mysql'));
+$wpdb->legacy_notes = array($old_note);
+$html = render_member_form(true, 'New admin note');
+expect($wpdb->renames === 1 && $wpdb->creates === 0, 'Existing admin schema is moved without recreating or copying rows');
+expect($wpdb->notes[0] === $old_note && count($wpdb->notes) === 2, 'Migration preserves existing admin note IDs, authors, timestamps and content');
+expect(str_contains($html, 'Existing admin history'), 'Migrated admin history is still displayed');
+expect(mmgr_ensure_member_notes_table() && $wpdb->renames === 1, 'Repeated schema checks do not repeat migration');
+expect(!$wpdb->legacy_schema, 'Migration frees the old table name for private profile notes');
+
+$wpdb = new NotesDatabase();
+$wpdb->legacy_schema = array('id', 'member_id', 'note', 'created_by', 'created_at');
+$wpdb->legacy_notes = array($old_note);
+$wpdb->rename_fails = true;
+$html = render_member_form(true, 'Pending migration');
+expect(!$wpdb->table_exists && $wpdb->legacy_notes === array($old_note), 'Failed migration leaves existing history untouched');
+expect(str_contains($html, 'rows="4">Pending migration</textarea>'), 'Failed migration preserves the submitted note');
+$wpdb->rename_fails = false;
+expect(mmgr_ensure_member_notes_table() && $wpdb->notes === array($old_note), 'Migration can safely retry after failure');
 
 $wpdb = new NotesDatabase();
 $wpdb->update_result = 0;

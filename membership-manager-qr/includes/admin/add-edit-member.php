@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 global $wpdb;
 $tbl = $wpdb->prefix . 'memberships';
-$member_notes_tbl = $wpdb->prefix . 'membership_member_notes';
+$member_notes_tbl = $wpdb->prefix . 'membership_admin_notes';
 $unsaved_note = '';
 
 // Check if editing
