@@ -4,6 +4,7 @@ if (!defined('ABSPATH')) exit;
 global $wpdb;
 $tbl = $wpdb->prefix . 'memberships';
 $member_notes_tbl = $wpdb->prefix . 'membership_member_notes';
+$unsaved_note = '';
 
 // Check if editing
 $editing = isset($_GET['id']);
@@ -76,18 +77,36 @@ if (isset($_POST['mmgr_save_member'])) {
         // Remove null values so MySQL uses column defaults
         $data = array_filter($data, function($v) { return $v !== null; });
         
+        $admin_note = isset($_POST['admin_note']) ? sanitize_textarea_field(wp_unslash($_POST['admin_note'])) : '';
+        $unsaved_note = $admin_note;
         if ($editing) {
-            $wpdb->update($tbl, $data, array('id' => intval($_GET['id'])));
+            $member_saved = $wpdb->update($tbl, $data, array('id' => intval($_GET['id'])));
+            $saved_member_id = intval($_GET['id']);
+        } else {
+            $data['member_code'] = mmgr_generate_member_code($data['name']);
+            $member_saved = $wpdb->insert($tbl, $data);
+            $saved_member_id = $wpdb->insert_id;
+        }
 
-            $admin_note = isset($_POST['admin_note']) ? sanitize_textarea_field($_POST['admin_note']) : '';
-            if ($admin_note !== '') {
+        $note_saved = true;
+        if ($member_saved !== false && $admin_note !== '') {
+            $note_saved = mmgr_ensure_member_notes_table() &&
                 $wpdb->insert($member_notes_tbl, array(
-                    'member_id' => intval($_GET['id']),
+                    'member_id' => $saved_member_id,
                     'note' => $admin_note,
                     'created_by' => get_current_user_id(),
                     'created_at' => current_time('mysql'),
-                ));
+                )) !== false;
+            if ($note_saved) {
+                $unsaved_note = '';
+            } else {
+                echo '<div class="notice notice-error"><p>Member details saved, but the admin note could not be saved. Your note is still below; please try again.</p></div>';
             }
+        }
+
+        if ($member_saved === false) {
+            echo '<div class="notice notice-error"><p>Member could not be saved. Please try again. Any submitted note has not been saved.</p></div>';
+        } elseif ($editing) {
             
             // Handle password management
             if (isset($_POST['member_password']) && !empty($_POST['member_password'])) {
@@ -100,27 +119,16 @@ if (isset($_POST['mmgr_save_member'])) {
                 }
             }
             
-            echo '<div class="notice notice-success"><p>Member updated successfully! <a href="' . admin_url('admin.php?page=membership_manager') . '">Back to list</a></p></div>';
+            if ($note_saved) {
+                echo '<div class="notice notice-success"><p>Member updated successfully! <a href="' . admin_url('admin.php?page=membership_manager') . '">Back to list</a></p></div>';
+            }
             $member = $wpdb->get_row($wpdb->prepare("SELECT * FROM $tbl WHERE id = %d", intval($_GET['id'])), ARRAY_A);
         } else {
-            // Generate member code
-            $data['member_code'] = mmgr_generate_member_code($data['name']);
-            $wpdb->insert($tbl, $data);
-            $new_id = $wpdb->insert_id;
+            $new_id = $saved_member_id;
             
             // Generate QR code file
             mmgr_generate_qr_file($data['member_code']);
 
-            $admin_note = isset($_POST['admin_note']) ? sanitize_textarea_field($_POST['admin_note']) : '';
-            if ($admin_note !== '') {
-                $wpdb->insert($member_notes_tbl, array(
-                    'member_id' => $new_id,
-                    'note' => $admin_note,
-                    'created_by' => get_current_user_id(),
-                    'created_at' => current_time('mysql'),
-                ));
-            }
-            
             // Set password if provided
             if (isset($_POST['member_password']) && !empty($_POST['member_password'])) {
                 $password = $_POST['member_password'];
@@ -135,7 +143,14 @@ if (isset($_POST['mmgr_save_member'])) {
             // Send welcome PM
             mmgr_send_welcome_pm($new_id);
             
-            echo '<div class="notice notice-success"><p>Member added successfully! <a href="' . admin_url('admin.php?page=membership_edit&id=' . $new_id) . '">Edit member</a> | <a href="' . admin_url('admin.php?page=membership_manager') . '">Back to list</a></p></div>';
+            if ($note_saved) {
+                echo '<div class="notice notice-success"><p>Member added successfully! <a href="' . admin_url('admin.php?page=membership_add&id=' . $new_id) . '">Edit member</a> | <a href="' . admin_url('admin.php?page=membership_manager') . '">Back to list</a></p></div>';
+            } else {
+                // Retry the note on the created account instead of adding a duplicate member.
+                $editing = true;
+                $_GET['id'] = $new_id;
+                $member = $wpdb->get_row($wpdb->prepare("SELECT * FROM $tbl WHERE id = %d", $new_id), ARRAY_A);
+            }
         }
     }
 }
@@ -143,7 +158,7 @@ if (isset($_POST['mmgr_save_member'])) {
 // Get membership levels
 $levels = $wpdb->get_results("SELECT level_name, price FROM {$wpdb->prefix}membership_levels ORDER BY level_name", ARRAY_A);
 $member_notes = array();
-if ($editing && $member && $wpdb->get_var("SHOW TABLES LIKE '$member_notes_tbl'") === $member_notes_tbl) {
+if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($member_notes_tbl))) === $member_notes_tbl) {
     $member_notes = $wpdb->get_results($wpdb->prepare(
         "SELECT note, created_by, created_at FROM `$member_notes_tbl` WHERE member_id = %d ORDER BY created_at DESC, id DESC",
         intval($member['id'])
@@ -154,7 +169,7 @@ if ($editing && $member && $wpdb->get_var("SHOW TABLES LIKE '$member_notes_tbl'"
 <div class="wrap">
     <h1><?php echo $editing ? 'Edit Member' : 'Add New Member'; ?></h1>
     
-    <form method="post" style="max-width:800px;">
+    <form method="post" action="<?php echo esc_url(admin_url('admin.php?page=membership_add' . ($editing ? '&id=' . intval($member['id']) : ''))); ?>" style="max-width:800px;">
         <?php wp_nonce_field('mmgr_save_member', 'member_nonce'); ?>
         
         <table class="form-table">
@@ -257,7 +272,7 @@ if ($editing && $member && $wpdb->get_var("SHOW TABLES LIKE '$member_notes_tbl'"
             <tr>
                 <th><label for="admin_note">Add a note</label></th>
                 <td>
-                    <textarea name="admin_note" id="admin_note" class="large-text" rows="4"></textarea>
+                    <textarea name="admin_note" id="admin_note" class="large-text" rows="4"><?php echo esc_textarea($unsaved_note); ?></textarea>
                     <p class="description">Notes are private to administrators and are saved as dated entries in the member note log.</p>
                     <?php if (!empty($member_notes)): ?>
                         <h3>Note Log</h3>
