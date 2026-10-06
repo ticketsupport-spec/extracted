@@ -1160,15 +1160,28 @@ function mmgr_migrate_sexual_orientation_fields() {
 }
 
 /**
- * Ensure member notes use the current site's WordPress database and table prefix.
+ * Keep admin notes separate from private member profile notes.
  */
 function mmgr_ensure_member_notes_table() {
     global $wpdb;
-    $table = $wpdb->prefix . 'membership_member_notes';
+    $table = $wpdb->prefix . 'membership_admin_notes';
     $exists_query = $wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table));
 
     if ($wpdb->get_var($exists_query) === $table) {
         return true;
+    }
+
+    $legacy_table = $wpdb->prefix . 'membership_member_notes';
+    if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($legacy_table))) === $legacy_table) {
+        $columns = $wpdb->get_col("SHOW COLUMNS FROM `$legacy_table`");
+        // Only move the legacy admin schema; private profile notes must stay intact.
+        if (!array_diff(array('id', 'member_id', 'note', 'created_by', 'created_at'), $columns) &&
+            !in_array('viewer_member_id', $columns, true)) {
+            if ($wpdb->query("RENAME TABLE `$legacy_table` TO `$table`") === false) {
+                return false;
+            }
+            return $wpdb->get_var($exists_query) === $table;
+        }
     }
 
     $charset_collate = $wpdb->get_charset_collate();
@@ -1206,7 +1219,7 @@ function mmgr_check_database() {
         update_option( 'mmgr_db_version', '1.10.0' );
     }
 
-    // Repair missing notes tables even when the schema version is already current.
+    // Repair missing admin notes tables even when the schema version is already current.
     mmgr_ensure_member_notes_table();
 }
 

@@ -163,6 +163,8 @@ function mmgr_create_portal_tables() {
     ) $charset_collate");
 
     // Private member notes table (notes a viewer leaves on another member's profile, only visible to them)
+    // Move any legacy admin notes before creating the private profile notes schema.
+    mmgr_ensure_member_notes_table();
     $member_notes_tbl = $wpdb->prefix . 'membership_member_notes';
     $wpdb->query("CREATE TABLE IF NOT EXISTS `$member_notes_tbl` (
         id INT AUTO_INCREMENT PRIMARY KEY,
