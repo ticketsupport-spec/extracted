@@ -338,9 +338,9 @@ function mmgr_create_portal_tables() {
             'ticket_etransfer_email' => "ADD COLUMN `ticket_etransfer_email` VARCHAR(255) NULL DEFAULT NULL",
             'ticket_instructions'    => "ADD COLUMN `ticket_instructions` TEXT NULL DEFAULT NULL",
         );
+        $existing_cols = (array) $wpdb->get_col("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($events_tbl) . "' AND column_name LIKE 'ticket%'");
         foreach ($ticket_cols as $col => $alter) {
-            $exists = $wpdb->get_results("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($events_tbl) . "' AND column_name = '" . esc_sql($col) . "'");
-            if (empty($exists)) {
+            if (!in_array($col, $existing_cols, true)) {
                 $wpdb->query("ALTER TABLE `$events_tbl` $alter");
             }
         }

@@ -242,13 +242,7 @@ add_shortcode('mmgr_upcoming_events', function($atts) {
                                        background:<?php echo $is_going ? '#28a745' : '#9b51e0'; ?>;color:white;">
                                 <?php echo $is_going ? '✅ Going – Remove Me' : '📌 Mark as Going'; ?>
                             </button>
-                            <?php if (!empty($event['tickets_enabled'])): ?>
-                                <a href="<?php echo esc_url(mmgr_event_tickets_url($event_id, $current_member)); ?>"
-                                   class="mmgr-buy-tickets-btn"
-                                   style="display:inline-block;margin-bottom:12px;padding:8px 16px;border:none;border-radius:6px;font-size:13px;font-weight:bold;background:#ff9800;color:white;text-decoration:none;">
-                                    🎟️ BUY TICKETS
-                                </a>
-                            <?php endif; ?>
+                            <?php echo mmgr_render_buy_tickets_button($event, $current_member); ?>
                         <?php endif; ?>
 
                         <?php if (!empty($attendees)): ?>
@@ -394,6 +388,18 @@ add_action('wp_ajax_mmgr_toggle_event_rsvp', function() {
 });
 
 /**
+ * "BUY TICKETS" button for an event card (empty when tickets are not on sale).
+ */
+function mmgr_render_buy_tickets_button($event, $member) {
+    if (empty($event['tickets_enabled'])) {
+        return '';
+    }
+    return '<a href="' . esc_url(mmgr_event_tickets_url((int) $event['id'], $member)) . '" class="mmgr-buy-tickets-btn"'
+        . ' style="display:inline-block;margin-bottom:12px;padding:8px 16px;border:none;border-radius:6px;font-size:13px;font-weight:bold;background:#ff9800;color:white;text-decoration:none;">'
+        . '🎟️ BUY TICKETS</a>';
+}
+
+/**
  * Render the "Buy Tickets" view for a single event.
  *
  * @param array $member    Logged-in member.
@@ -514,8 +520,7 @@ function mmgr_render_event_tickets_page($member, $event_id) {
                             <p style="margin:0;">
                                 Send an email money transfer of <strong><?php echo esc_html($money($calc['total'])); ?></strong>
                                 <?php if (!empty($event['ticket_etransfer_email'])): ?>
-                                    to <strong><?php echo esc_html($event['ticket_etransfer_email']); ?></strong>
-                                <?php endif; ?>.
+                                    to <strong><?php echo esc_html($event['ticket_etransfer_email']); ?></strong><?php endif; ?>.
                                 Please include your name and "<?php echo esc_html($event['event_name']); ?>" in the message.
                             </p>
                         </div>
@@ -664,13 +669,7 @@ add_shortcode('mmgr_member_events', function() {
                                        background:<?php echo $is_going ? '#28a745' : '#9b51e0'; ?>;color:white;">
                                 <?php echo $is_going ? '✅ Going – Remove Me' : '📌 Mark as Going'; ?>
                             </button>
-                            <?php if (!empty($event['tickets_enabled'])): ?>
-                                <a href="<?php echo esc_url(mmgr_event_tickets_url($event_id, $member)); ?>"
-                                   class="mmgr-buy-tickets-btn"
-                                   style="display:inline-block;margin-bottom:12px;padding:8px 16px;border:none;border-radius:6px;font-size:13px;font-weight:bold;background:#ff9800;color:white;text-decoration:none;">
-                                    🎟️ BUY TICKETS
-                                </a>
-                            <?php endif; ?>
+                            <?php echo mmgr_render_buy_tickets_button($event, $member); ?>
 
                             <?php if (!empty($attendees)): ?>
                                 <div id="rsvp-list-<?php echo $event_id; ?>" style="border-top:1px solid #ddd;padding-top:10px;margin-top:4px;">
