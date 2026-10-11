@@ -242,6 +242,13 @@ add_shortcode('mmgr_upcoming_events', function($atts) {
                                        background:<?php echo $is_going ? '#28a745' : '#9b51e0'; ?>;color:white;">
                                 <?php echo $is_going ? '✅ Going – Remove Me' : '📌 Mark as Going'; ?>
                             </button>
+                            <?php if (!empty($event['tickets_enabled'])): ?>
+                                <a href="<?php echo esc_url(mmgr_event_tickets_url($event_id, $current_member)); ?>"
+                                   class="mmgr-buy-tickets-btn"
+                                   style="display:inline-block;margin-bottom:12px;padding:8px 16px;border:none;border-radius:6px;font-size:13px;font-weight:bold;background:#ff9800;color:white;text-decoration:none;">
+                                    🎟️ BUY TICKETS
+                                </a>
+                            <?php endif; ?>
                         <?php endif; ?>
 
                         <?php if (!empty($attendees)): ?>
@@ -387,6 +394,147 @@ add_action('wp_ajax_mmgr_toggle_event_rsvp', function() {
 });
 
 /**
+ * Render the "Buy Tickets" view for a single event.
+ *
+ * @param array $member    Logged-in member.
+ * @param int   $event_id  Event ID.
+ * @return string HTML.
+ */
+function mmgr_render_event_tickets_page($member, $event_id) {
+    global $wpdb;
+    $events_table = $wpdb->prefix . 'membership_events';
+
+    $event = $event_id > 0 ? $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $events_table WHERE id = %d AND active = 1 AND event_date >= CURDATE()",
+        $event_id
+    ), ARRAY_A) : null;
+
+    $uc = !empty($member['member_code']) ? rawurlencode($member['member_code']) : '';
+    $events_url = $uc ? home_url('/member-events/?usercod=' . $uc) : home_url('/member-events/');
+    $money = function($amount) {
+        return '$' . number_format((float) $amount, 2);
+    };
+
+    ob_start();
+    ?>
+    <div class="mmgr-portal-container">
+        <?php echo mmgr_get_portal_navigation('events', $member); ?>
+
+        <div class="mmgr-portal-titlecc">
+            <h1>🎟️ Buy Tickets</h1>
+        </div>
+
+        <p><a href="<?php echo esc_url($events_url); ?>">← Back to Upcoming Events</a></p>
+
+        <?php if (!$event || empty($event['tickets_enabled'])): ?>
+            <div class="mmgr-portal-card">
+                <p style="text-align:center;color:#666;">Tickets are not available for this event.</p>
+            </div>
+        <?php else:
+            $calc = mmgr_calculate_event_ticket_total($event, $member);
+        ?>
+            <div class="mmgr-portal-card mmgr-event-tickets" style="background:#fff;border:2px solid #9b51e0;border-radius:8px;overflow:hidden;">
+                <?php if (!empty($event['image_url'])): ?>
+                    <img src="<?php echo esc_url($event['image_url']); ?>" style="width:100%;max-height:300px;object-fit:cover;" alt="">
+                <?php endif; ?>
+
+                <div style="padding:15px;">
+                    <h2 style="margin:0 0 8px 0;color:#0073aa;"><?php echo esc_html($event['event_name']); ?></h2>
+                    <p style="margin:0 0 8px 0;color:#666;font-size:14px;">
+                        📆 <?php echo esc_html(date('M d, Y', strtotime($event['event_date']))); ?>
+                    </p>
+                    <?php if (!empty($event['start_time'])): ?>
+                        <p style="margin:0 0 8px 0;color:#666;font-size:14px;">
+                            🕐 <?php echo esc_html(date('g:i A', strtotime($event['start_time'])));
+                            if (!empty($event['end_time'])) {
+                                echo ' - ' . esc_html(date('g:i A', strtotime($event['end_time'])));
+                            }
+                            ?>
+                        </p>
+                    <?php endif; ?>
+                    <?php if (!empty($event['location'])): ?>
+                        <p style="margin:0 0 8px 0;color:#666;font-size:14px;">📍 <?php echo esc_html($event['location']); ?></p>
+                    <?php endif; ?>
+                    <?php if (!empty($event['description'])): ?>
+                        <div style="margin:0 0 12px 0;color:#333;font-size:14px;line-height:1.5;">
+                            <?php echo wp_kses_post(wpautop($event['description'])); ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="mmgr-portal-card" style="margin-top:20px;">
+                <h3 style="margin-top:0;">🧾 Your Ticket Total</h3>
+                <?php if (!$calc['available']): ?>
+                    <p style="color:#d63638;">Tickets for this event are not available for your membership level (<?php echo esc_html($calc['level']); ?>). Please contact us for details.</p>
+                <?php else: ?>
+                    <table class="mmgr-ticket-breakdown" style="width:100%;max-width:450px;border-collapse:collapse;">
+                        <tr>
+                            <td style="padding:6px 0;">Event ticket (<?php echo esc_html($calc['level']); ?>)</td>
+                            <td style="padding:6px 0;text-align:right;"><?php echo esc_html($money($calc['ticket_price'])); ?></td>
+                        </tr>
+                        <?php if ($calc['membership_due']): ?>
+                            <tr>
+                                <td style="padding:6px 0;">Membership fee (<?php echo esc_html($calc['level']); ?>)</td>
+                                <td style="padding:6px 0;text-align:right;"><?php echo esc_html($money($calc['membership_fee'])); ?></td>
+                            </tr>
+                        <?php endif; ?>
+                        <tr style="border-top:2px solid #333;font-weight:bold;font-size:16px;">
+                            <td style="padding:8px 0;">Total</td>
+                            <td style="padding:8px 0;text-align:right;" class="mmgr-ticket-total"><?php echo esc_html($money($calc['total'])); ?></td>
+                        </tr>
+                    </table>
+                    <?php if ($calc['membership_due']): ?>
+                        <p style="margin-top:10px;padding:10px;background:#fff3cd;border-left:4px solid #ff9800;border-radius:4px;font-size:13px;">
+                            Your account does not have a paid membership, so the membership fee is included in your total.
+                        </p>
+                    <?php else: ?>
+                        <p style="margin-top:10px;color:#28a745;font-size:13px;">✅ Your membership is paid – you only pay the event ticket price.</p>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($calc['available']): ?>
+                <div class="mmgr-portal-card" style="margin-top:20px;">
+                    <h3 style="margin-top:0;">💳 How to Buy</h3>
+                    <?php if (empty($event['ticket_pay_cash']) && empty($event['ticket_pay_etransfer'])): ?>
+                        <p>Please contact us to arrange payment for your ticket.</p>
+                    <?php endif; ?>
+
+                    <?php if (!empty($event['ticket_pay_cash'])): ?>
+                        <div class="mmgr-ticket-pay-cash" style="margin-bottom:15px;">
+                            <h4 style="margin:0 0 5px 0;">💵 Cash in Person</h4>
+                            <p style="margin:0;">Pay <strong><?php echo esc_html($money($calc['total'])); ?></strong> in cash to a staff member in person.</p>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($event['ticket_pay_etransfer'])): ?>
+                        <div class="mmgr-ticket-pay-etransfer" style="margin-bottom:15px;">
+                            <h4 style="margin:0 0 5px 0;">📧 Email Money Transfer</h4>
+                            <p style="margin:0;">
+                                Send an email money transfer of <strong><?php echo esc_html($money($calc['total'])); ?></strong>
+                                <?php if (!empty($event['ticket_etransfer_email'])): ?>
+                                    to <strong><?php echo esc_html($event['ticket_etransfer_email']); ?></strong>
+                                <?php endif; ?>.
+                                Please include your name and "<?php echo esc_html($event['event_name']); ?>" in the message.
+                            </p>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($event['ticket_instructions'])): ?>
+                        <div style="margin-top:10px;font-size:14px;line-height:1.5;">
+                            <?php echo nl2br(esc_html($event['ticket_instructions'])); ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
+    <?php
+    return ob_get_clean();
+}
+
+/**
  * Member Events Portal Page
  */
 add_shortcode('mmgr_member_events', function() {
@@ -399,6 +547,10 @@ add_shortcode('mmgr_member_events', function() {
     }
 
     mmgr_enforce_usercod($member);
+
+    if (isset($_GET['tickets'])) {
+        return mmgr_render_event_tickets_page($member, intval($_GET['tickets']));
+    }
 
     global $wpdb;
     $events_table = $wpdb->prefix . 'membership_events';
@@ -512,6 +664,13 @@ add_shortcode('mmgr_member_events', function() {
                                        background:<?php echo $is_going ? '#28a745' : '#9b51e0'; ?>;color:white;">
                                 <?php echo $is_going ? '✅ Going – Remove Me' : '📌 Mark as Going'; ?>
                             </button>
+                            <?php if (!empty($event['tickets_enabled'])): ?>
+                                <a href="<?php echo esc_url(mmgr_event_tickets_url($event_id, $member)); ?>"
+                                   class="mmgr-buy-tickets-btn"
+                                   style="display:inline-block;margin-bottom:12px;padding:8px 16px;border:none;border-radius:6px;font-size:13px;font-weight:bold;background:#ff9800;color:white;text-decoration:none;">
+                                    🎟️ BUY TICKETS
+                                </a>
+                            <?php endif; ?>
 
                             <?php if (!empty($attendees)): ?>
                                 <div id="rsvp-list-<?php echo $event_id; ?>" style="border-top:1px solid #ddd;padding-top:10px;margin-top:4px;">
