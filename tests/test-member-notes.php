@@ -110,6 +110,9 @@ class NotesDatabase {
         return $this->member_fails ? false : $this->update_result;
     }
     public function insert($table, $data, $formats = null) {
+        if ($table === $this->prefix . 'membership_event_rsvps') {
+            return 1;
+        }
         if ($table === $this->prefix . 'membership_member_event_tickets') {
             if ($this->ticket_fails) { return false; }
             $this->ticket_writes[] = $data;

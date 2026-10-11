@@ -6,6 +6,7 @@ define('ARRAY_A', 'ARRAY_A');
 $passed = 0;
 $current_member = null;
 $can_manage = true;
+$options = array();
 
 function add_action($hook, $callback) {}
 function add_shortcode($tag, $callback) {
@@ -28,7 +29,8 @@ function esc_js($value) { return addslashes($value); }
 function esc_sql($value) { return addslashes($value); }
 function wp_kses_post($value) { return $value; }
 function wpautop($value) { return '<p>' . $value . '</p>'; }
-function get_option($key, $default = false) { return $default; }
+function get_option($key, $default = false) { global $options; return $options[$key] ?? $default; }
+function update_option($key, $value) { global $options; $options[$key] = $value; }
 function wp_create_nonce($action) { return 'test-nonce'; }
 function current_time($format) { return '2026-10-11 12:00:00'; }
 function date_i18n($format, $timestamp) { return date($format, $timestamp); }
@@ -40,6 +42,9 @@ class TestDatabase {
     public $events = array();
     public $level_prices = array('Single' => 150.00, 'Couple' => 250.00);
     public $tickets = array();
+    public $rsvps = array();
+    public $rsvp_write_fails = false;
+    public $backfill_runs = 0;
     public $write_fails = false;
     public $writes = 0;
 
@@ -53,6 +58,14 @@ class TestDatabase {
         return $query;
     }
     public function get_var($query) {
+        if (str_contains($query, 'FROM wp_membership_member_event_tickets')) {
+            preg_match('/member_id = (\d+) AND event_id = (\d+)/', $query, $m);
+            return isset($this->tickets[$m[1]][$m[2]]) ? 1 : null;
+        }
+        if (str_contains($query, 'FROM wp_membership_event_rsvps')) {
+            preg_match('/event_id = (\d+) AND member_id = (\d+)/', $query, $m);
+            return isset($this->rsvps[$m[2]][$m[1]]) ? 1 : null;
+        }
         if (str_contains($query, 'FROM wp_membership_levels')) {
             preg_match("/level_name = '([^']*)'/", $query, $m);
             return $this->level_prices[$m[1]] ?? null;
@@ -69,6 +82,19 @@ class TestDatabase {
         return null;
     }
     public function get_results($query, $format = null) {
+        if (str_contains($query, 'FROM wp_membership_event_rsvps')) {
+            $rows = array();
+            foreach ($this->rsvps as $member_id => $events) {
+                foreach ($events as $event_id => $rsvp) {
+                    $rows[] = array(
+                        'event_id' => $event_id, 'member_id' => $member_id,
+                        'community_alias' => 'Member ' . $member_id,
+                        'level' => 'Couple', 'sex' => '', 'community_photo_url' => '',
+                    );
+                }
+            }
+            return $rows;
+        }
         if (str_contains($query, 'JOIN wp_membership_member_event_tickets')) {
             preg_match('/t.member_id = (\d+)/', $query, $match);
             $member_id = (int) $match[1];
@@ -87,13 +113,44 @@ class TestDatabase {
             return $results;
         }
         if (str_contains($query, 'SELECT * FROM wp_membership_events')) {
-            return $this->events;
+            return array_filter($this->events, function($event) {
+                return $event['active'] && $event['event_date'] >= '2026-10-11';
+            });
         }
         return array();
     }
-    public function get_col($query) { return array(); }
+    public function get_col($query) {
+        if (str_contains($query, 'FROM wp_membership_event_rsvps')) {
+            preg_match('/member_id = (\d+)/', $query, $m);
+            return array_keys($this->rsvps[$m[1]] ?? array());
+        }
+        return array();
+    }
+    public function query($query) {
+        $this->backfill_runs++;
+        if ($this->write_fails) { return false; }
+        expect(str_contains($query, 'ON DUPLICATE KEY UPDATE'), 'Backfill tolerates concurrent RSVP creation');
+        foreach ($this->events as $event) {
+            if (!$event['active'] || $event['event_date'] < '2026-10-11') {
+                continue;
+            }
+            foreach ($this->tickets as $member_id => $tickets) {
+                if (isset($tickets[$event['id']]) && !isset($this->rsvps[$member_id][$event['id']])) {
+                    $this->rsvps[$member_id][$event['id']] = array('created_at' => $tickets[$event['id']]['created_at']);
+                }
+            }
+        }
+        return 1;
+    }
     public function insert($table, $data, $formats = null) {
-        expect($table === 'wp_membership_member_event_tickets', 'Ticket saves do not change memberships or RSVPs');
+        if ($table === 'wp_membership_event_rsvps') {
+            if ($this->rsvp_write_fails) { return false; }
+            expect(!isset($this->rsvps[$data['member_id']][$data['event_id']]), 'RSVP insertion never duplicates an attendee');
+            $this->writes++;
+            $this->rsvps[$data['member_id']][$data['event_id']] = $data;
+            return 1;
+        }
+        expect($table === 'wp_membership_member_event_tickets', 'Ticket saves do not change membership payments');
         if ($this->write_fails) { return false; }
         $this->writes++;
         $this->tickets[$data['member_id']][$data['event_id']] = $data;
@@ -214,7 +271,18 @@ $wpdb->events = array(
 );
 expect(mmgr_save_member_paid_tickets(8, array('5', '11', '5')), 'Admin can assign multiple paid tickets');
 expect(count($wpdb->tickets[8]) === 2, 'Duplicate IDs create one ticket per event');
+expect(count($wpdb->rsvps[8]) === 2, 'Paid ticket assignments automatically add members to Going');
 expect($wpdb->tickets[8][5]['created_by'] === 3, 'Ticket assignment records the administrator');
+$current_member = $paid;
+unset($_GET['tickets']);
+$html = $shortcodes['mmgr_upcoming_events'](array());
+expect(substr_count($html, 'YOU ARE GOING') === 2 && !str_contains($html, 'BUY TICKETS'), 'Widget replaces buy buttons for paid ticket holders');
+$html = $shortcodes['mmgr_member_events']();
+expect(substr_count($html, 'YOU ARE GOING') === 2 && !str_contains($html, 'BUY TICKETS'), 'Events page replaces buy buttons for paid ticket holders');
+expect(preg_match_all('/>\s*✅ Going – Remove Me\s*<\/button>/', $html) === 2, 'Paid ticket holders also have Going RSVP state');
+expect(substr_count($html, '👥 Going (1)') === 2 && str_contains($html, 'Member 8'), 'Paid ticket holders appear in event Going lists');
+expect(str_contains(mmgr_render_buy_tickets_button($event, $unpaid), 'BUY TICKETS'), 'Another member still sees BUY TICKETS');
+expect(!mmgr_member_has_paid_event_ticket(0, 5), 'Missing member cannot have a paid ticket');
 $writes = $wpdb->writes;
 expect(mmgr_save_member_paid_tickets(8, array('5', '11')), 'Resaving existing tickets succeeds');
 expect($wpdb->writes === $writes, 'Resaving paid selections does not create duplicates');
@@ -234,16 +302,42 @@ expect(str_contains(mmgr_render_member_paid_events($unpaid), 'No prepaid event t
 expect(mmgr_render_member_paid_events(null) === '', 'Visitors cannot see paid ticket cards');
 $wpdb->events[0]['tickets_enabled'] = 0;
 expect(str_contains(mmgr_render_member_paid_events($paid), 'Halloween Party'), 'Paid tickets remain visible when sales close');
+expect(str_contains(mmgr_render_buy_tickets_button($wpdb->events[0], $paid), 'YOU ARE GOING'), 'Paid ticket status remains visible after sales close');
 $wpdb->tickets[8][12] = array('event_id' => 12);
 $wpdb->tickets[8][13] = array('event_id' => 13);
 expect(count(mmgr_get_member_paid_events(8)) === 2, 'Past and inactive paid events are hidden');
 expect(mmgr_save_member_paid_tickets(8, array('11')), 'Admin can remove a paid ticket after sales close');
 expect(!isset($wpdb->tickets[8][5]) && isset($wpdb->tickets[8][12], $wpdb->tickets[8][13]), 'Removing upcoming tickets retains historical and inactive assignments');
+expect(isset($wpdb->rsvps[8][5]), 'Removing payment does not remove Going RSVP');
 $wpdb->write_fails = true;
 expect(!mmgr_save_member_paid_tickets(8, array()), 'Failed ticket removal reports failure');
 $wpdb->write_fails = false;
 expect(mmgr_save_member_paid_tickets(8, array()), 'Empty selection removes remaining editable tickets');
 $wpdb->write_fails = true;
 expect(!mmgr_save_member_paid_tickets(8, array('11')), 'Failed ticket insertion reports failure');
+$wpdb->write_fails = false;
+$wpdb->rsvp_write_fails = true;
+unset($wpdb->rsvps[8][11]);
+expect(!mmgr_save_member_paid_tickets(8, array('11')), 'Failed automatic RSVP reports failure');
+$wpdb->rsvp_write_fails = false;
+expect(mmgr_save_member_paid_tickets(8, array('11')), 'Resaving repairs a missing RSVP for an existing paid ticket');
+expect(isset($wpdb->rsvps[8][11]), 'Repaired paid ticket holder is Going');
+
+// Upgrade existing paid tickets, preserving manual RSVPs and historical records.
+$wpdb->events[0]['tickets_enabled'] = 1;
+$wpdb->tickets[8][5] = array('created_at' => '2026-10-01 12:00:00');
+$wpdb->rsvps[8][11] = array('created_at' => '2026-09-01 12:00:00');
+unset($wpdb->rsvps[8][5]);
+$wpdb->write_fails = true;
+mmgr_backfill_paid_ticket_rsvps();
+expect(empty($options['mmgr_paid_ticket_rsvps_backfilled']), 'Failed backfill can retry');
+$wpdb->write_fails = false;
+mmgr_backfill_paid_ticket_rsvps();
+expect($wpdb->rsvps[8][5]['created_at'] === '2026-10-01 12:00:00', 'Existing paid tickets are added to Going on upgrade');
+expect($wpdb->rsvps[8][11]['created_at'] === '2026-09-01 12:00:00', 'Backfill preserves existing RSVP timestamps');
+expect(!isset($wpdb->rsvps[8][12]) && !isset($wpdb->rsvps[8][13]), 'Backfill does not add past or inactive events');
+$runs = $wpdb->backfill_runs;
+mmgr_backfill_paid_ticket_rsvps();
+expect($wpdb->backfill_runs === $runs, 'Successful backfill runs only once');
 
 echo "\nResults: $passed passed, 0 failed\n";

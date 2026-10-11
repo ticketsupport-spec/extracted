@@ -13,7 +13,11 @@ Past and inactive event records are retained.
 Members see **Your upcoming events** below the **Download** button in **Your
 Digital Membership Card**, with rounded cards showing each prepaid event's
 title, date, time, and **PAID** badge. Ticket payment is independent of membership
-payment and the **Going** RSVP.
+payment. Marking an event ticket paid automatically adds the member to its
+**Going** list without duplicating an existing RSVP. Existing paid tickets for
+upcoming active events are also added when upgrading. Paid ticket holders see
+**YOU ARE GOING** instead of **BUY TICKETS**, even after ticket sales close.
+Removing a paid ticket does not remove the member's RSVP.
 
 ## Plugin Files
 
