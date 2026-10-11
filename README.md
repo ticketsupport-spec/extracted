@@ -2,6 +2,19 @@
 
 A WordPress plugin for complete membership management with QR code check-ins.
 
+## Paid event tickets
+
+In **Memberships → Edit Member**, use **Paid Event Tickets** to check events
+after receiving payment, then save the member. Uncheck an event to remove its
+paid ticket. Upcoming active events with ticket sales enabled are available;
+already-assigned tickets remain editable even if ticket sales are turned off.
+Past and inactive event records are retained.
+
+Members see **Your upcoming events** below the **Download** button in **Your
+Digital Membership Card**, with rounded cards showing each prepaid event's
+title, date, time, and **PAID** badge. Ticket payment is independent of membership
+payment and the **Going** RSVP.
+
 ## Plugin Files
 
 ### Plugin Root

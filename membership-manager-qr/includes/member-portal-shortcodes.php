@@ -388,6 +388,37 @@ add_action('wp_ajax_mmgr_toggle_event_rsvp', function() {
 });
 
 /**
+ * Display the member's prepaid upcoming events below their digital card.
+ */
+function mmgr_render_member_paid_events($member) {
+    if (!$member || empty($member['id'])) {
+        return '';
+    }
+    $events = mmgr_get_member_paid_events((int) $member['id']);
+    ob_start();
+    ?>
+    <section class="mmgr-paid-events" style="margin-top:24px;text-align:left;">
+        <h4 style="margin:0 0 12px;">Your upcoming events</h4>
+        <?php if (empty($events)): ?>
+            <p style="color:#666;font-size:14px;">No prepaid event tickets yet.</p>
+        <?php else: ?>
+            <?php foreach ($events as $event): ?>
+                <div class="mmgr-paid-event" style="background:#f0faf5;border:1px solid #b7dfca;border-radius:14px;padding:16px;margin-bottom:12px;overflow-wrap:anywhere;">
+                    <span style="display:inline-block;background:#167443;color:#fff;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:bold;margin-bottom:8px;">PAID</span>
+                    <h5 style="margin:0 0 6px;font-size:17px;"><?php echo esc_html($event['event_name']); ?></h5>
+                    <time datetime="<?php echo esc_attr($event['event_date']); ?>" style="color:#43564b;font-size:14px;"><?php echo esc_html(date_i18n('F j, Y', strtotime($event['event_date']))); ?></time>
+                    <?php if (!empty($event['start_time'])): ?>
+                        <span style="color:#43564b;font-size:14px;"> · <?php echo esc_html(date_i18n('g:i A', strtotime($event['start_time']))); ?></span>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </section>
+    <?php
+    return ob_get_clean();
+}
+
+/**
  * "BUY TICKETS" button for an event card (empty when tickets are not on sale).
  */
 function mmgr_render_buy_tickets_button($event, $member) {
@@ -1141,6 +1172,7 @@ add_shortcode('mmgr_member_dashboard', function() {
                     <div style="margin-top:15px;">
                         <a href="<?php echo esc_url($qr_url); ?>" download="my-membership-card.png" class="mmgr-btn-secondary">💾 Download</a>
                     </div>
+                    <?php echo mmgr_render_member_paid_events($member); ?>
                 </div>
             </div>
             

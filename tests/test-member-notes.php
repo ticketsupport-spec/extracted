@@ -16,7 +16,7 @@ function expect($condition, $description) {
 function add_action($hook, $callback) {}
 function get_option($key, $default) { return '1.10.0'; }
 function wp_verify_nonce($nonce, $action) { global $valid_nonce; return $valid_nonce; }
-function wp_unslash($value) { return stripslashes($value); }
+function wp_unslash($value) { return is_array($value) ? array_map('wp_unslash', $value) : stripslashes($value); }
 function sanitize_text_field($value) { return trim(strip_tags($value)); }
 function sanitize_textarea_field($value) { return trim(strip_tags($value)); }
 function sanitize_email($value) { return $value; }
@@ -28,7 +28,8 @@ function esc_attr($value) { return esc_html($value); }
 function esc_textarea($value) { return esc_html($value); }
 function esc_url($value) { return esc_html($value); }
 function selected($value, $expected) {}
-function checked($value, $expected) {}
+function checked($value, $expected = true) {}
+function current_user_can($capability) { return true; }
 function wp_nonce_field($action, $name) {}
 function wp_create_nonce($action) { return 'test-nonce'; }
 function date_i18n($format, $timestamp) { return date($format, $timestamp); }
@@ -54,6 +55,9 @@ class NotesDatabase {
     public $checks = array();
     public $notes = array();
     public $member_writes = 0;
+    public $ticket_options = array();
+    public $ticket_writes = array();
+    public $ticket_fails = false;
     public $member = array(
         'id' => 7, 'member_code' => 'TEST7', 'email' => 'member@example.com',
     );
@@ -96,13 +100,21 @@ class NotesDatabase {
     }
     public function get_row($query, $format) { return $this->member; }
     public function get_results($query, $format) {
+        if (str_contains($query, 'LEFT JOIN') && str_contains($query, 'membership_member_event_tickets')) {
+            return $this->ticket_options;
+        }
         return str_contains($query, 'membership_admin_notes') ? $this->notes : array();
     }
     public function update($table, $data, $where) {
         $this->member_writes++;
         return $this->member_fails ? false : $this->update_result;
     }
-    public function insert($table, $data) {
+    public function insert($table, $data, $formats = null) {
+        if ($table === $this->prefix . 'membership_member_event_tickets') {
+            if ($this->ticket_fails) { return false; }
+            $this->ticket_writes[] = $data;
+            return 1;
+        }
         if ($table === $this->prefix . 'memberships') {
             $this->member_writes++;
             if ($this->member_fails) {
@@ -123,6 +135,7 @@ class NotesDatabase {
 }
 
 require __DIR__ . '/../membership-manager-qr/includes/database.php';
+require __DIR__ . '/../membership-manager-qr/includes/member-portal-functions.php';
 
 $wpdb = new NotesDatabase();
 mmgr_check_database();
@@ -136,7 +149,7 @@ expect(!mmgr_ensure_member_notes_table(), 'Failed table creation returns failure
 $wpdb->creation_fails = false;
 expect(mmgr_ensure_member_notes_table(), 'Failed creation can be retried');
 
-function render_member_form($editing, $note) {
+function render_member_form($editing, $note, $tickets = null) {
     global $wpdb;
     $_GET = $editing ? array('id' => 7) : array();
     $_POST = array_fill_keys(array(
@@ -147,6 +160,10 @@ function render_member_form($editing, $note) {
     $_POST['mmgr_save_member'] = '1';
     $_POST['member_nonce'] = 'test-nonce';
     $_POST['admin_note'] = addslashes($note);
+    if ($tickets !== null) {
+        $_POST['mmgr_paid_tickets_present'] = '1';
+        $_POST['paid_event_ids'] = $tickets;
+    }
     ob_start();
     include __DIR__ . '/../membership-manager-qr/includes/admin/add-edit-member.php';
     return ob_get_clean();
@@ -231,5 +248,25 @@ expect(!$wpdb->notes && $wpdb->creates === 0, 'Empty notes do not create entries
 $valid_nonce = false;
 $html = render_member_form(true, 'Unauthorized note');
 expect($wpdb->member_writes === 1 && !$wpdb->notes, 'Invalid nonce prevents member and note writes');
+
+$valid_nonce = true;
+$wpdb = new NotesDatabase();
+$wpdb->ticket_options = array(array(
+    'id' => 5, 'event_name' => '<b>Party</b>', 'event_date' => '2099-10-31', 'paid_ticket_id' => null,
+));
+$html = render_member_form(true, '', array('5'));
+expect(count($wpdb->ticket_writes) === 1 && $wpdb->ticket_writes[0]['member_id'] === 7, 'Editing a member saves the paid ticket on that account');
+expect(str_contains($html, 'name="paid_event_ids[]"') && str_contains($html, '&lt;b&gt;Party&lt;/b&gt;'), 'Edit form presents escaped ticket event options');
+$wpdb->ticket_fails = true;
+$html = render_member_form(true, '', array('5'));
+expect(str_contains($html, 'paid event tickets could not all be saved') && !str_contains($html, 'Member updated successfully!'), 'Ticket write failure is not reported as overall success');
+$wpdb->ticket_fails = false;
+$wpdb->member_fails = true;
+$html = render_member_form(true, '', array('5'));
+expect(count($wpdb->ticket_writes) === 1, 'Failed member update does not save tickets');
+$wpdb->member_fails = false;
+$valid_nonce = false;
+$html = render_member_form(true, '', array('5'));
+expect(count($wpdb->ticket_writes) === 1, 'Invalid member nonce prevents paid ticket writes');
 
 echo "\nResults: $passed passed, 0 failed\n";
