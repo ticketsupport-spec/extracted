@@ -89,6 +89,13 @@ if (isset($_POST['mmgr_save_member'])) {
         }
 
         $note_saved = true;
+        $tickets_saved = true;
+        if ($editing && $member_saved !== false && isset($_POST['mmgr_paid_tickets_present'])) {
+            $tickets_saved = mmgr_save_member_paid_tickets($saved_member_id, wp_unslash($_POST['paid_event_ids'] ?? array()));
+            if (!$tickets_saved) {
+                echo '<div class="notice notice-error"><p>Member details saved, but paid event tickets could not all be saved. Please review the selections below and try again.</p></div>';
+            }
+        }
         if ($member_saved !== false && $admin_note !== '') {
             $note_saved = mmgr_ensure_member_notes_table() &&
                 $wpdb->insert($member_notes_tbl, array(
@@ -119,7 +126,7 @@ if (isset($_POST['mmgr_save_member'])) {
                 }
             }
             
-            if ($note_saved) {
+            if ($note_saved && $tickets_saved) {
                 echo '<div class="notice notice-success"><p>Member updated successfully! <a href="' . admin_url('admin.php?page=membership_manager') . '">Back to list</a></p></div>';
             }
             $member = $wpdb->get_row($wpdb->prepare("SELECT * FROM $tbl WHERE id = %d", intval($_GET['id'])), ARRAY_A);
@@ -158,6 +165,7 @@ if (isset($_POST['mmgr_save_member'])) {
 // Get membership levels
 $levels = $wpdb->get_results("SELECT level_name, price FROM {$wpdb->prefix}membership_levels ORDER BY level_name", ARRAY_A);
 $member_notes = array();
+$ticket_options = $editing && $member ? mmgr_get_member_ticket_options((int) $member['id']) : array();
 if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($member_notes_tbl))) === $member_notes_tbl) {
     $member_notes = $wpdb->get_results($wpdb->prepare(
         "SELECT note, created_by, created_at FROM `$member_notes_tbl` WHERE member_id = %d ORDER BY created_at DESC, id DESC",
@@ -322,6 +330,28 @@ if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', 
                     </label>
                 </td>
             </tr>
+
+            <?php if ($editing): ?>
+                <tr>
+                    <th>Paid Event Tickets</th>
+                    <td>
+                        <input type="hidden" name="mmgr_paid_tickets_present" value="1">
+                        <p class="description">Check each event after receiving payment. Uncheck to remove its paid ticket. These tickets are separate from membership payment and Going RSVPs.</p>
+                        <?php if ($ticket_options): ?>
+                            <?php foreach ($ticket_options as $ticket_event): ?>
+                                <label style="display:block;margin:10px 0;">
+                                    <input type="checkbox" name="paid_event_ids[]" value="<?php echo esc_attr($ticket_event['id']); ?>" <?php checked(!empty($ticket_event['paid_ticket_id'])); ?>>
+                                    <?php echo esc_html($ticket_event['event_name']); ?>
+                                    — <?php echo esc_html(date_i18n('F j, Y', strtotime($ticket_event['event_date']))); ?>
+                                    (PAID)
+                                </label>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <p>No upcoming ticketed events available.</p>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endif; ?>
             
             <!-- PASSWORD MANAGEMENT SECTION -->
             <tr>

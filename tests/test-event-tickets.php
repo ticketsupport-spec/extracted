@@ -5,6 +5,7 @@ define('ARRAY_A', 'ARRAY_A');
 
 $passed = 0;
 $current_member = null;
+$can_manage = true;
 
 function add_action($hook, $callback) {}
 function add_shortcode($tag, $callback) {
@@ -29,11 +30,18 @@ function wp_kses_post($value) { return $value; }
 function wpautop($value) { return '<p>' . $value . '</p>'; }
 function get_option($key, $default = false) { return $default; }
 function wp_create_nonce($action) { return 'test-nonce'; }
+function current_time($format) { return '2026-10-11 12:00:00'; }
+function date_i18n($format, $timestamp) { return date($format, $timestamp); }
+function current_user_can($capability) { global $can_manage; return $can_manage; }
+function get_current_user_id() { return 3; }
 
 class TestDatabase {
     public $prefix = 'wp_';
     public $events = array();
     public $level_prices = array('Single' => 150.00, 'Couple' => 250.00);
+    public $tickets = array();
+    public $write_fails = false;
+    public $writes = 0;
 
     public function prepare($query, ...$args) {
         if (count($args) === 1 && is_array($args[0])) {
@@ -61,12 +69,42 @@ class TestDatabase {
         return null;
     }
     public function get_results($query, $format = null) {
+        if (str_contains($query, 'JOIN wp_membership_member_event_tickets')) {
+            preg_match('/t.member_id = (\d+)/', $query, $match);
+            $member_id = (int) $match[1];
+            expect(str_contains($query, "e.event_date >= '2026-10-11'"), 'Upcoming tickets use the WordPress local date');
+            $results = array();
+            foreach ($this->events as $event) {
+                $ticket = $this->tickets[$member_id][$event['id']] ?? null;
+                if (!$event['active'] || $event['event_date'] < '2026-10-11') {
+                    continue;
+                }
+                if (str_contains($query, 'LEFT JOIN') ? ($event['tickets_enabled'] || $ticket) : (bool) $ticket) {
+                    $results[] = array_merge($event, array('paid_ticket_id' => $ticket ? 1 : null));
+                }
+            }
+            usort($results, function($a, $b) { return strcmp($a['event_date'], $b['event_date']); });
+            return $results;
+        }
         if (str_contains($query, 'SELECT * FROM wp_membership_events')) {
             return $this->events;
         }
         return array();
     }
     public function get_col($query) { return array(); }
+    public function insert($table, $data, $formats = null) {
+        expect($table === 'wp_membership_member_event_tickets', 'Ticket saves do not change memberships or RSVPs');
+        if ($this->write_fails) { return false; }
+        $this->writes++;
+        $this->tickets[$data['member_id']][$data['event_id']] = $data;
+        return 1;
+    }
+    public function delete($table, $where, $formats = null) {
+        if ($this->write_fails) { return false; }
+        $this->writes++;
+        unset($this->tickets[$where['member_id']][$where['event_id']]);
+        return 1;
+    }
 }
 
 function expect($condition, $description) {
@@ -165,5 +203,47 @@ expect(str_contains($html, 'not available for your membership level'), 'Unpriced
 $_GET['tickets'] = '6';
 $html = $shortcodes['mmgr_member_events']();
 expect(str_contains($html, 'Tickets are not available for this event'), 'Non-ticketed event has no ticket page');
+
+// Admin-assigned paid tickets and digital card display.
+$wpdb->events = array(
+    $event,
+    array_merge($event, array('id' => 11, 'event_name' => '<script>alert(1)</script>', 'event_date' => '2026-10-11')),
+    array_merge($event, array('id' => 12, 'event_date' => '2000-01-01')),
+    array_merge($event, array('id' => 13, 'active' => 0)),
+    $plain_event,
+);
+expect(mmgr_save_member_paid_tickets(8, array('5', '11', '5')), 'Admin can assign multiple paid tickets');
+expect(count($wpdb->tickets[8]) === 2, 'Duplicate IDs create one ticket per event');
+expect($wpdb->tickets[8][5]['created_by'] === 3, 'Ticket assignment records the administrator');
+$writes = $wpdb->writes;
+expect(mmgr_save_member_paid_tickets(8, array('5', '11')), 'Resaving existing tickets succeeds');
+expect($wpdb->writes === $writes, 'Resaving paid selections does not create duplicates');
+foreach (array(array('12'), array('13'), array('6'), array('999'), array('5 OR 1=1'), array(array('5')), '5') as $invalid) {
+    expect(!mmgr_save_member_paid_tickets(8, $invalid), 'Invalid or unavailable selection is rejected');
+}
+expect($wpdb->writes === $writes, 'Rejected selections do not modify paid tickets');
+$can_manage = false;
+expect(!mmgr_save_member_paid_tickets(8, array('5')), 'Members cannot grant themselves paid tickets');
+$can_manage = true;
+$html = mmgr_render_member_paid_events($paid);
+expect(str_contains($html, 'Your upcoming events') && substr_count($html, '>PAID</span>') === 2, 'Paid ticket cards have heading and PAID badges');
+expect(str_contains($html, 'October 11, 2026') && str_contains($html, '8:00 PM'), 'Cards include event date and start time');
+expect(str_contains($html, '&lt;script&gt;') && !str_contains($html, '<script>'), 'Paid event titles are escaped');
+expect(strpos($html, 'October 11, 2026') < strpos($html, 'October 31, 2099'), 'Paid tickets appear in chronological order');
+expect(str_contains(mmgr_render_member_paid_events($unpaid), 'No prepaid event tickets yet.'), 'Another member cannot see assigned tickets');
+expect(mmgr_render_member_paid_events(null) === '', 'Visitors cannot see paid ticket cards');
+$wpdb->events[0]['tickets_enabled'] = 0;
+expect(str_contains(mmgr_render_member_paid_events($paid), 'Halloween Party'), 'Paid tickets remain visible when sales close');
+$wpdb->tickets[8][12] = array('event_id' => 12);
+$wpdb->tickets[8][13] = array('event_id' => 13);
+expect(count(mmgr_get_member_paid_events(8)) === 2, 'Past and inactive paid events are hidden');
+expect(mmgr_save_member_paid_tickets(8, array('11')), 'Admin can remove a paid ticket after sales close');
+expect(!isset($wpdb->tickets[8][5]) && isset($wpdb->tickets[8][12], $wpdb->tickets[8][13]), 'Removing upcoming tickets retains historical and inactive assignments');
+$wpdb->write_fails = true;
+expect(!mmgr_save_member_paid_tickets(8, array()), 'Failed ticket removal reports failure');
+$wpdb->write_fails = false;
+expect(mmgr_save_member_paid_tickets(8, array()), 'Empty selection removes remaining editable tickets');
+$wpdb->write_fails = true;
+expect(!mmgr_save_member_paid_tickets(8, array('11')), 'Failed ticket insertion reports failure');
 
 echo "\nResults: $passed passed, 0 failed\n";
