@@ -430,6 +430,25 @@ function mmgr_member_has_paid_event_ticket($member_id, $event_id) {
 }
 
 /**
+ * Today's active events and whether a member has a paid ticket for each.
+ */
+function mmgr_get_member_today_event_ticket_statuses($member_id) {
+    if ($member_id <= 0) {
+        return array();
+    }
+    global $wpdb;
+    return $wpdb->get_results($wpdb->prepare(
+        "SELECT e.id, e.event_name, t.id AS paid_ticket_id
+         FROM {$wpdb->prefix}membership_events e
+         LEFT JOIN {$wpdb->prefix}membership_member_event_tickets t
+           ON t.event_id = e.id AND t.member_id = %d
+         WHERE e.active = 1 AND e.event_date = %s
+         ORDER BY e.start_time ASC, e.id ASC",
+        $member_id, substr(current_time('mysql'), 0, 10)
+    ), ARRAY_A);
+}
+
+/**
  * Upcoming events that an administrator can mark as paid for a member.
  */
 function mmgr_get_member_ticket_options($member_id) {

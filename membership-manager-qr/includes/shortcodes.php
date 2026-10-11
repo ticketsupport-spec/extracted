@@ -517,6 +517,21 @@ add_shortcode('membership_checkin', function($atts){
 
                 html += '<p style="margin:5px 0 !important;font-size:14px !important;"><strong>Last Visit:</strong> ' + member.last_visited + '</p>';
 
+                const todayEventTickets = data.data.today_event_tickets || [];
+                if (todayEventTickets.length) {
+                    html += '<div style="margin-top:14px !important;padding:12px !important;background:#f0f8ff !important;border:2px solid #0073aa !important;border-radius:8px !important;">';
+                    html += '<h3 style="margin:0 0 8px 0 !important;font-size:1.1rem !important;">Today’s Event Tickets</h3>';
+                    todayEventTickets.forEach(function(event) {
+                        const ticketStatus = event.paid_ticket_id
+                            ? 'PAID FULL'
+                            : 'NO EVENT TICKET ON FILE FOR TODAY';
+                        html += '<p style="margin:5px 0 !important;font-size:15px !important;"><strong>'
+                             + mmgrEscHtml(event.event_name || 'Event')
+                             + ':</strong> ' + ticketStatus + '</p>';
+                    });
+                    html += '</div>';
+                }
+
                 // ── FIRST VISIT: ID VERIFIED + ORIENTATION STATUS ───────────
                 if (isFirst) {
                     const idDone    = member.id_verified;
