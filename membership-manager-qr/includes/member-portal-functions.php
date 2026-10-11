@@ -327,6 +327,25 @@ function mmgr_create_portal_tables() {
         INDEX idx_member_id (member_id)
     ) $charset_collate");
 
+    // Ticket sale columns for upcoming events
+    $events_tbl = $wpdb->prefix . 'membership_events';
+    if ($wpdb->get_var("SHOW TABLES LIKE '" . esc_sql($events_tbl) . "'") === $events_tbl) {
+        $ticket_cols = array(
+            'tickets_enabled'        => "ADD COLUMN `tickets_enabled` TINYINT(1) NOT NULL DEFAULT 0",
+            'ticket_prices'          => "ADD COLUMN `ticket_prices` TEXT NULL DEFAULT NULL",
+            'ticket_pay_cash'        => "ADD COLUMN `ticket_pay_cash` TINYINT(1) NOT NULL DEFAULT 0",
+            'ticket_pay_etransfer'   => "ADD COLUMN `ticket_pay_etransfer` TINYINT(1) NOT NULL DEFAULT 0",
+            'ticket_etransfer_email' => "ADD COLUMN `ticket_etransfer_email` VARCHAR(255) NULL DEFAULT NULL",
+            'ticket_instructions'    => "ADD COLUMN `ticket_instructions` TEXT NULL DEFAULT NULL",
+        );
+        $existing_cols = (array) $wpdb->get_col("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($events_tbl) . "' AND column_name LIKE 'ticket%'");
+        foreach ($ticket_cols as $col => $alter) {
+            if (!in_array($col, $existing_cols, true)) {
+                $wpdb->query("ALTER TABLE `$events_tbl` $alter");
+            }
+        }
+    }
+
     // Custom BIO fields definition table
     $bio_fields_tbl = $wpdb->prefix . 'membership_bio_fields';
     $wpdb->query("CREATE TABLE IF NOT EXISTS `$bio_fields_tbl` (
@@ -357,6 +376,96 @@ function mmgr_create_portal_tables() {
 
 // Run on plugin activation
 add_action('init', 'mmgr_create_portal_tables');
+
+/**
+ * Decode an event's per-membership-level ticket prices.
+ *
+ * @param array $event  Event row (uses the ticket_prices JSON column).
+ * @return array        level_name => price (float). Levels without a price are omitted.
+ */
+function mmgr_get_event_ticket_prices($event) {
+    $raw = isset($event['ticket_prices']) ? $event['ticket_prices'] : '';
+    $decoded = $raw !== '' && $raw !== null ? json_decode($raw, true) : null;
+    $prices = array();
+    if (is_array($decoded)) {
+        foreach ($decoded as $level => $price) {
+            if ($price === '' || $price === null || !is_numeric($price)) {
+                continue;
+            }
+            $prices[(string) $level] = round(max(0, (float) $price), 2);
+        }
+    }
+    return $prices;
+}
+
+/**
+ * Whether a member currently holds a paid, non-expired membership.
+ */
+function mmgr_member_has_paid_membership($member) {
+    if (empty($member['paid']) || intval($member['paid']) !== 1) {
+        return false;
+    }
+    if (!empty($member['expire_date']) && $member['expire_date'] < date('Y-m-d')) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Calculate the ticket total for a member for a given event.
+ *
+ * Members without a paid (current) membership are charged their membership
+ * level fee in addition to the event ticket price.
+ *
+ * @param array $event   Event row.
+ * @param array $member  Member row.
+ * @return array {
+ *     @type bool   $available       Whether a ticket price is set for the member's level.
+ *     @type string $level           Member's membership level.
+ *     @type float  $ticket_price    Event ticket price for the member's level.
+ *     @type bool   $membership_due  Whether the membership fee is added.
+ *     @type float  $membership_fee  Membership fee added to the total (0 when not due).
+ *     @type float  $total           Ticket price + membership fee.
+ * }
+ */
+function mmgr_calculate_event_ticket_total($event, $member) {
+    global $wpdb;
+
+    $level  = isset($member['level']) ? (string) $member['level'] : '';
+    $prices = mmgr_get_event_ticket_prices($event);
+    $available    = array_key_exists($level, $prices);
+    $ticket_price = $available ? $prices[$level] : 0.0;
+
+    $membership_due = !mmgr_member_has_paid_membership($member);
+    $membership_fee = 0.0;
+    if ($membership_due) {
+        $level_price = $wpdb->get_var($wpdb->prepare(
+            "SELECT price FROM {$wpdb->prefix}membership_levels WHERE level_name = %s",
+            $level
+        ));
+        $membership_fee = $level_price !== null ? round((float) $level_price, 2) : 0.0;
+    }
+
+    return array(
+        'available'      => $available,
+        'level'          => $level,
+        'ticket_price'   => $ticket_price,
+        'membership_due' => $membership_due,
+        'membership_fee' => $membership_fee,
+        'total'          => round($ticket_price + $membership_fee, 2),
+    );
+}
+
+/**
+ * URL of the Buy Tickets page for an event.
+ */
+function mmgr_event_tickets_url($event_id, $member = null) {
+    $args = array('tickets' => (int) $event_id);
+    if ($member && !empty($member['member_code'])) {
+        $args = array('usercod' => (string) $member['member_code']) + $args;
+    }
+    return home_url('/member-events/?' . http_build_query($args, '', '&', PHP_QUERY_RFC3986));
+}
 
 /**
  * Return the display name for an event attendee row.

@@ -23,6 +23,12 @@ if (!$table_exists) {
         location VARCHAR(255),
         active TINYINT(1) DEFAULT 1,
         sort_order INT DEFAULT 0,
+        tickets_enabled TINYINT(1) NOT NULL DEFAULT 0,
+        ticket_prices TEXT NULL DEFAULT NULL,
+        ticket_pay_cash TINYINT(1) NOT NULL DEFAULT 0,
+        ticket_pay_etransfer TINYINT(1) NOT NULL DEFAULT 0,
+        ticket_etransfer_email VARCHAR(255) NULL DEFAULT NULL,
+        ticket_instructions TEXT NULL DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_event_date (event_date),
@@ -74,6 +80,32 @@ if (isset($_POST['save_event']) && isset($_POST['event_nonce'])) {
         $description = wp_kses_post(wp_unslash($_POST['description']));
         $active = isset($_POST['active']) ? 1 : 0;
         $sort_order = intval($_POST['sort_order'] ?? 0);
+
+        // Ticket sales settings
+        $tickets_enabled      = isset($_POST['tickets_enabled']) ? 1 : 0;
+        $ticket_pay_cash      = isset($_POST['ticket_pay_cash']) ? 1 : 0;
+        $ticket_pay_etransfer = isset($_POST['ticket_pay_etransfer']) ? 1 : 0;
+        $ticket_etransfer_email = sanitize_email(wp_unslash($_POST['ticket_etransfer_email'] ?? ''));
+        $ticket_instructions  = sanitize_textarea_field(wp_unslash($_POST['ticket_instructions'] ?? ''));
+        $ticket_prices = array();
+        if (!empty($_POST['ticket_prices']) && is_array($_POST['ticket_prices'])) {
+            foreach (wp_unslash($_POST['ticket_prices']) as $level_name => $price) {
+                $level_name = sanitize_text_field($level_name);
+                $price = trim((string) $price);
+                if ($level_name === '' || $price === '' || !is_numeric($price)) {
+                    continue;
+                }
+                $ticket_prices[$level_name] = round(max(0, (float) $price), 2);
+            }
+        }
+        $ticket_data = array(
+            'tickets_enabled'        => $tickets_enabled,
+            'ticket_prices'          => wp_json_encode($ticket_prices),
+            'ticket_pay_cash'        => $ticket_pay_cash,
+            'ticket_pay_etransfer'   => $ticket_pay_etransfer,
+            'ticket_etransfer_email' => $ticket_etransfer_email,
+            'ticket_instructions'    => $ticket_instructions,
+        );
         
         // Handle image upload
         $image_url = null;
@@ -102,7 +134,7 @@ if (isset($_POST['save_event']) && isset($_POST['event_nonce'])) {
                 'description' => $description,
                 'active' => $active,
                 'sort_order' => $sort_order
-            );
+            ) + $ticket_data;
             
             if ($image_url) {
                 $update_data['image_url'] = $image_url;
@@ -122,7 +154,7 @@ if (isset($_POST['save_event']) && isset($_POST['event_nonce'])) {
                 'image_url' => $image_url,
                 'active' => $active,
                 'sort_order' => $sort_order
-            ));
+            ) + $ticket_data);
             echo '<div class="notice notice-success"><p>✓ Event created successfully!</p></div>';
         }
     }
@@ -132,6 +164,9 @@ $editing_event = null;
 if (isset($_GET['edit'])) {
     $editing_event = $wpdb->get_row($wpdb->prepare("SELECT * FROM $events_table WHERE id = %d", intval($_GET['edit'])), ARRAY_A);
 }
+
+$membership_levels = $wpdb->get_results("SELECT level_name, price FROM {$wpdb->prefix}membership_levels ORDER BY level_name", ARRAY_A);
+$editing_ticket_prices = $editing_event ? mmgr_get_event_ticket_prices($editing_event) : array();
 
 ?>
 <div class="wrap">
@@ -219,6 +254,70 @@ if (isset($_GET['edit'])) {
                         </td>
                     </tr>
                 </table>
+
+                <h3 style="margin-top:20px;border-top:1px solid #ddd;padding-top:15px;">🎟️ Ticket Sales</h3>
+                <table class="form-table" style="width:100%;">
+                    <tr>
+                        <th><label for="tickets_enabled">Sell Tickets</label></th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="tickets_enabled" id="tickets_enabled" value="1" <?php checked($editing_event['tickets_enabled'] ?? 0, 1); ?>>
+                                Show a "Buy Tickets" button for this event
+                            </label>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th>Ticket Price per Level</th>
+                        <td>
+                            <?php if (empty($membership_levels)): ?>
+                                <p class="description">No membership levels defined yet.</p>
+                            <?php else: ?>
+                                <?php foreach ($membership_levels as $lvl):
+                                    $lvl_name = $lvl['level_name'];
+                                    $lvl_value = array_key_exists($lvl_name, $editing_ticket_prices) ? number_format($editing_ticket_prices[$lvl_name], 2, '.', '') : '';
+                                ?>
+                                    <p style="margin:0 0 8px 0;">
+                                        <label style="display:inline-block;min-width:110px;"><?php echo esc_html($lvl_name); ?></label>
+                                        $ <input type="number" name="ticket_prices[<?php echo esc_attr($lvl_name); ?>]" step="0.01" min="0" style="width:100px;" value="<?php echo esc_attr($lvl_value); ?>">
+                                        <span class="description">(membership fee: $<?php echo esc_html(number_format((float) $lvl['price'], 2)); ?>)</span>
+                                    </p>
+                                <?php endforeach; ?>
+                                <p class="description">Leave blank to make tickets unavailable for that level. Members without a paid membership are charged the membership fee plus the ticket price.</p>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th>Payment Options</th>
+                        <td>
+                            <label style="display:block;margin-bottom:6px;">
+                                <input type="checkbox" name="ticket_pay_cash" value="1" <?php checked($editing_event['ticket_pay_cash'] ?? 0, 1); ?>>
+                                💵 Cash in person
+                            </label>
+                            <label style="display:block;">
+                                <input type="checkbox" name="ticket_pay_etransfer" value="1" <?php checked($editing_event['ticket_pay_etransfer'] ?? 0, 1); ?>>
+                                📧 Email money transfer
+                            </label>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th><label for="ticket_etransfer_email">E-Transfer Email</label></th>
+                        <td>
+                            <input type="email" name="ticket_etransfer_email" id="ticket_etransfer_email" class="regular-text" value="<?php echo esc_attr($editing_event['ticket_etransfer_email'] ?? ''); ?>">
+                            <p class="description">Where members should send email money transfers.</p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th><label for="ticket_instructions">Ticket Instructions</label></th>
+                        <td>
+                            <textarea name="ticket_instructions" id="ticket_instructions" class="large-text" rows="3"><?php echo esc_textarea($editing_event['ticket_instructions'] ?? ''); ?></textarea>
+                            <p class="description">Optional extra information shown on the Buy Tickets page.</p>
+                        </td>
+                    </tr>
+                </table>
                 
                 <p>
                     <button type="submit" name="save_event" class="button button-primary">💾 Save Event</button>
@@ -244,6 +343,9 @@ if (isset($_GET['edit'])) {
                 
                 foreach ($events as $event):
                     $status = $event['active'] ? '✓ Active' : '⊘ Inactive';
+                    if (!empty($event['tickets_enabled'])) {
+                        $status .= '<br>🎟️ Tickets on sale';
+                    }
                     $is_past = strtotime($event['event_date']) < strtotime('today') ? ' (Past)' : '';
                     echo '<tr>';
                     echo '<td><strong>' . esc_html($event['event_name']) . '</strong>' . $is_past . '</td>';
@@ -261,4 +363,4 @@ if (isset($_GET['edit'])) {
             ?>
         </div>
     </div>
-</div>
+</div>
