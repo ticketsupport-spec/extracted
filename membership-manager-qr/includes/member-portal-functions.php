@@ -390,6 +390,46 @@ function mmgr_create_portal_tables() {
 add_action('init', 'mmgr_create_portal_tables');
 
 /**
+ * Add existing paid ticket holders to Going once when upgrading.
+ */
+function mmgr_backfill_paid_ticket_rsvps() {
+    if (get_option('mmgr_paid_ticket_rsvps_backfilled')) {
+        return;
+    }
+    global $wpdb;
+    $rsvps_table = $wpdb->prefix . 'membership_event_rsvps';
+    $result = $wpdb->query($wpdb->prepare(
+        "INSERT INTO $rsvps_table (event_id, member_id, created_at)
+         SELECT t.event_id, t.member_id, t.created_at
+         FROM {$wpdb->prefix}membership_member_event_tickets t
+         INNER JOIN {$wpdb->prefix}membership_events e ON e.id = t.event_id
+         LEFT JOIN $rsvps_table r ON r.event_id = t.event_id AND r.member_id = t.member_id
+         WHERE e.active = 1 AND e.event_date >= %s AND r.id IS NULL
+         ON DUPLICATE KEY UPDATE created_at = $rsvps_table.created_at",
+        substr(current_time('mysql'), 0, 10)
+    ));
+    if ($result !== false) {
+        update_option('mmgr_paid_ticket_rsvps_backfilled', 1);
+    }
+}
+add_action('init', 'mmgr_backfill_paid_ticket_rsvps', 11);
+
+/**
+ * Check event payment independently of membership payment or ticket sales.
+ */
+function mmgr_member_has_paid_event_ticket($member_id, $event_id) {
+    if ($member_id <= 0 || $event_id <= 0) {
+        return false;
+    }
+    global $wpdb;
+    return (bool) $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM {$wpdb->prefix}membership_member_event_tickets
+         WHERE member_id = %d AND event_id = %d",
+        $member_id, $event_id
+    ));
+}
+
+/**
  * Upcoming events that an administrator can mark as paid for a member.
  */
 function mmgr_get_member_ticket_options($member_id) {
@@ -444,6 +484,20 @@ function mmgr_save_member_paid_tickets($member_id, $event_ids) {
             }
         } elseif (!in_array($event_id, $selected, true) && !empty($event['paid_ticket_id'])) {
             if ($wpdb->delete($table, array('member_id' => $member_id, 'event_id' => $event_id), array('%d', '%d')) === false) {
+                return false;
+            }
+        }
+        if (in_array($event_id, $selected, true)) {
+            $rsvps_table = $wpdb->prefix . 'membership_event_rsvps';
+            $existing_rsvp = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM $rsvps_table WHERE event_id = %d AND member_id = %d",
+                $event_id, $member_id
+            ));
+            if (!$existing_rsvp && $wpdb->insert($rsvps_table, array(
+                'event_id' => $event_id,
+                'member_id' => $member_id,
+                'created_at' => current_time('mysql'),
+            ), array('%d', '%d', '%s')) === false) {
                 return false;
             }
         }

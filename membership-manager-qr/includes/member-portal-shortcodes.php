@@ -419,9 +419,14 @@ function mmgr_render_member_paid_events($member) {
 }
 
 /**
- * "BUY TICKETS" button for an event card (empty when tickets are not on sale).
+ * Ticket status for paid attendees, or "BUY TICKETS" when tickets are on sale.
  */
 function mmgr_render_buy_tickets_button($event, $member) {
+    if ($member && mmgr_member_has_paid_event_ticket((int) $member['id'], (int) $event['id'])) {
+        return '<span class="mmgr-paid-ticket-status"'
+            . ' style="display:inline-block;margin-bottom:12px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:bold;background:#28a745;color:white;">'
+            . '✅ YOU ARE GOING</span>';
+    }
     if (empty($event['tickets_enabled'])) {
         return '';
     }
