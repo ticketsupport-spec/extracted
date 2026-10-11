@@ -82,6 +82,23 @@ class TestDatabase {
         return null;
     }
     public function get_results($query, $format = null) {
+        if (str_contains($query, 'FROM wp_membership_events e') && str_contains($query, 'e.event_date =')) {
+            preg_match('/t.member_id = (\d+)/', $query, $member_match);
+            preg_match("/e.event_date = '([^']+)'/", $query, $date_match);
+            expect($date_match[1] === '2026-10-11', 'Check-in event status uses the WordPress local date');
+            $results = array();
+            foreach ($this->events as $event) {
+                if (!$event['active'] || $event['event_date'] !== $date_match[1]) {
+                    continue;
+                }
+                $ticket = $this->tickets[(int) $member_match[1]][$event['id']] ?? null;
+                $results[] = array_merge($event, array('paid_ticket_id' => $ticket ? 1 : null));
+            }
+            usort($results, function($a, $b) {
+                return strcmp($a['start_time'], $b['start_time']) ?: ($a['id'] <=> $b['id']);
+            });
+            return $results;
+        }
         if (str_contains($query, 'FROM wp_membership_event_rsvps')) {
             $rows = array();
             foreach ($this->rsvps as $member_id => $events) {
@@ -267,12 +284,18 @@ $wpdb->events = array(
     array_merge($event, array('id' => 11, 'event_name' => '<script>alert(1)</script>', 'event_date' => '2026-10-11')),
     array_merge($event, array('id' => 12, 'event_date' => '2000-01-01')),
     array_merge($event, array('id' => 13, 'active' => 0)),
+    array_merge($event, array('id' => 14, 'event_name' => 'Same-day event without ticket', 'event_date' => '2026-10-11', 'tickets_enabled' => 0)),
     $plain_event,
 );
 expect(mmgr_save_member_paid_tickets(8, array('5', '11', '5')), 'Admin can assign multiple paid tickets');
 expect(count($wpdb->tickets[8]) === 2, 'Duplicate IDs create one ticket per event');
 expect(count($wpdb->rsvps[8]) === 2, 'Paid ticket assignments automatically add members to Going');
 expect($wpdb->tickets[8][5]['created_by'] === 3, 'Ticket assignment records the administrator');
+$today_tickets = mmgr_get_member_today_event_ticket_statuses(8);
+expect(count($today_tickets) === 2, 'Check-in statuses include only active events on the current date');
+expect((int) $today_tickets[0]['id'] === 11 && $today_tickets[0]['paid_ticket_id'] === 1, 'Paid ticket for today is reported');
+expect((int) $today_tickets[1]['id'] === 14 && $today_tickets[1]['paid_ticket_id'] === null, 'Today event without a paid ticket is reported');
+expect(mmgr_get_member_today_event_ticket_statuses(7)[0]['paid_ticket_id'] === null, 'Another member has no paid ticket for today');
 $current_member = $paid;
 unset($_GET['tickets']);
 $html = $shortcodes['mmgr_upcoming_events'](array());

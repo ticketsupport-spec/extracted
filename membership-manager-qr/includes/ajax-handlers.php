@@ -190,6 +190,7 @@ function mmgr_handle_checkin() {
         'membership_fee_due'        => $membership_fee_due,
         'membership_fee_reason'     => $membership_fee_reason,
         'membership_fee_amount'     => $membership_fee_amount,
+        'today_event_tickets'       => mmgr_get_member_today_event_ticket_statuses((int) $member['id']),
     ));
 }
 
