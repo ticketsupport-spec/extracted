@@ -1173,35 +1173,45 @@ function mmgr_ensure_member_notes_table() {
     $table = $wpdb->prefix . 'membership_admin_notes';
     $exists_query = $wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table));
 
-    if ($wpdb->get_var($exists_query) === $table) {
-        return true;
-    }
-
-    $legacy_table = $wpdb->prefix . 'membership_member_notes';
-    if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($legacy_table))) === $legacy_table) {
-        $columns = $wpdb->get_col("SHOW COLUMNS FROM `$legacy_table`");
-        // Only move the legacy admin schema; private profile notes must stay intact.
-        if (!array_diff(array('id', 'member_id', 'note', 'created_by', 'created_at'), $columns) &&
-            !in_array('viewer_member_id', $columns, true)) {
-            if ($wpdb->query("RENAME TABLE `$legacy_table` TO `$table`") === false) {
-                return false;
+    if ($wpdb->get_var($exists_query) !== $table) {
+        $legacy_table = $wpdb->prefix . 'membership_member_notes';
+        if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($legacy_table))) === $legacy_table) {
+            $columns = $wpdb->get_col("SHOW COLUMNS FROM `$legacy_table`");
+            // Only move the legacy admin schema; private profile notes must stay intact.
+            if (!array_diff(array('id', 'member_id', 'note', 'created_by', 'created_at'), $columns) &&
+                !in_array('viewer_member_id', $columns, true)) {
+                if ($wpdb->query("RENAME TABLE `$legacy_table` TO `$table`") === false) {
+                    return false;
+                }
             }
-            return $wpdb->get_var($exists_query) === $table;
         }
     }
 
-    $charset_collate = $wpdb->get_charset_collate();
-    $wpdb->query("CREATE TABLE IF NOT EXISTS `$table` (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        member_id INT NOT NULL,
-        note TEXT NOT NULL,
-        created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
-        created_at DATETIME NOT NULL,
-        INDEX idx_member_id (member_id),
-        INDEX idx_created_at (created_at)
-    ) ENGINE=InnoDB $charset_collate");
+    if ($wpdb->get_var($exists_query) !== $table) {
+        $charset_collate = $wpdb->get_charset_collate();
+        $wpdb->query("CREATE TABLE IF NOT EXISTS `$table` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            member_id INT NOT NULL,
+            note TEXT NOT NULL,
+            created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL,
+            hidden TINYINT(1) NOT NULL DEFAULT 0,
+            INDEX idx_member_id (member_id),
+            INDEX idx_created_at (created_at)
+        ) ENGINE=InnoDB $charset_collate");
+    }
 
-    return $wpdb->get_var($exists_query) === $table;
+    if ($wpdb->get_var($exists_query) !== $table) {
+        return false;
+    }
+
+    $columns = $wpdb->get_col("SHOW COLUMNS FROM `$table`");
+    if (!in_array('hidden', $columns, true) &&
+        $wpdb->query("ALTER TABLE `$table` ADD COLUMN hidden TINYINT(1) NOT NULL DEFAULT 0") === false) {
+        return false;
+    }
+
+    return true;
 }
 
 /**

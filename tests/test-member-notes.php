@@ -22,6 +22,7 @@ function sanitize_textarea_field($value) { return trim(strip_tags($value)); }
 function sanitize_email($value) { return $value; }
 function get_current_user_id() { return 3; }
 function current_time($format) { return '2026-10-06 12:00:00'; }
+function wp_send_json_error($data) { throw new JsonResponse($data); }
 function admin_url($path) { return 'https://example.com/wp-admin/' . $path; }
 function esc_html($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
 function esc_attr($value) { return esc_html($value); }
@@ -39,25 +40,35 @@ function mmgr_generate_qr_file($code) {}
 function mmgr_send_welcome_email($id) {}
 function mmgr_send_welcome_pm($id) {}
 
+class JsonResponse extends RuntimeException {
+    public $data;
+    public function __construct($data) { $this->data = $data; }
+}
+
 class NotesDatabase {
     public $prefix = 'site_2_';
     public $insert_id = 0;
     public $table_exists = false;
     public $legacy_schema = array();
     public $legacy_notes = array();
+    public $admin_columns = array('id', 'member_id', 'note', 'created_by', 'created_at', 'hidden');
     public $rename_fails = false;
     public $renames = 0;
     public $creation_fails = false;
+    public $hidden_column_add_fails = false;
     public $note_fails = false;
     public $member_fails = false;
     public $update_result = 1;
     public $creates = 0;
     public $checks = array();
     public $notes = array();
+    public $admin_updates = array();
+    public $admin_deletions = array();
     public $member_writes = 0;
     public $ticket_options = array();
     public $ticket_writes = array();
     public $ticket_fails = false;
+    public $queries = array();
     public $member = array(
         'id' => 7, 'member_code' => 'TEST7', 'email' => 'member@example.com',
     );
@@ -78,7 +89,9 @@ class NotesDatabase {
         }
         return $this->legacy_schema ? $this->prefix . 'membership_member_notes' : null;
     }
-    public function get_col($query) { return $this->legacy_schema; }
+    public function get_col($query) {
+        return str_contains($query, $this->prefix . 'membership_admin_notes') ? $this->admin_columns : $this->legacy_schema;
+    }
     public function query($query) {
         if (str_starts_with($query, 'RENAME TABLE')) {
             expect($query === "RENAME TABLE `{$this->prefix}membership_member_notes` TO `{$this->prefix}membership_admin_notes`", 'Migration renames only the current site legacy admin table');
@@ -88,24 +101,47 @@ class NotesDatabase {
             }
             $this->table_exists = true;
             $this->notes = $this->legacy_notes;
+            $this->admin_columns = $this->legacy_schema;
             $this->legacy_schema = array();
             $this->legacy_notes = array();
             return 1;
         }
+        if (str_starts_with($query, 'ALTER TABLE')) {
+            expect(str_contains($query, 'ADD COLUMN hidden TINYINT(1) NOT NULL DEFAULT 0'), 'Adds the hidden flag to existing admin notes');
+            if ($this->hidden_column_add_fails) {
+                return false;
+            }
+            $this->admin_columns[] = 'hidden';
+            return 1;
+        }
         expect(str_contains($query, 'CREATE TABLE IF NOT EXISTS `' . $this->prefix . 'membership_admin_notes`'), 'Creates the active site admin notes table only');
+        expect(str_contains($query, 'hidden TINYINT(1) NOT NULL DEFAULT 0'), 'New admin notes tables include the hidden flag');
         expect(str_contains($query, $this->get_charset_collate()), 'Uses the WordPress database charset');
         $this->creates++;
         $this->table_exists = !$this->creation_fails;
+        $this->admin_columns = array('id', 'member_id', 'note', 'created_by', 'created_at', 'hidden');
         return $this->creation_fails ? false : 1;
     }
     public function get_row($query, $format) { return $this->member; }
     public function get_results($query, $format) {
+        $this->queries[] = $query;
         if (str_contains($query, 'LEFT JOIN') && str_contains($query, 'membership_member_event_tickets')) {
             return $this->ticket_options;
         }
-        return str_contains($query, 'membership_admin_notes') ? $this->notes : array();
+        if (str_contains($query, 'membership_admin_notes')) {
+            $notes = $this->notes;
+            if (str_contains($query, 'hidden = 0')) {
+                $notes = array_filter($notes, function($note) { return empty($note['hidden']); });
+            }
+            return array_values($notes);
+        }
+        return array();
     }
-    public function update($table, $data, $where) {
+    public function update($table, $data, $where, $format = null, $where_format = null) {
+        if ($table === $this->prefix . 'membership_admin_notes') {
+            $this->admin_updates[] = array('updated' => $data, 'where' => $where);
+            return 1;
+        }
         $this->member_writes++;
         return $this->member_fails ? false : $this->update_result;
     }
@@ -131,14 +167,21 @@ class NotesDatabase {
         if (!$this->table_exists || $this->note_fails) {
             return false;
         }
+        $data['id'] = 99;
         $this->notes[] = $data;
         $this->insert_id = 99;
+        return 1;
+    }
+    public function delete($table, $where, $where_format = null) {
+        expect($table === $this->prefix . 'membership_admin_notes', 'Note deletion uses the admin notes table');
+        $this->admin_deletions[] = $where;
         return 1;
     }
 }
 
 require __DIR__ . '/../membership-manager-qr/includes/database.php';
 require __DIR__ . '/../membership-manager-qr/includes/member-portal-functions.php';
+require __DIR__ . '/../membership-manager-qr/includes/ajax-handlers.php';
 
 $wpdb = new NotesDatabase();
 mmgr_check_database();
@@ -152,7 +195,15 @@ expect(!mmgr_ensure_member_notes_table(), 'Failed table creation returns failure
 $wpdb->creation_fails = false;
 expect(mmgr_ensure_member_notes_table(), 'Failed creation can be retried');
 
-function render_member_form($editing, $note, $tickets = null) {
+$wpdb = new NotesDatabase();
+$wpdb->table_exists = true;
+$wpdb->admin_columns = array('id', 'member_id', 'note', 'created_by', 'created_at');
+expect(mmgr_ensure_member_notes_table() && in_array('hidden', $wpdb->admin_columns, true), 'Existing admin notes tables gain the hidden flag');
+$wpdb->hidden_column_add_fails = true;
+$wpdb->admin_columns = array('id', 'member_id', 'note', 'created_by', 'created_at');
+expect(!mmgr_ensure_member_notes_table(), 'Failed hidden-flag migration is reported');
+
+function render_member_form($editing, $note, $tickets = null, $note_action = null) {
     global $wpdb;
     $_GET = $editing ? array('id' => 7) : array();
     $_POST = array_fill_keys(array(
@@ -160,7 +211,11 @@ function render_member_form($editing, $note, $tickets = null) {
         'email', 'phone', 'sex', 'partner_sex', 'age', 'partner_age',
         'level', 'start_date', 'expire_date',
     ), '');
-    $_POST['mmgr_save_member'] = '1';
+    if ($note_action === null) {
+        $_POST['mmgr_save_member'] = '1';
+    } else {
+        $_POST['mmgr_note_action'] = $note_action;
+    }
     $_POST['member_nonce'] = 'test-nonce';
     $_POST['admin_note'] = addslashes($note);
     if ($tickets !== null) {
@@ -212,6 +267,52 @@ expect($wpdb->notes[0]['member_id'] === 7 && $wpdb->notes[0]['created_by'] === 3
 expect(str_contains($html, 'Member updated successfully!'), 'Successful note save reports success');
 expect(str_contains($html, 'Second line'), 'Saved note appears in the note log');
 expect(str_contains($html, 'rows="4"></textarea>'), 'Successful save clears the note input');
+
+$wpdb = new NotesDatabase();
+$wpdb->table_exists = true;
+$wpdb->notes = array(array('id' => 55, 'member_id' => 7, 'note' => 'Old note', 'created_by' => 3, 'created_at' => current_time('mysql'), 'hidden' => 0));
+$html = render_member_form(true, '', null, 'hide:55');
+expect($wpdb->admin_updates[0]['updated'] === array('hidden' => 1), 'Hide action marks only the selected note hidden');
+expect($wpdb->admin_updates[0]['where'] === array('id' => 55, 'member_id' => 7), 'Hide action is scoped to the edited member');
+expect(str_contains($html, 'Note hidden from check-in.'), 'Hide action reports success');
+expect(!str_contains($html, 'Member updated successfully!'), 'Note action does not save the member form');
+
+$wpdb = new NotesDatabase();
+$wpdb->table_exists = true;
+$wpdb->notes = array(array('id' => 56, 'member_id' => 7, 'note' => 'Hidden note', 'created_by' => 3, 'created_at' => current_time('mysql'), 'hidden' => 1));
+$html = render_member_form(true, '', null, 'show:56');
+expect($wpdb->admin_updates[0]['updated'] === array('hidden' => 0), 'Show action restores the note to check-in');
+expect(str_contains($html, 'Show at check-in'), 'Hidden notes can be shown again from the edit form');
+
+$wpdb = new NotesDatabase();
+$wpdb->table_exists = true;
+$wpdb->notes = array(array('id' => 57, 'member_id' => 7, 'note' => 'Delete this note', 'created_by' => 3, 'created_at' => current_time('mysql'), 'hidden' => 0));
+$html = render_member_form(true, '', null, 'delete:57');
+expect($wpdb->admin_deletions[0] === array('id' => 57, 'member_id' => 7), 'Delete action is scoped to the edited member');
+expect(str_contains($html, 'Note deleted.'), 'Delete action reports success');
+
+$valid_nonce = false;
+$wpdb = new NotesDatabase();
+$wpdb->table_exists = true;
+$wpdb->notes = array(array('id' => 58, 'member_id' => 7, 'note' => 'Hidden note', 'created_by' => 3, 'created_at' => current_time('mysql'), 'hidden' => 1));
+$html = render_member_form(true, '', null, 'delete:58');
+expect(!$wpdb->admin_deletions && str_contains($html, 'Security check failed.'), 'Invalid nonce prevents note actions');
+$valid_nonce = true;
+
+$wpdb = new NotesDatabase();
+$wpdb->table_exists = true;
+$wpdb->member = array('id' => 7, 'member_code' => 'TEST7', 'name' => 'Test Member', 'email' => 'member@example.com', 'banned' => 1);
+$wpdb->notes = array(
+    array('id' => 59, 'member_id' => 7, 'note' => 'Visible note', 'created_at' => current_time('mysql'), 'hidden' => 0),
+    array('id' => 60, 'member_id' => 7, 'note' => 'Hidden note', 'created_at' => current_time('mysql'), 'hidden' => 1),
+);
+$_POST = array('code' => 'TEST7');
+try {
+    mmgr_handle_checkin();
+} catch (JsonResponse $response) {
+    expect(count($response->data['admin_notes']) === 1 && $response->data['admin_notes'][0]['note'] === 'Visible note', 'Check-in alerts include visible notes only');
+}
+expect(str_contains($wpdb->queries[0], 'member_id = 7 AND hidden = 0'), 'Check-in note query filters hidden notes');
 
 $wpdb->note_fails = true;
 $html = render_member_form(true, 'Unsaved & private');

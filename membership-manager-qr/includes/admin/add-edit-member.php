@@ -49,8 +49,45 @@ if ($editing && isset($_POST['mmgr_assign_code']) && isset($_POST['member_nonce_
     }
 }
 
+// Handle admin note actions separately so they do not save other member form fields.
+if ($editing && isset($_POST['mmgr_note_action'])) {
+    if (!isset($_POST['member_nonce']) || !wp_verify_nonce($_POST['member_nonce'], 'mmgr_save_member')) {
+        echo '<div class="notice notice-error"><p>Security check failed.</p></div>';
+    } elseif (!current_user_can('manage_options')) {
+        echo '<div class="notice notice-error"><p>You are not allowed to manage member notes.</p></div>';
+    } else {
+        $note_action = sanitize_text_field(wp_unslash($_POST['mmgr_note_action']));
+        if (preg_match('/^(hide|show|delete):([1-9][0-9]*)$/', $note_action, $note_action_parts)) {
+            $note_id = (int) $note_action_parts[2];
+            $note_action = $note_action_parts[1];
+            if ($note_action === 'delete') {
+                $note_action_result = $wpdb->delete($member_notes_tbl, array(
+                    'id' => $note_id,
+                    'member_id' => (int) $member['id'],
+                ), array('%d', '%d'));
+            } else {
+                $note_action_result = $wpdb->update($member_notes_tbl, array(
+                    'hidden' => $note_action === 'hide' ? 1 : 0,
+                ), array(
+                    'id' => $note_id,
+                    'member_id' => (int) $member['id'],
+                ), array('%d'), array('%d', '%d'));
+            }
+
+            if ($note_action_result !== false) {
+                $notice = $note_action === 'delete' ? 'Note deleted.' : ($note_action === 'hide' ? 'Note hidden from check-in.' : 'Note will appear at check-in.');
+                echo '<div class="notice notice-success"><p>' . esc_html($notice) . '</p></div>';
+            } else {
+                echo '<div class="notice notice-error"><p>Member note could not be updated. Please try again.</p></div>';
+            }
+        } else {
+            echo '<div class="notice notice-error"><p>Invalid member note action.</p></div>';
+        }
+    }
+}
+
 // Handle form submission
-if (isset($_POST['mmgr_save_member'])) {
+if (!isset($_POST['mmgr_note_action']) && isset($_POST['mmgr_save_member'])) {
     if (!isset($_POST['member_nonce']) || !wp_verify_nonce($_POST['member_nonce'], 'mmgr_save_member')) {
         echo '<div class="notice notice-error"><p>Security check failed.</p></div>';
     } else {
@@ -168,7 +205,7 @@ $member_notes = array();
 $ticket_options = $editing && $member ? mmgr_get_member_ticket_options((int) $member['id']) : array();
 if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($member_notes_tbl))) === $member_notes_tbl) {
     $member_notes = $wpdb->get_results($wpdb->prepare(
-        "SELECT note, created_by, created_at FROM `$member_notes_tbl` WHERE member_id = %d ORDER BY created_at DESC, id DESC",
+        "SELECT id, note, created_by, created_at, hidden FROM `$member_notes_tbl` WHERE member_id = %d ORDER BY created_at DESC, id DESC",
         intval($member['id'])
     ), ARRAY_A);
 }
@@ -295,6 +332,14 @@ if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', 
                                     }
                                     ?>
                                     <br><?php echo nl2br(esc_html($note['note'])); ?>
+                                    <?php if (!empty($note['hidden'])): ?>
+                                        <br><em>Hidden from check-in</em>
+                                    <?php endif; ?>
+                                    <br>
+                                    <button type="submit" name="mmgr_note_action" value="<?php echo !empty($note['hidden']) ? 'show:' : 'hide:'; ?><?php echo (int) $note['id']; ?>" class="button button-small" formnovalidate>
+                                        <?php echo !empty($note['hidden']) ? 'Show at check-in' : 'Hide from check-in'; ?>
+                                    </button>
+                                    <button type="submit" name="mmgr_note_action" value="delete:<?php echo (int) $note['id']; ?>" class="button button-small" formnovalidate onclick="return confirm('Permanently delete this note?')">Delete note</button>
                                 </li>
                             <?php endforeach; ?>
                         </ul>
