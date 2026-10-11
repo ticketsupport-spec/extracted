@@ -344,6 +344,15 @@ add_shortcode('membership_checkin', function($atts){
         </div>
         
         <div id="checkin-result" class="mmgr-checkin-result" style="margin-top:30px !important;"></div>
+        <dialog id="mmgr-admin-notes-dialog" aria-labelledby="mmgr-admin-notes-title" aria-describedby="mmgr-admin-notes-text" style="padding:0 !important;border:none !important;border-radius:8px !important;width:calc(100% - 32px) !important;max-width:600px !important;max-height:80vh !important;overflow:auto !important;">
+            <div style="background:#c00 !important;color:#fff !important;font-weight:700 !important;padding:24px !important;">
+                <h2 id="mmgr-admin-notes-title" style="color:#fff !important;font-weight:700 !important;margin:0 0 16px !important;font-size:1.25rem !important;"></h2>
+                <p id="mmgr-admin-notes-text" style="color:#fff !important;font-weight:700 !important;white-space:pre-wrap !important;overflow-wrap:anywhere !important;"></p>
+                <form method="dialog">
+                    <button type="submit" autofocus style="background:#fff !important;color:#c00 !important;font-weight:700 !important;border:none !important;border-radius:4px !important;padding:10px 20px !important;cursor:pointer !important;">OK</button>
+                </form>
+            </div>
+        </dialog>
     </div>
     
     <script src="https://unpkg.com/html5-qrcode"></script>
@@ -420,6 +429,7 @@ add_shortcode('membership_checkin', function($atts){
     }
     
     function processCheckin(code) {
+        if (document.getElementById('mmgr-admin-notes-dialog').open) return;
         const formData = new FormData();
         formData.append('action', 'mmgr_checkin');
         formData.append('code', code);
@@ -442,7 +452,10 @@ add_shortcode('membership_checkin', function($atts){
                 const memberName = data.data.member
                     ? data.data.member.name
                     : data.data.member_name;
-                window.alert('ADMIN NOTES — ' + memberName + '\n\n' + notesText);
+                document.getElementById('mmgr-admin-notes-title').textContent = 'ADMIN NOTES — ' + memberName;
+                document.getElementById('mmgr-admin-notes-text').textContent = notesText;
+                const notesDialog = document.getElementById('mmgr-admin-notes-dialog');
+                if (!notesDialog.open) notesDialog.showModal();
             }
             
             if (data.success && data.data && data.data.member) {
