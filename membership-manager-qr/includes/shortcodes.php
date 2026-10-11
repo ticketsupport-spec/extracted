@@ -361,6 +361,7 @@ add_shortcode('membership_checkin', function($atts){
     const mmgrBtnBase   = '<?php echo esc_js($btn_base_style); ?>';
     const mmgrBtnActive = '<?php echo esc_js($btn_active_style); ?>';
     const mmgrAjaxUrl   = '<?php echo admin_url('admin-ajax.php'); ?>';
+    let mmgrCheckinPending = false;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     function mmgrEscHtml(str) {
@@ -429,7 +430,8 @@ add_shortcode('membership_checkin', function($atts){
     }
     
     function processCheckin(code) {
-        if (document.getElementById('mmgr-admin-notes-dialog').open) return;
+        if (mmgrCheckinPending || document.getElementById('mmgr-admin-notes-dialog').open) return;
+        mmgrCheckinPending = true;
         const formData = new FormData();
         formData.append('action', 'mmgr_checkin');
         formData.append('code', code);
@@ -685,6 +687,9 @@ add_shortcode('membership_checkin', function($atts){
             const result = document.getElementById('checkin-result');
             result.innerHTML = '<div class="mmgr-error" style="background:#f8d7da !important;border-left:4px solid #dc3232 !important;color:#721c24 !important;padding:12px 15px !important;border-radius:6px !important;margin:15px 0 !important;font-weight:600 !important;font-size:14px !important;">❌ Error: ' + err.message + '</div>';
             console.error('Check-in error:', err);
+        })
+        .finally(() => {
+            mmgrCheckinPending = false;
         });
     }
 
