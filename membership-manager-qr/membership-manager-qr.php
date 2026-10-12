@@ -162,7 +162,9 @@ function mmgr_newsletter_page() {
             $subscribed = !empty($sub['created_at']) ? date_i18n('M d, Y', strtotime($sub['created_at'])) : '—';
             echo '<tr>';
             echo '<td>' . esc_html($sub['first_name'] . ' ' . $sub['last_name']) . '</td>';
-            echo '<td><a href="' . esc_url('mailto:' . $sub['email']) . '">' . esc_html($sub['email']) . '</a></td>';
+            $name = trim($sub['first_name'] . ' ' . $sub['last_name']);
+            $subject = 'Hi ' . $name . ' update for GetExtracted.ca Upcoming Event';
+            echo '<td><a href="' . esc_url('mailto:' . $sub['email'] . '?subject=' . rawurlencode($subject)) . '">' . esc_html($sub['email']) . '</a></td>';
             echo '<td>' . esc_html($sub['phone']) . '</td>';
             echo '<td>' . esc_html($sub['level']) . '</td>';
             echo '<td>' . esc_html($subscribed) . '</td>';
