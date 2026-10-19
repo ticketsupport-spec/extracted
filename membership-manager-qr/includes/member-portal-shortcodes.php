@@ -926,6 +926,8 @@ add_shortcode('mmgr_member_login', function() {
     }
 
     $error = '';
+    $recovery_error = '';
+    $recovery_notice = '';
     
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['member_login'])) {
         if (!isset($_POST['login_nonce']) || !wp_verify_nonce($_POST['login_nonce'], 'mmgr_member_login')) {
@@ -955,6 +957,47 @@ add_shortcode('mmgr_member_login', function() {
                 mmgr_log_login_attempt($email, $member_for_log ? $member_for_log['id'] : null, $member_for_log ? $member_for_log['email'] : null, false, 'invalid_credentials');
                 $error = 'Invalid email or password.';
             }
+        }
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_password_reset'])) {
+        if (!isset($_POST['reset_nonce']) || !wp_verify_nonce($_POST['reset_nonce'], 'mmgr_request_password_reset')) {
+            $recovery_error = 'Security check failed.';
+        } else {
+            $email = isset($_POST['reset_email']) ? sanitize_email(wp_unslash($_POST['reset_email'])) : '';
+
+            if (is_email($email)) {
+                $ip_address = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+                $throttle_key = 'mmgr_password_reset_' . hash('sha256', strtolower($email) . '|' . $ip_address);
+
+                if (!get_transient($throttle_key)) {
+                    set_transient($throttle_key, 1, 60);
+
+                    global $wpdb;
+                    $member = $wpdb->get_row($wpdb->prepare(
+                        "SELECT id, email, first_name FROM {$wpdb->prefix}memberships WHERE email = %s",
+                        $email
+                    ), ARRAY_A);
+
+                    if ($member) {
+                        $token = mmgr_generate_portal_token($member['id']);
+                        $setup_url = add_query_arg('token', $token, home_url('/member-setup/'));
+                        $site_name = get_bloginfo('name');
+                        $subject = 'Reset your ' . $site_name . ' member portal password';
+                        $message = 'Hi ' . esc_html($member['first_name']) . ',<br><br>'
+                            . 'Use the link below to set a new password for your member portal account:<br><br>'
+                            . '<a href="' . esc_url($setup_url) . '">' . esc_url($setup_url) . '</a><br><br>'
+                            . 'This link will expire in 7 days. If you did not request this, you can ignore this email.<br><br>'
+                            . '— ' . esc_html($site_name);
+                        $headers = array('Content-Type: text/html; charset=UTF-8');
+                        $sent = wp_mail($member['email'], $subject, $message, $headers);
+
+                        if (function_exists('mmgr_log_email')) {
+                            mmgr_log_email($member['id'], $member['email'], $subject, $sent);
+                        }
+                    }
+                }
+            }
+
+            $recovery_notice = 'If an account exists with that email address, a password reset link will be sent shortly.';
         }
     }
     
@@ -1005,6 +1048,26 @@ add_shortcode('mmgr_member_login', function() {
                 
                 <div class="mmgr-login-help">
                     Don't have a password? Check your welcome email for the setup link.
+                </div>
+
+                <div class="mmgr-login-help">
+                    <p>Forgot your password? Enter your email address and we’ll send you a reset link.</p>
+                    <?php if ($recovery_error): ?>
+                        <div class="mmgr-login-error"><?php echo esc_html($recovery_error); ?></div>
+                    <?php endif; ?>
+                    <?php if ($recovery_notice): ?>
+                        <p role="status"><?php echo esc_html($recovery_notice); ?></p>
+                    <?php endif; ?>
+                    <form method="POST" id="mmgr-password-reset-form">
+                        <?php wp_nonce_field('mmgr_request_password_reset', 'reset_nonce'); ?>
+                        <div class="mmgr-login-field">
+                            <label for="mmgr-reset-email">Email Address</label>
+                            <input type="email" id="mmgr-reset-email" name="reset_email" required placeholder="your-email@example.com" autocomplete="email">
+                        </div>
+                        <button type="submit" name="request_password_reset" class="mmgr-login-btn">
+                            Send Reset Link
+                        </button>
+                    </form>
                 </div>
             </div>
             
