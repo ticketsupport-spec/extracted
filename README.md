@@ -19,6 +19,19 @@ upcoming active events are also added when upgrading. Paid ticket holders see
 **YOU ARE GOING** instead of **BUY TICKETS**, even after ticket sales close.
 Removing a paid ticket does not remove the member's RSVP.
 
+## Couples account upgrades
+
+Single, male, and female members can use **Upgrade to a Couples Account** on
+their portal **Profile** page. The partner's first name, last name, and date of
+birth are required; partners must be at least 18. A configured **Couple** or
+**Couples** membership level is required.
+
+Paid accounts receive a visible admin note stating that **$20.00 is owed at the
+next visit**, shown to administrators during QR check-in. Unpaid accounts receive
+no upgrade debt or payment change. Existing payment records, membership dates,
+and QR codes are preserved. Staff can hide the reminder in **Edit Member** after
+collecting payment.
+
 ## Plugin Files
 
 ### Plugin Root
