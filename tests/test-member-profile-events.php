@@ -26,6 +26,7 @@ function mmgr_get_current_member() {
 function home_url($path) { return 'https://example.com' . $path; }
 function admin_url($path) { return home_url('/wp-admin/' . $path); }
 function esc_html($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
+function esc_attr($value) { return esc_html($value); }
 function esc_url($value) { return esc_html($value); }
 function esc_js($value) { return addslashes($value); }
 function esc_sql($value) { return addslashes($value); }
