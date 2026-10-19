@@ -1,6 +1,82 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+add_action('wp_ajax_mmgr_upgrade_to_couple', 'mmgr_ajax_upgrade_to_couple');
+add_action('wp_ajax_nopriv_mmgr_upgrade_to_couple', 'mmgr_ajax_upgrade_to_couple');
+
+function mmgr_ajax_upgrade_to_couple() {
+    check_ajax_referer('mmgr_upgrade_to_couple', 'nonce');
+    $member = mmgr_get_current_member();
+    if (!$member) {
+        wp_send_json_error(array('message' => 'Please log in to upgrade your account.'));
+        return;
+    }
+
+    $fields = array();
+    foreach (array('partner_first_name', 'partner_last_name', 'partner_dob') as $key) {
+        if (!isset($_POST[$key]) || !is_string($_POST[$key])) {
+            wp_send_json_error(array('message' => 'Partner first name, last name and date of birth are required.'));
+            return;
+        }
+        $fields[$key] = sanitize_text_field(wp_unslash($_POST[$key]));
+    }
+    $dob = DateTimeImmutable::createFromFormat('!Y-m-d', $fields['partner_dob']);
+    $today = new DateTimeImmutable(current_time('Y-m-d'));
+    if ($fields['partner_first_name'] === '' || $fields['partner_last_name'] === '' ||
+        !$dob || $dob->format('Y-m-d') !== $fields['partner_dob'] || $dob > $today ||
+        $today->diff($dob)->y < 18) {
+        wp_send_json_error(array('message' => 'Enter your partner’s first and last name and a valid date of birth (18 or older).'));
+        return;
+    }
+
+    $level = mmgr_get_couple_upgrade_level();
+    if ($level === '') {
+        wp_send_json_error(array('message' => 'A couples membership is not available. Please contact support.'));
+        return;
+    }
+
+    global $wpdb;
+    $table = $wpdb->prefix . 'memberships';
+    if (!mmgr_ensure_member_notes_table() || $wpdb->query('START TRANSACTION') === false) {
+        wp_send_json_error(array('message' => 'Unable to upgrade your account. Please try again.'));
+        return;
+    }
+    // Lock and re-read so retries cannot create duplicate upgrade notes.
+    $member = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM `$table` WHERE id = %d FOR UPDATE", $member['id']
+    ), ARRAY_A);
+    if (!$member || !mmgr_can_upgrade_to_couple($member)) {
+        $wpdb->query('ROLLBACK');
+        wp_send_json_error(array('message' => 'Only single memberships can be upgraded to couples.'));
+        return;
+    }
+
+    $paid = (int) $member['paid'] === 1;
+    $note_saved = !$paid || $wpdb->insert($wpdb->prefix . 'membership_admin_notes', array(
+        'member_id' => (int) $member['id'],
+        'note' => 'Couples account upgrade: $20.00 owed at next visit.',
+        'created_by' => 0,
+        'created_at' => current_time('mysql'),
+        'hidden' => 0,
+    )) !== false;
+    $updated = $note_saved && $wpdb->update($table, array(
+        'level' => $level,
+        'partner_first_name' => $fields['partner_first_name'],
+        'partner_last_name' => $fields['partner_last_name'],
+        'partner_name' => $fields['partner_first_name'] . ' ' . $fields['partner_last_name'],
+        'partner_age' => $fields['partner_dob'],
+    ), array('id' => (int) $member['id'])) !== false;
+
+    if (!$updated || $wpdb->query('COMMIT') === false) {
+        $wpdb->query('ROLLBACK');
+        wp_send_json_error(array('message' => 'Unable to upgrade your account. Please try again.'));
+        return;
+    }
+    wp_send_json_success(array('message' => $paid
+        ? 'Account upgraded to couples. $20.00 is due at your next visit.'
+        : 'Account upgraded to couples. No upgrade payment is due.'));
+}
+
 /**
  * AJAX Handler for Member Check-In - Enhanced with Member Info
  */

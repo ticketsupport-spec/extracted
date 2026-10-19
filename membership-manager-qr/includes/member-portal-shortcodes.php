@@ -2051,6 +2051,52 @@ add_shortcode('mmgr_member_profile', function() {
             </div>
         <?php endif; ?>
         
+        <?php if (mmgr_can_upgrade_to_couple($member) && mmgr_get_couple_upgrade_level() !== ''): ?>
+        <div class="mmgr-portal-card" style="margin-bottom:30px;">
+            <h3>Upgrade to a Couples Account</h3>
+            <p><?php echo (int) $member['paid'] === 1
+                ? 'A $20.00 upgrade payment will be due at your next visit. Staff will see a reminder when scanning your QR code.'
+                : 'No upgrade payment is due for an unpaid account.'; ?></p>
+            <form id="mmgr-couple-upgrade">
+                <p><label for="mmgr-partner-first">Partner First Name *</label><br>
+                    <input id="mmgr-partner-first" name="partner_first_name" type="text" maxlength="100" required></p>
+                <p><label for="mmgr-partner-last">Partner Last Name *</label><br>
+                    <input id="mmgr-partner-last" name="partner_last_name" type="text" maxlength="100" required></p>
+                <p><label for="mmgr-partner-dob">Partner Date of Birth *</label><br>
+                    <input id="mmgr-partner-dob" name="partner_dob" type="date" required></p>
+                <button type="submit" class="mmgr-btn-primary">Upgrade to Couples</button>
+                <p id="mmgr-upgrade-result" role="status"></p>
+            </form>
+        </div>
+        <script>
+        document.getElementById('mmgr-couple-upgrade').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const form = this;
+            const button = form.querySelector('button');
+            const result = document.getElementById('mmgr-upgrade-result');
+            const data = new FormData(form);
+            data.append('action', 'mmgr_upgrade_to_couple');
+            data.append('nonce', <?php echo wp_json_encode(wp_create_nonce('mmgr_upgrade_to_couple')); ?>);
+            button.disabled = true;
+            fetch(<?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>, {method: 'POST', body: data})
+                .then(response => response.json())
+                .then(response => {
+                    result.textContent = response.data.message || 'Unable to upgrade your account.';
+                    if (response.success) {
+                        form.querySelectorAll('input').forEach(input => input.disabled = true);
+                        window.location.reload();
+                    } else {
+                        button.disabled = false;
+                    }
+                })
+                .catch(() => {
+                    result.textContent = 'Unable to upgrade your account. Please try again.';
+                    button.disabled = false;
+                });
+        });
+        </script>
+        <?php endif; ?>
+
         <!-- Profile Info -->
         <form method="POST" enctype="multipart/form-data">
         <?php wp_nonce_field('mmgr_update_profile', 'profile_nonce'); ?>

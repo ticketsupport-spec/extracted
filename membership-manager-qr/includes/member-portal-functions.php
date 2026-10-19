@@ -560,6 +560,21 @@ function mmgr_get_event_ticket_prices($event) {
     return $prices;
 }
 
+function mmgr_can_upgrade_to_couple($member) {
+    return in_array(strtolower(trim($member['level'] ?? '')), array('single', 'male', 'female', 'single male', 'single female'), true);
+}
+
+function mmgr_get_couple_upgrade_level() {
+    global $wpdb;
+    $levels = $wpdb->get_col("SELECT level_name FROM {$wpdb->prefix}membership_levels ORDER BY id");
+    foreach ($levels as $level) {
+        if (in_array(strtolower(trim($level)), array('couple', 'couples'), true)) {
+            return $level;
+        }
+    }
+    return '';
+}
+
 /**
  * Whether a member currently holds a paid, non-expired membership.
  */
