@@ -418,9 +418,23 @@ function mmgr_members_page() {
         echo '<div class="notice notice-success"><p>Member unbanned successfully!</p></div>';
     }
     
-    // Get all members
-    $members = $wpdb->get_results("SELECT * FROM $tbl ORDER BY paid ASC, id DESC", ARRAY_A);
-    $total = count($members);
+    $search = isset($_GET['member_search']) && is_string($_GET['member_search'])
+        ? sanitize_text_field(wp_unslash($_GET['member_search'])) : '';
+    $members_query = "SELECT * FROM $tbl";
+    if ($search !== '') {
+        $like = '%' . $wpdb->esc_like($search) . '%';
+        $where = '(name LIKE %s OR partner_name LIKE %s OR email LIKE %s OR phone LIKE %s';
+        $args = array($like, $like, $like, $like);
+        $phone_digits = preg_replace('/\D/', '', $search);
+        if ($phone_digits !== '' && preg_match('/^[0-9\s()+.\-]+$/', $search)) {
+            $where .= " OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', ''), '.', '') LIKE %s";
+            $args[] = '%' . $wpdb->esc_like($phone_digits) . '%';
+        }
+        $members_query .= ' WHERE ' . $where . ')';
+        $members_query = $wpdb->prepare($members_query, $args);
+    }
+    $members = $wpdb->get_results($members_query . ' ORDER BY paid ASC, id DESC', ARRAY_A);
+    $total = $search === '' ? count($members) : (int) $wpdb->get_var("SELECT COUNT(*) FROM $tbl");
 
     $fetlife_names = array();
     $bio_fields_tbl = $wpdb->prefix . 'membership_bio_fields';
@@ -449,13 +463,56 @@ function mmgr_members_page() {
     $levels = $wpdb->get_results("SELECT level_name FROM {$wpdb->prefix}membership_levels ORDER BY level_name", ARRAY_A);
     
     ?>
-    <div class="wrap">
+    <style>
+        .mmgr-members-search { display:flex; flex-wrap:wrap; align-items:end; gap:10px; margin:20px 0; }
+        .mmgr-members-search label { display:block; margin-bottom:5px; font-weight:600; }
+        .mmgr-members-search input[type="search"] { width:360px; max-width:100%; }
+        .mmgr-members-table td { overflow-wrap:anywhere; }
+        .mmgr-mobile-label { display:none; }
+        @media screen and (max-width: 782px) {
+            .mmgr-members-search > div { width:100%; }
+            .mmgr-members-search input[type="search"] { width:100%; min-height:44px; font-size:16px; margin:0; }
+            .mmgr-members-page .button { min-height:44px; display:inline-flex; align-items:center; justify-content:center; padding:0 12px; }
+            .mmgr-members-page .mmgr-members-stats { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:10px !important; }
+            .mmgr-members-stats > div { padding:15px !important; }
+            .mmgr-members-table, .mmgr-members-table tbody { display:block; width:100%; border:0; background:transparent; }
+            .mmgr-members-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+            .mmgr-members-table tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin-bottom:16px; padding:12px; border:1px solid #c3c4c7; border-radius:8px; background:#fff; }
+            .mmgr-members-table td { display:block; width:auto; min-width:0; padding:8px; border:0; }
+            .mmgr-mobile-label { display:block; font-size:12px; font-weight:600; color:#50575e; margin-bottom:6px; }
+            .mmgr-members-table .mmgr-member-info,
+            .mmgr-members-table .mmgr-member-contact,
+            .mmgr-members-table .mmgr-member-actions,
+            .mmgr-members-table .mmgr-members-empty { grid-column:1 / -1; }
+            .mmgr-members-table .mmgr-member-info strong { font-size:18px !important; }
+            .mmgr-members-table .mmgr-member-contact { font-size:14px !important; }
+            .mmgr-members-table .mmgr-member-actions { display:flex; flex-wrap:wrap; gap:8px; }
+            .mmgr-member-actions .mmgr-mobile-label { width:100%; }
+        }
+    </style>
+    <div class="wrap mmgr-members-page">
         <h1 class="wp-heading-inline">Membership Manager</h1>
         <a href="<?php echo admin_url('admin.php?page=membership_add'); ?>" class="page-title-action">Add New</a>
         <hr class="wp-header-end">
+
+        <form method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>" class="mmgr-members-search">
+            <input type="hidden" name="page" value="membership_manager">
+            <div>
+                <label for="mmgr-member-search">Search members</label>
+                <input type="search" id="mmgr-member-search" name="member_search"
+                       value="<?php echo esc_attr($search); ?>" placeholder="First or last name, phone, or email">
+            </div>
+            <button type="submit" class="button button-primary">Search</button>
+            <?php if ($search !== ''): ?>
+                <a href="<?php echo esc_url(admin_url('admin.php?page=membership_manager')); ?>" class="button">Clear search</a>
+            <?php endif; ?>
+        </form>
+        <?php if ($search !== ''): ?>
+            <p role="status"><?php echo count($members); ?> matching member(s) for “<?php echo esc_html($search); ?>”.</p>
+        <?php endif; ?>
         
         <!-- Stats -->
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin:20px 0;">
+        <div class="mmgr-members-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin:20px 0;">
             <div style="background:#0073aa;color:white;padding:20px;border-radius:6px;">
                 <h3 style="margin:0;font-size:32px;"><?php echo $total; ?></h3>
                 <p style="margin:5px 0 0 0;">Total Members</p>
@@ -469,7 +526,7 @@ function mmgr_members_page() {
         </div>
         
         <!-- Members Table -->
-        <table class="widefat fixed striped">
+        <table class="widefat fixed striped mmgr-members-table">
             <thead>
                 <tr>
                     <th style="width:80px;">Photo</th>
@@ -487,8 +544,12 @@ function mmgr_members_page() {
             <tbody>
                 <?php if (empty($members)): ?>
                     <tr>
-                        <td colspan="10" style="text-align:center;padding:40px;color:#666;">
-                            No members found. <a href="<?php echo admin_url('admin.php?page=membership_add'); ?>">Add your first member</a>
+                        <td class="mmgr-members-empty" colspan="10" style="text-align:center;padding:40px;color:#666;">
+                            <?php if ($search !== ''): ?>
+                                No members match your search. Try another name, phone number, or email address.
+                            <?php else: ?>
+                                No members found. <a href="<?php echo admin_url('admin.php?page=membership_add'); ?>">Add your first member</a>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php else: ?>
@@ -511,6 +572,7 @@ function mmgr_members_page() {
                     <tr style="<?php echo $row_style; ?>">
                         <!-- Photo -->
                         <td>
+                            <span class="mmgr-mobile-label" aria-hidden="true">Photo</span>
                             <div style="text-align:center;">
                                 <div style="font-size:10px;font-weight:bold;color:#666;text-transform:uppercase;margin-bottom:4px;">
                                     <?php echo esc_html($member['level']); ?>
@@ -527,6 +589,7 @@ function mmgr_members_page() {
                         
                         <!-- QR Code -->
                         <td>
+                            <span class="mmgr-mobile-label" aria-hidden="true">QR Code</span>
                             <a href="<?php echo esc_url($qr_url); ?>" target="_blank">
                                 <img src="<?php echo esc_url($qr_url); ?>" 
                                      style="width:60px;height:60px;border:1px solid #ccc;" 
@@ -535,7 +598,8 @@ function mmgr_members_page() {
                         </td>
                                     
                         <!-- Member Info -->
-                        <td>
+                        <td class="mmgr-member-info">
+                            <span class="mmgr-mobile-label" aria-hidden="true">Member</span>
                             <strong style="font-size:14px;">
                                 <a href="<?php echo admin_url('admin.php?page=membership_add&id=' . $member['id']); ?>">
                                     <?php echo esc_html($member['name']); ?>
@@ -551,13 +615,15 @@ function mmgr_members_page() {
                         </td>
                         
                         <!-- Contact -->
-                        <td style="font-size:12px;">
+                        <td class="mmgr-member-contact" style="font-size:12px;">
+                            <span class="mmgr-mobile-label" aria-hidden="true">Contact</span>
                             <?php echo esc_html($member['email']); ?><br>
                             <?php echo esc_html($member['phone']); ?>
                         </td>
                         
                         <!-- Level -->
                         <td>
+                            <span class="mmgr-mobile-label" aria-hidden="true">Level</span>
                             <span style="background:#0073aa;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:bold;">
                                 <?php echo esc_html($member['level']); ?>
                             </span>
@@ -565,6 +631,7 @@ function mmgr_members_page() {
                         
                         <!-- Payment Status -->
                         <td>
+                            <span class="mmgr-mobile-label" aria-hidden="true">Payment</span>
                             <?php if ($is_paid): ?>
                                 <span style="background:#00a32a;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:bold;">✓ PAID</span>
                                 <?php if (!empty($member['payment_date'])): ?>
@@ -577,6 +644,7 @@ function mmgr_members_page() {
                         
                         <!-- Status -->
                         <td>
+                            <span class="mmgr-mobile-label" aria-hidden="true">Status</span>
                             <?php if ($is_banned): ?>
                                 <span style="background:#d00;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:bold;">⛔ BANNED</span>
                             <?php elseif (!$is_paid): ?>
@@ -590,6 +658,7 @@ function mmgr_members_page() {
                         
                         <!-- Expires -->
                         <td style="font-size:12px;">
+                            <span class="mmgr-mobile-label" aria-hidden="true">Expires</span>
                             <?php 
                             if (!$is_paid) {
                                 echo '<em style="color:#999;">Pending payment</em>';
@@ -601,11 +670,13 @@ function mmgr_members_page() {
                         
                         <!-- Last Visit -->
                         <td style="font-size:12px;">
+                            <span class="mmgr-mobile-label" aria-hidden="true">Last Visit</span>
                             <?php echo !empty($member['last_visited']) ? date('M d, Y', strtotime($member['last_visited'])) : 'Never'; ?>
                         </td>
                         
                         <!-- Actions -->
-                        <td>
+                        <td class="mmgr-member-actions">
+                            <span class="mmgr-mobile-label" aria-hidden="true">Actions</span>
                             <a href="<?php echo admin_url('admin.php?page=membership_add&id=' . $member['id']); ?>" class="button button-small">Edit</a>
                             
                             <?php if (!$is_paid): ?>
