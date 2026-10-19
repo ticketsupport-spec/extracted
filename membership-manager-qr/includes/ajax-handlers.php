@@ -80,6 +80,50 @@ function mmgr_ajax_upgrade_to_couple() {
 /**
  * AJAX Handler for Member Check-In - Enhanced with Member Info
  */
+add_action('wp_ajax_mmgr_checkin_note', 'mmgr_ajax_checkin_note');
+
+function mmgr_ajax_checkin_note() {
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(array('message' => 'You are not allowed to manage member notes.'));
+        return;
+    }
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'mmgr_checkin_note')) {
+        wp_send_json_error(array('message' => 'Security check failed. Please reload and try again.'));
+        return;
+    }
+
+    $note_id = isset($_POST['note_id']) ? absint($_POST['note_id']) : 0;
+    $member_id = isset($_POST['member_id']) ? absint($_POST['member_id']) : 0;
+    $operation = isset($_POST['operation']) ? sanitize_text_field(wp_unslash($_POST['operation'])) : '';
+    if (!$note_id || !$member_id || !in_array($operation, array('edit', 'delete'), true)) {
+        wp_send_json_error(array('message' => 'Invalid member note action.'));
+        return;
+    }
+
+    global $wpdb;
+    $table = $wpdb->prefix . 'membership_admin_notes';
+    $where = array('id' => $note_id, 'member_id' => $member_id);
+    if ($operation === 'delete') {
+        $result = $wpdb->delete($table, $where, array('%d', '%d'));
+    } else {
+        $note = isset($_POST['note']) ? sanitize_textarea_field(wp_unslash($_POST['note'])) : '';
+        if ($note === '') {
+            wp_send_json_error(array('message' => 'Please enter a note.'));
+            return;
+        }
+        $result = $wpdb->update($table, array('note' => $note), $where, array('%s'), array('%d', '%d'));
+    }
+    if ($result === false) {
+        wp_send_json_error(array('message' => 'Member note could not be updated. Please try again.'));
+        return;
+    }
+    $response = array('message' => $operation === 'delete' ? 'Note deleted.' : 'Note saved.');
+    if ($operation === 'edit') {
+        $response['note'] = $note;
+    }
+    wp_send_json_success($response);
+}
+
 add_action('wp_ajax_mmgr_checkin', 'mmgr_handle_checkin');
 add_action('wp_ajax_nopriv_mmgr_checkin', 'mmgr_handle_checkin');
 
@@ -112,7 +156,7 @@ function mmgr_handle_checkin() {
         $member_notes_tbl = $wpdb->prefix . 'membership_admin_notes';
         if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($member_notes_tbl))) === $member_notes_tbl) {
             $admin_notes = $wpdb->get_results($wpdb->prepare(
-                "SELECT note, created_at FROM `$member_notes_tbl` WHERE member_id = %d AND hidden = 0 ORDER BY created_at DESC, id DESC",
+                "SELECT id, member_id, note, created_at FROM `$member_notes_tbl` WHERE member_id = %d AND hidden = 0 ORDER BY created_at DESC, id DESC",
                 $member['id']
             ), ARRAY_A);
         }
