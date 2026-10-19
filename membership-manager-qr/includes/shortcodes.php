@@ -347,9 +347,10 @@ add_shortcode('membership_checkin', function($atts){
         <dialog id="mmgr-admin-notes-dialog" aria-labelledby="mmgr-admin-notes-title" aria-describedby="mmgr-admin-notes-text" style="padding:0 !important;border:none !important;border-radius:8px !important;width:calc(100% - 32px) !important;max-width:600px !important;max-height:80vh !important;overflow:auto !important;">
             <div style="background:#c00 !important;color:#fff !important;font-weight:700 !important;padding:24px !important;">
                 <h2 id="mmgr-admin-notes-title" style="color:#fff !important;font-weight:700 !important;margin:0 0 16px !important;font-size:1.25rem !important;"></h2>
-                <p id="mmgr-admin-notes-text" style="color:#fff !important;font-weight:700 !important;white-space:pre-wrap !important;overflow-wrap:anywhere !important;"></p>
+                <div id="mmgr-admin-notes-text" style="color:#fff !important;font-weight:700 !important;white-space:pre-wrap !important;overflow-wrap:anywhere !important;"></div>
+                <p id="mmgr-admin-notes-status" role="status" style="color:#fff !important;"></p>
                 <form method="dialog">
-                    <button type="submit" autofocus style="background:#fff !important;color:#c00 !important;font-weight:700 !important;border:none !important;border-radius:4px !important;padding:10px 20px !important;cursor:pointer !important;">OK</button>
+                    <button type="submit" autofocus style="background:#fff !important;color:#c00 !important;font-weight:700 !important;border:none !important;border-radius:4px !important;padding:10px 20px !important;cursor:pointer !important;">REMIND ME NEXT TIME</button>
                 </form>
             </div>
         </dialog>
@@ -361,7 +362,103 @@ add_shortcode('membership_checkin', function($atts){
     const mmgrBtnBase   = '<?php echo esc_js($btn_base_style); ?>';
     const mmgrBtnActive = '<?php echo esc_js($btn_active_style); ?>';
     const mmgrAjaxUrl   = '<?php echo admin_url('admin-ajax.php'); ?>';
+    const mmgrNoteNonce = '<?php echo esc_js(wp_create_nonce('mmgr_checkin_note')); ?>';
     let mmgrCheckinPending = false;
+    let mmgrNotePending = false;
+
+    function mmgrRenderCheckinNotes(notes) {
+        const container = document.getElementById('mmgr-admin-notes-text');
+        container.replaceChildren();
+        document.getElementById('mmgr-admin-notes-status').textContent = '';
+        notes.forEach(note => {
+            const card = document.createElement('section');
+            const text = document.createElement('p');
+            text.textContent = note.created_at + '\n' + note.note;
+            const editor = document.createElement('textarea');
+            editor.value = note.note;
+            editor.rows = 4;
+            editor.hidden = true;
+            editor.setAttribute('aria-label', 'Edit admin note from ' + note.created_at);
+            editor.style.cssText = 'width:100%;box-sizing:border-box;color:#000;background:#fff;';
+            const controls = document.createElement('div');
+            controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;';
+            const button = (label, handler) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = label;
+                btn.style.cssText = 'background:#fff;color:#c00;font-weight:700;border:none;border-radius:4px;padding:10px;cursor:pointer;';
+                btn.addEventListener('click', handler);
+                controls.appendChild(btn);
+                return btn;
+            };
+            const edit = button('EDIT NOTE', () => {
+                if (mmgrNotePending) return;
+                editor.hidden = false;
+                text.hidden = true;
+                edit.hidden = true;
+                save.hidden = cancel.hidden = false;
+                editor.focus();
+            });
+            button('DELETE NOTE', () => {
+                if (mmgrNotePending || !confirm('Permanently delete this note?')) return;
+                mmgrSaveCheckinNote(note, 'delete', '', () => {
+                    card.remove();
+                    if (!container.children.length) document.getElementById('mmgr-admin-notes-dialog').close();
+                });
+            });
+            const save = button('SAVE NOTE', () => {
+                mmgrSaveCheckinNote(note, 'edit', editor.value, data => {
+                    note.note = data.note;
+                    editor.value = note.note;
+                    text.textContent = note.created_at + '\n' + note.note;
+                    editor.hidden = save.hidden = cancel.hidden = true;
+                    text.hidden = edit.hidden = false;
+                });
+            });
+            const cancel = button('CANCEL', () => {
+                if (mmgrNotePending) return;
+                editor.value = note.note;
+                editor.hidden = save.hidden = cancel.hidden = true;
+                text.hidden = edit.hidden = false;
+                edit.focus();
+            });
+            save.hidden = cancel.hidden = true;
+            card.append(text, editor, controls);
+            container.appendChild(card);
+        });
+    }
+
+    async function mmgrSaveCheckinNote(note, operation, value, onSuccess) {
+        if (mmgrNotePending) return;
+        mmgrNotePending = true;
+        const dialog = document.getElementById('mmgr-admin-notes-dialog');
+        const status = document.getElementById('mmgr-admin-notes-status');
+        dialog.querySelectorAll('button, textarea').forEach(el => el.disabled = true);
+        status.textContent = 'Saving…';
+        const formData = new FormData();
+        formData.append('action', 'mmgr_checkin_note');
+        formData.append('nonce', mmgrNoteNonce);
+        formData.append('note_id', note.id);
+        formData.append('member_id', note.member_id);
+        formData.append('operation', operation);
+        formData.append('note', value);
+        try {
+            const response = await fetch(mmgrAjaxUrl, { method: 'POST', body: formData });
+            const data = await response.json();
+            if (!data.success) throw new Error(data.data && data.data.message || 'Unable to save note.');
+            onSuccess(data.data);
+            status.textContent = data.data.message;
+        } catch (error) {
+            status.textContent = error.message || 'Unable to save note. Please try again.';
+        } finally {
+            mmgrNotePending = false;
+            dialog.querySelectorAll('button, textarea').forEach(el => el.disabled = false);
+        }
+    }
+
+    document.getElementById('mmgr-admin-notes-dialog').addEventListener('cancel', event => {
+        if (mmgrNotePending) event.preventDefault();
+    });
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     function mmgrEscHtml(str) {
@@ -448,14 +545,11 @@ add_shortcode('membership_checkin', function($atts){
                 ? data.data.member.admin_notes
                 : (data.data ? data.data.admin_notes : []);
             if (Array.isArray(adminNotes) && adminNotes.length) {
-                const notesText = adminNotes.map(note =>
-                    note.created_at + '\n' + note.note
-                ).join('\n\n');
                 const memberName = data.data.member
                     ? data.data.member.name
                     : data.data.member_name;
                 document.getElementById('mmgr-admin-notes-title').textContent = 'ADMIN NOTES — ' + memberName;
-                document.getElementById('mmgr-admin-notes-text').textContent = notesText;
+                mmgrRenderCheckinNotes(adminNotes);
                 const notesDialog = document.getElementById('mmgr-admin-notes-dialog');
                 if (!notesDialog.open) notesDialog.showModal();
             }

@@ -5,6 +5,7 @@ define('ARRAY_A', 'ARRAY_A');
 
 $passed = 0;
 $valid_nonce = true;
+$can_manage_notes = true;
 function expect($condition, $description) {
     global $passed;
     if (!$condition) {
@@ -23,6 +24,8 @@ function sanitize_email($value) { return $value; }
 function get_current_user_id() { return 3; }
 function current_time($format) { return '2026-10-06 12:00:00'; }
 function wp_send_json_error($data) { throw new JsonResponse($data); }
+function wp_send_json_success($data) { throw new JsonResponse($data, true); }
+function absint($value) { return abs((int) $value); }
 function admin_url($path) { return 'https://example.com/wp-admin/' . $path; }
 function esc_html($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
 function esc_attr($value) { return esc_html($value); }
@@ -30,7 +33,7 @@ function esc_textarea($value) { return esc_html($value); }
 function esc_url($value) { return esc_html($value); }
 function selected($value, $expected) {}
 function checked($value, $expected = true) {}
-function current_user_can($capability) { return true; }
+function current_user_can($capability) { global $can_manage_notes; return $can_manage_notes; }
 function wp_nonce_field($action, $name) {}
 function wp_create_nonce($action) { return 'test-nonce'; }
 function date_i18n($format, $timestamp) { return date($format, $timestamp); }
@@ -42,7 +45,8 @@ function mmgr_send_welcome_pm($id) {}
 
 class JsonResponse extends RuntimeException {
     public $data;
-    public function __construct($data) { $this->data = $data; }
+    public $success;
+    public function __construct($data, $success = false) { $this->data = $data; $this->success = $success; }
 }
 
 class NotesDatabase {
@@ -140,7 +144,7 @@ class NotesDatabase {
     public function update($table, $data, $where, $format = null, $where_format = null) {
         if ($table === $this->prefix . 'membership_admin_notes') {
             $this->admin_updates[] = array('updated' => $data, 'where' => $where);
-            return 1;
+            return $this->note_fails ? false : $this->update_result;
         }
         $this->member_writes++;
         return $this->member_fails ? false : $this->update_result;
@@ -175,7 +179,7 @@ class NotesDatabase {
     public function delete($table, $where, $where_format = null) {
         expect($table === $this->prefix . 'membership_admin_notes', 'Note deletion uses the admin notes table');
         $this->admin_deletions[] = $where;
-        return 1;
+        return $this->note_fails ? false : 1;
     }
 }
 
@@ -313,6 +317,50 @@ try {
     expect(count($response->data['admin_notes']) === 1 && $response->data['admin_notes'][0]['note'] === 'Visible note', 'Check-in alerts include visible notes only');
 }
 expect(str_contains($wpdb->queries[0], 'member_id = 7 AND hidden = 0'), 'Check-in note query filters hidden notes');
+expect(str_contains($wpdb->queries[0], 'SELECT id, member_id, note, created_at'), 'Check-in provides identifiers for individual note actions');
+
+function checkin_note_action($operation, $note = '') {
+    $_POST = array('nonce' => 'test-nonce', 'note_id' => 59, 'member_id' => 7, 'operation' => $operation, 'note' => $note);
+    try {
+        mmgr_ajax_checkin_note();
+    } catch (JsonResponse $response) {
+        return $response;
+    }
+    throw new RuntimeException('Missing note action response');
+}
+
+$wpdb = new NotesDatabase();
+$response = checkin_note_action('edit', "Updated <b>note</b>\nSecond line");
+expect($response->success, 'Check-in note edit succeeds');
+expect($wpdb->admin_updates[0]['updated'] === array('note' => "Updated note\nSecond line"), 'Edits sanitize text while preserving multiple lines and note visibility');
+expect($wpdb->admin_updates[0]['where'] === array('id' => 59, 'member_id' => 7), 'Check-in edit is scoped to the selected note and member');
+$wpdb->update_result = 0;
+expect(checkin_note_action('edit', 'Unchanged note')->success, 'Saving unchanged text is successful');
+expect(checkin_note_action('delete')->success, 'Check-in delete succeeds');
+expect($wpdb->admin_deletions[0] === array('id' => 59, 'member_id' => 7), 'Check-in delete is scoped to the selected note and member');
+expect(!$wpdb->member_writes, 'Check-in note actions do not change member data');
+$wpdb->note_fails = true;
+expect(!checkin_note_action('edit', 'Retry me')->success, 'Check-in edit reports database failure');
+expect(!checkin_note_action('delete')->success, 'Check-in delete reports database failure');
+
+$wpdb = new NotesDatabase();
+expect(!checkin_note_action('edit', '   ')->success && !$wpdb->admin_updates, 'Empty edits cannot erase a note');
+expect(!checkin_note_action('hide')->success && !$wpdb->admin_updates, 'Unsupported check-in note actions are rejected');
+$valid_nonce = false;
+expect(!checkin_note_action('delete')->success && !$wpdb->admin_deletions, 'Invalid nonce blocks check-in deletion');
+expect(!checkin_note_action('edit', 'Blocked')->success && !$wpdb->admin_updates, 'Invalid nonce blocks check-in editing');
+$valid_nonce = true;
+$can_manage_notes = false;
+expect(!checkin_note_action('delete')->success && !$wpdb->admin_deletions, 'Non-admin cannot delete check-in notes');
+expect(!checkin_note_action('edit', 'Blocked')->success && !$wpdb->admin_updates, 'Non-admin cannot edit check-in notes');
+$_POST = array('code' => 'TEST7');
+$wpdb->member = array('id' => 7, 'member_code' => 'TEST7', 'name' => 'Test Member', 'email' => 'member@example.com', 'banned' => 1);
+try {
+    mmgr_handle_checkin();
+} catch (JsonResponse $response) {
+    expect($response->data['admin_notes'] === array(), 'Non-admin check-in does not expose admin notes or identifiers');
+}
+$can_manage_notes = true;
 
 $wpdb->note_fails = true;
 $html = render_member_form(true, 'Unsaved & private');
