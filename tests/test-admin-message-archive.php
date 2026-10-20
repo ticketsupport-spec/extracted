@@ -83,7 +83,8 @@ expect(strpos($query, 'INNER JOIN site_2_memberships m') !== false, 'Matches sid
 expect(strpos($query, 'CASE WHEN msg.from_member_id = 0 THEN msg.to_member_id') !== false, 'Includes outgoing admin conversations');
 expect(strpos($query, 'ELSE msg.from_member_id END = m.id') !== false, 'Includes incoming admin conversations');
 expect(strpos($query, 'WHERE (msg.from_member_id = 0 OR msg.to_member_id = 0)') !== false, 'Excludes member-to-member messages');
-expect(strpos($query, 'AND NOT EXISTS') !== false && strpos($query, 'archived.member_id = 0 AND archived.other_member_id = m.id') !== false, 'Preserves existing archives and ignores member-side archives');
+expect(strpos($query, 'UPDATE') === false && strpos($query, 'DELETE') === false, 'INSERT IGNORE preserves existing archives without changing member-side archives');
+expect(substr_count($query, 'site_2_membership_conversation_archive') === 1, 'Does not read the insert target in a MySQL subquery');
 
 $wpdb->result = 0;
 expect(archive_all()->success, 'No active conversations is a successful no-op');

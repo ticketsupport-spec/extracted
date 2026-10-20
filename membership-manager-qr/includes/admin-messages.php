@@ -616,11 +616,7 @@ add_action('wp_ajax_mmgr_admin_archive_all_conversations', function() {
              CASE WHEN msg.from_member_id = 0 THEN msg.to_member_id
                   ELSE msg.from_member_id END = m.id
          )
-         WHERE (msg.from_member_id = 0 OR msg.to_member_id = 0)
-           AND NOT EXISTS (
-               SELECT 1 FROM $archive_table archived
-               WHERE archived.member_id = 0 AND archived.other_member_id = m.id
-           )",
+         WHERE (msg.from_member_id = 0 OR msg.to_member_id = 0)",
         current_time('mysql')
     ));
 
