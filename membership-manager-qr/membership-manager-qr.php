@@ -20,6 +20,7 @@ require_once MMGR_PLUGIN_DIR . 'includes/qr-generator.php';
 require_once MMGR_PLUGIN_DIR . 'includes/member-portal-functions.php';
 require_once MMGR_PLUGIN_DIR . 'includes/messaging-functions.php';
 require_once MMGR_PLUGIN_DIR . 'includes/email-functions.php';
+require_once MMGR_PLUGIN_DIR . 'includes/newsletter-functions.php';
 require_once MMGR_PLUGIN_DIR . 'includes/admin-messages.php';  // MUST be before admin-menu.php
 
 // Load UI/functionality files on plugins_loaded
@@ -124,6 +125,10 @@ function mmgr_get_absolute_url($url) {
 
 // Newsletter functionality
 function mmgr_newsletter_page() {
+    if (!current_user_can('manage_options')) {
+        wp_die('You do not have permission to manage newsletters.');
+    }
+
     global $wpdb;
     $tbl = $wpdb->prefix . 'memberships';
 
@@ -155,6 +160,8 @@ function mmgr_newsletter_page() {
 
     echo '<p>Total subscribers: <strong>' . $total . '</strong></p>';
     echo '<p><a href="' . esc_url(wp_nonce_url(admin_url('admin.php?mmgr_export_newsletter=1'), 'mmgr_export_newsletter')) . '" class="button button-primary">📥 Export to CSV</a></p>';
+
+    mmgr_newsletter_composer();
 
     if ($total > 0) {
         echo '<table class="widefat"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Level</th><th>Subscribed</th></tr></thead><tbody>';
