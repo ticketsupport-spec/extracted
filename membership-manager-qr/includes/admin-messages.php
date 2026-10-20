@@ -157,6 +157,13 @@ function mmgr_admin_messages_page() {
                             <p style="font-size:13px;">Members can message you from their portal</p>
                         </div>
                     <?php else: ?>
+                        <div style="padding:12px;border-bottom:1px solid #ddd;">
+                            <button type="button" class="button"
+                                    onclick="archiveAllAdminConversations(this)"
+                                    data-nonce="<?php echo esc_attr(wp_create_nonce('mmgr_admin_archive_all_conversations')); ?>">
+                                Archive All
+                            </button>
+                        </div>
                         <?php foreach ($conversations as $conv): ?>
                             <div class="mmgr-admin-conv-item <?php echo ($active_member_id == $conv['member_id']) ? 'active' : ''; ?>" 
                                  onclick="window.location.href='?page=membership_messages&member=<?php echo $conv['member_id']; ?>'">
@@ -518,6 +525,30 @@ function blockMember(memberId) {
     });
 }
 
+function archiveAllAdminConversations(button) {
+    if (!confirm('Archive all active conversations? Messages will be kept and can be viewed in the Archived tab.')) return;
+
+    button.disabled = true;
+    fetch('<?php echo esc_url(admin_url('admin-ajax.php')); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'action=mmgr_admin_archive_all_conversations&nonce=' + encodeURIComponent(button.getAttribute('data-nonce'))
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) {
+            window.location.href = '<?php echo esc_url(admin_url('admin.php?page=membership_messages')); ?>&tab=archived';
+        } else {
+            button.disabled = false;
+            alert('✕ ' + (d.data.message || d.data));
+        }
+    })
+    .catch(() => {
+        button.disabled = false;
+        alert('Unable to archive conversations. Please try again.');
+    });
+}
+
 function archiveAdminConversation(memberId, button) {
     const isArchived = button.getAttribute('data-archived') === '1';
     const nonceArchive = button.getAttribute('data-nonce-archive');
@@ -564,6 +595,37 @@ function deleteAdminConversation(memberId) {
 </script>
     <?php
 }
+
+// AJAX: Admin archive all active conversations
+add_action('wp_ajax_mmgr_admin_archive_all_conversations', function() {
+    check_ajax_referer('mmgr_admin_archive_all_conversations', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(array('message' => 'Unauthorized'));
+    }
+
+    global $wpdb;
+    $messages_table = $wpdb->prefix . 'membership_messages';
+    $members_table = $wpdb->prefix . 'memberships';
+    $archive_table = $wpdb->prefix . 'membership_conversation_archive';
+
+    $result = $wpdb->query($wpdb->prepare(
+        "INSERT IGNORE INTO $archive_table (member_id, other_member_id, archived_at)
+         SELECT DISTINCT 0, m.id, %s
+         FROM $messages_table msg
+         INNER JOIN $members_table m ON (
+             CASE WHEN msg.from_member_id = 0 THEN msg.to_member_id
+                  ELSE msg.from_member_id END = m.id
+         )
+         WHERE (msg.from_member_id = 0 OR msg.to_member_id = 0)",
+        current_time('mysql')
+    ));
+
+    if ($result === false) {
+        wp_send_json_error(array('message' => 'Unable to archive conversations. Please try again.'));
+    }
+
+    wp_send_json_success(array('message' => 'All active conversations archived.'));
+});
 
 // AJAX: Admin archive conversation
 add_action('wp_ajax_mmgr_admin_archive_conversation', function() {
