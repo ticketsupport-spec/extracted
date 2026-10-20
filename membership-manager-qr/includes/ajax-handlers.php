@@ -526,7 +526,8 @@ add_action('wp_ajax_mmgr_admin_load_more_messages', function() {
             'message' => $msg['message'],
             'image_url' => $msg['image_url'],
             'image_deleted' => $msg['image_deleted'],
-            'sent_at' => date('M j, g:i A', strtotime($msg['sent_at']))
+            'sent_at' => date('M j, g:i A', strtotime($msg['sent_at'])),
+            'read_status' => mmgr_admin_message_read_status($msg)
         );
     }
     

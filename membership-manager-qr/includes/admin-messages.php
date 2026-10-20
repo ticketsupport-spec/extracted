@@ -2,6 +2,24 @@
 if (!defined('ABSPATH')) exit;
 
 /**
+ * Recipient read status for messages sent by admin.
+ */
+function mmgr_admin_message_read_status($message) {
+    if ((int) $message['from_member_id'] !== 0) {
+        return '';
+    }
+
+    if (empty($message['read_at'])) {
+        return 'Unread';
+    }
+
+    return 'Read on ' . mysql2date(
+        get_option('date_format') . ' ' . get_option('time_format'),
+        $message['read_at']
+    );
+}
+
+/**
  * Admin Messages Page - View and reply to member messages
  */
 function mmgr_admin_messages_page() {
@@ -335,6 +353,9 @@ function mmgr_admin_messages_page() {
 											<span style="margin-left:5px;">(You)</span>
 										<?php endif; ?>
 									</div>
+									<?php if ($msg['from_member_id'] == 0): ?>
+										<div class="mmgr-admin-message-time mmgr-admin-message-read-status"><?php echo esc_html(mmgr_admin_message_read_status($msg)); ?></div>
+									<?php endif; ?>
 								</div>
 							</div>
 						<?php endforeach; ?>
@@ -467,6 +488,12 @@ function adminLoadMoreMessages() {
                 content += '<div class="mmgr-admin-message-time">' + msg.sent_at + (msg.from_member_id == 0 ? ' (You)' : '') + '</div>';
                 
                 div.innerHTML = '<div class="mmgr-admin-message-content">' + content + '</div>';
+                if (msg.from_member_id == 0) {
+                    const readStatus = document.createElement('div');
+                    readStatus.className = 'mmgr-admin-message-time mmgr-admin-message-read-status';
+                    readStatus.textContent = msg.read_status;
+                    div.firstElementChild.appendChild(readStatus);
+                }
                 fragment.appendChild(div);
             });
             
