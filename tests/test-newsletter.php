@@ -75,20 +75,64 @@ function wp_editor($body, $id, $settings) {
     echo '<textarea>' . esc_html($body) . '</textarea>';
 }
 function submit_button($label) { echo '<button>' . esc_html($label) . '</button>'; }
+function current_time($format) { return '2026-10-20'; }
+function selected($actual, $expected) { if ((string) $actual === (string) $expected) echo 'selected="selected"'; }
+function checked($actual) { if ($actual) echo 'checked="checked"'; }
 
 class NewsletterDatabase {
     public $prefix = 'site_2_';
     public $last_error = '';
     public $subscribers = array();
     public $queries = array();
+    public $events = array(
+        array('id' => 12, 'event_name' => 'Upcoming <party>', 'event_date' => '2026-10-21', 'active' => 1),
+        array('id' => 13, 'event_name' => 'Today', 'event_date' => '2026-10-20', 'active' => 1),
+        array('id' => 14, 'event_name' => 'Past', 'event_date' => '2026-10-19', 'active' => 1),
+        array('id' => 15, 'event_name' => 'Inactive', 'event_date' => '2026-10-21', 'active' => 0),
+    );
+    public $tickets = array();
+    public function prepare($sql, ...$args) {
+        foreach ($args as $arg) {
+            $sql = preg_replace_callback('/%[ds]/', function($match) use ($arg) {
+                return $match[0] === '%d' ? (string) (int) $arg : "'" . addslashes($arg) . "'";
+            }, $sql, 1);
+        }
+        return $sql;
+    }
+    public function get_var($sql) {
+        $this->queries[] = $sql;
+        expect(str_contains($sql, 'active = 1 AND event_date >= \'2026-10-20\''), 'Selected event validated against local date and active status');
+        preg_match('/WHERE id = (\d+)/', $sql, $match);
+        foreach ($this->events as $event) {
+            if ($event['id'] === (int) $match[1] && $event['active'] && $event['event_date'] >= '2026-10-20') {
+                return $event['id'];
+            }
+        }
+        return null;
+    }
     public function get_results($sql, $format) {
         $this->queries[] = $sql;
         expect($format === ARRAY_A, 'Subscriber results use associative arrays');
-        expect(str_contains($sql, 'FROM `site_2_memberships` WHERE newsletter = 1'), 'Only opted-in subscribers queried using site prefix');
         if ($this->last_error) {
             return null;
         }
-        return array_values(array_filter($this->subscribers, function($row) { return $row['newsletter'] === 1; }));
+        if (str_contains($sql, 'FROM site_2_membership_events')) {
+            expect(str_contains($sql, "active = 1 AND event_date >= '2026-10-20'"), 'Composer loads active upcoming events using local date');
+            return array_filter($this->events, function($event) { return $event['active'] && $event['event_date'] >= '2026-10-20'; });
+        }
+        expect(str_contains($sql, 'FROM `site_2_memberships` WHERE '), 'Recipients queried using site prefix');
+        $ticket_filter = str_contains($sql, 'EXISTS');
+        $match = array();
+        if ($ticket_filter) {
+            expect(str_contains($sql, 'FROM site_2_membership_member_event_tickets t') && str_contains($sql, 't.member_id = `site_2_memberships`.id'), 'Ticket filter uses correlated paid-ticket records, not RSVPs');
+            preg_match('/t.event_id = (\d+)/', $sql, $match);
+        }
+        return array_values(array_filter($this->subscribers, function($row) use ($sql, $ticket_filter, $match) {
+            if (str_contains($sql, 'WHERE newsletter = 1') && $row['newsletter'] !== 1) return false;
+            if (!$ticket_filter) return true;
+            $has_ticket = in_array((int) $match[1], $this->tickets[$row['id']] ?? array(), true);
+            return str_contains($sql, 'NOT EXISTS') ? !$has_ticket : $has_ticket;
+        }));
     }
 }
 $wpdb = new NewsletterDatabase();
@@ -118,6 +162,9 @@ $output = ob_get_clean();
 expect(str_contains($output, 'admin-post.php') && str_contains($output, 'mmgr_newsletter_nonce'), 'Composer posts to protected endpoint');
 expect($editor['id'] === 'mmgr_newsletter_body' && $editor['settings']['textarea_name'] === 'mmgr_newsletter_body', 'Editor submits message body');
 expect($editor['settings']['tinymce'] && $editor['settings']['quicktags'] && $editor['settings']['media_buttons'], 'Visual, HTML, and image controls enabled');
+expect(str_contains($output, 'Upcoming &lt;party&gt;') && !str_contains($output, '>Past') && !str_contains($output, '>Inactive'), 'Upcoming event names escaped and unavailable events excluded');
+expect(str_contains($output, 'value="with_ticket"') && str_contains($output, 'value="without_ticket"'), 'Both ticket audiences available');
+expect(str_contains($output, 'name="mmgr_newsletter_override"') && !str_contains($output, 'checked="checked"'), 'Override is explicit and off by default');
 
 $wpdb->subscribers = array(
     array('email' => 'one@example.com', 'newsletter' => 1),
@@ -146,9 +193,9 @@ expect(isset($result['error']) && count($mail) === 2, 'Database failure sends no
 $wpdb->last_error = '';
 $wpdb->subscribers = array(array('email' => 'one@example.com', 'newsletter' => 1));
 
-function submit_newsletter($subject, $body) {
+function submit_newsletter($subject, $body, $options = array()) {
     $_SERVER['REQUEST_METHOD'] = 'POST';
-    $_POST = array('mmgr_newsletter_subject' => $subject, 'mmgr_newsletter_body' => $body);
+    $_POST = array_merge(array('mmgr_newsletter_subject' => $subject, 'mmgr_newsletter_body' => $body), $options);
     try {
         mmgr_handle_send_newsletter();
         throw new RuntimeException('Missing redirect');
@@ -202,5 +249,56 @@ mmgr_newsletter_composer();
 $output = ob_get_clean();
 expect(str_contains($output, 'notice-warning') && str_contains($output, 'Failed: 1'), 'Partial failure visibly reported');
 expect($editor['body'] === '', 'Successful send clears composer');
+
+$wpdb->subscribers = array(
+    array('id' => 1, 'email' => 'paid-in@example.com', 'newsletter' => 1),
+    array('id' => 2, 'email' => 'paid-out@example.com', 'newsletter' => 0),
+    array('id' => 3, 'email' => 'unpaid-in@example.com', 'newsletter' => 1),
+    array('id' => 4, 'email' => 'unpaid-out@example.com', 'newsletter' => 0),
+);
+$wpdb->tickets = array(1 => array(12), 2 => array(12), 3 => array(13));
+foreach (array(false, true) as $override) {
+    foreach (array('all', 'with_ticket', 'without_ticket') as $audience) {
+        $mail = array();
+        $result = submit_newsletter('Event', 'Message', array(
+            'mmgr_newsletter_event' => '12', 'mmgr_newsletter_audience' => $audience,
+            'mmgr_newsletter_override' => $override ? '1' : '0',
+        ));
+        $expected = $audience === 'all' ? array('paid-in@example.com', 'paid-out@example.com', 'unpaid-in@example.com', 'unpaid-out@example.com')
+            : ($audience === 'with_ticket' ? array('paid-in@example.com', 'paid-out@example.com') : array('unpaid-in@example.com', 'unpaid-out@example.com'));
+        if (!$override) $expected = array_values(array_filter($expected, function($email) { return !str_contains($email, '-out@'); }));
+        expect(array_column($mail, 'to') === $expected && $result['sent'] === count($expected), 'Correct ' . $audience . ' audience with override ' . ($override ? 'on' : 'off'));
+    }
+}
+foreach (array(
+    array('mmgr_newsletter_audience' => 'with_ticket'),
+    array('mmgr_newsletter_audience' => 'without_ticket'),
+    array('mmgr_newsletter_audience' => 'invalid'),
+    array('mmgr_newsletter_audience' => array('all')),
+    array('mmgr_newsletter_event' => array(12)),
+    array('mmgr_newsletter_event' => '-12'),
+    array('mmgr_newsletter_event' => '12 OR 1=1'),
+    array('mmgr_newsletter_event' => '14'),
+    array('mmgr_newsletter_event' => '15'),
+    array('mmgr_newsletter_event' => '999'),
+) as $options) {
+    $mail = array();
+    $result = submit_newsletter('Subject', 'Message', $options);
+    expect(isset($result['error']) && !$mail, 'Invalid audience/event fails closed without email');
+}
+$mail = array();
+$wpdb->last_error = 'Ticket query unavailable';
+$result = mmgr_send_newsletter('Event', 'Message', 12, 'without_ticket', true);
+expect(isset($result['error']) && !$mail, 'Event lookup failure cannot broaden audience');
+$wpdb->last_error = '';
+$result = submit_newsletter('Subject', '', array('mmgr_newsletter_event' => '12', 'mmgr_newsletter_audience' => 'with_ticket', 'mmgr_newsletter_override' => '1'));
+ob_start();
+mmgr_newsletter_composer();
+$output = ob_get_clean();
+expect(str_contains($output, 'value="12" selected="selected"') && str_contains($output, 'value="with_ticket" selected="selected"') && str_contains($output, 'checked="checked"'), 'Audience and override restored after validation errors');
+$mail = array();
+submit_newsletter('Regular newsletter', 'News');
+expect(array_column($mail, 'to') === array('paid-in@example.com', 'unpaid-in@example.com'), 'Override never persists to later ordinary newsletters');
+expect($wpdb->subscribers[1]['newsletter'] === 0, 'Override never changes stored subscription preferences');
 
 echo "\nResults: $passed passed\n";
