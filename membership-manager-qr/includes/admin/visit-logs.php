@@ -1,9 +1,36 @@
 <?php
 if (!defined('ABSPATH')) exit;
+require_once __DIR__ . '/../account-transactions.php';
+if (!current_user_can('manage_options')) {
+    echo '<div class="notice notice-error"><p>You are not allowed to view account logs.</p></div>';
+    return;
+}
 
 global $wpdb;
 $visits_tbl = $wpdb->prefix . 'membership_visits';
 $members_tbl = $wpdb->prefix . 'memberships';
+$account_ledger_ready = mmgr_ensure_account_transactions_table();
+
+if (isset($_GET['export_account_csv'])) {
+    if (!$account_ledger_ready || !isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'export_account_csv')) {
+        echo '<div class="notice notice-error"><p>Account export unavailable or security check failed.</p></div>';
+        return;
+    }
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="account-transactions-' . substr(current_time('mysql'), 0, 10) . '.csv"');
+    $output = fopen('php://output', 'w');
+    fputcsv($output, array('ID', 'Date/Time', 'Member ID', 'Member Name', 'Member Code', 'Activity', 'Amount', 'Payment Method', 'Event ID', 'Administrator ID', 'Description'));
+    $export_offset = 0;
+    do {
+        $account_rows = mmgr_get_account_transactions(0, 500, $export_offset);
+        foreach ((array) $account_rows as $row) {
+            fputcsv($output, mmgr_account_csv_row($row));
+        }
+        $export_offset += 500;
+    } while (count((array) $account_rows) === 500);
+    fclose($output);
+    exit;
+}
 
 // Handle delete all logs
 if (isset($_GET['delete_all_logs']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'delete_all_logs')) {
@@ -19,6 +46,10 @@ if (isset($_GET['delete_log']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_
 
 // Handle CSV export
 if (isset($_GET['export_logs_csv']) && current_user_can('manage_options')) {
+    if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'export_logs_csv')) {
+        echo '<div class="notice notice-error"><p>Security check failed.</p></div>';
+        return;
+    }
     $logs = $wpdb->get_results("
         SELECT 
             v.id,
@@ -95,8 +126,8 @@ $logs = $wpdb->get_results($wpdb->prepare("
 ", $per_page, $offset), ARRAY_A);
 
 // Calculate stats
-$today = date('Y-m-d');
-$this_month = date('Y-m');
+$today = substr(current_time('mysql'), 0, 10);
+$this_month = substr($today, 0, 7);
 
 $today_visits = $wpdb->get_var($wpdb->prepare(
     "SELECT COUNT(*) FROM $visits_tbl WHERE DATE(visit_time) = %s",
@@ -119,11 +150,18 @@ $month_revenue = $wpdb->get_var($wpdb->prepare(
     $this_month,
     '%PAID%'
 ));
+if ($account_ledger_ready) {
+    $today_revenue += mmgr_account_revenue($today);
+    $month_revenue += mmgr_account_revenue($this_month, true);
+}
+$account_page = max(1, intval($_GET['account_paged'] ?? 1));
+$account_total = $account_ledger_ready ? (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}membership_account_transactions") : 0;
+$account_rows = $account_ledger_ready ? mmgr_get_account_transactions(0, 50, ($account_page - 1) * 50) : array();
 
 ?>
 
 <div class="wrap">
-    <h1 class="wp-heading-inline">Visit Logs</h1>
+    <h1 class="wp-heading-inline">Accounting</h1>
     <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=membership_logs&export_logs_csv=1'), 'export_logs_csv'); ?>" class="page-title-action">📥 Export CSV</a>
     <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=membership_logs&delete_all_logs=1'), 'delete_all_logs'); ?>" 
        class="page-title-action" 
@@ -152,6 +190,24 @@ $month_revenue = $wpdb->get_var($wpdb->prepare(
             <p style="margin:5px 0 0 0;">This Month's Revenue</p>
         </div>
     </div>
+    <h2>Account transactions — membership and event tickets</h2>
+    <p>Sales and complimentary grants do not count as visits. Revenue includes paid account sales plus paid visit fees. Removing a ticket is not a refund. Deleting visit logs does not delete account transactions.</p>
+    <?php if ($account_ledger_ready): ?>
+        <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?page=membership_logs&export_account_csv=1'), 'export_account_csv')); ?>">Export account transactions CSV</a>
+        <p><?php echo (int) $account_total; ?> account transactions</p>
+        <?php mmgr_render_account_transactions($account_rows); ?>
+        <p>
+        <?php if ($account_page > 1): ?>
+            <a class="button" href="<?php echo esc_url(admin_url('admin.php?page=membership_logs&account_paged=' . ($account_page - 1))); ?>">Previous transactions</a>
+        <?php endif; ?>
+        <?php if ($account_page * 50 < $account_total): ?>
+            <a class="button" href="<?php echo esc_url(admin_url('admin.php?page=membership_logs&account_paged=' . ($account_page + 1))); ?>">Next transactions</a>
+        <?php endif; ?>
+        </p>
+    <?php else: ?>
+        <p>Account transaction log unavailable. Revenue above excludes account sales until the database is available.</p>
+    <?php endif; ?>
+    <h2>Visits / check-ins</h2>
     
     <p><strong>Total Logs:</strong> <?php echo number_format($total_logs); ?></p>
     

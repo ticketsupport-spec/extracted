@@ -18,6 +18,7 @@ define('MMGR_VERSION', get_file_data(__FILE__, ['Version' => 'Version'])['Versio
 require_once MMGR_PLUGIN_DIR . 'includes/database.php';
 require_once MMGR_PLUGIN_DIR . 'includes/qr-generator.php';
 require_once MMGR_PLUGIN_DIR . 'includes/member-portal-functions.php';
+require_once MMGR_PLUGIN_DIR . 'includes/account-transactions.php';
 require_once MMGR_PLUGIN_DIR . 'includes/messaging-functions.php';
 require_once MMGR_PLUGIN_DIR . 'includes/email-functions.php';
 require_once MMGR_PLUGIN_DIR . 'includes/newsletter-functions.php';

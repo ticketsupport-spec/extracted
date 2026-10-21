@@ -325,7 +325,7 @@ function mmgr_create_portal_tables() {
         UNIQUE KEY unique_rsvp (event_id, member_id),
         INDEX idx_event_id (event_id),
         INDEX idx_member_id (member_id)
-    ) $charset_collate");
+    ) ENGINE=InnoDB $charset_collate");
 
     // Paid event tickets are separate from membership payments and event RSVPs.
     $event_tickets_tbl = $wpdb->prefix . 'membership_member_event_tickets';
@@ -337,7 +337,7 @@ function mmgr_create_portal_tables() {
         created_by INT NOT NULL,
         UNIQUE KEY unique_member_event (member_id, event_id),
         INDEX idx_event_id (event_id)
-    ) $charset_collate");
+    ) ENGINE=InnoDB $charset_collate");
 
     // Ticket sale columns for upcoming events
     $events_tbl = $wpdb->prefix . 'membership_events';
@@ -492,7 +492,7 @@ function mmgr_get_member_today_event_ticket_statuses($member_id) {
 function mmgr_get_member_ticket_options($member_id) {
     global $wpdb;
     return $wpdb->get_results($wpdb->prepare(
-        "SELECT e.id, e.event_name, e.event_date, t.id AS paid_ticket_id
+        "SELECT e.id, e.event_name, e.event_date, e.ticket_prices, t.id AS paid_ticket_id
          FROM {$wpdb->prefix}membership_events e
          LEFT JOIN {$wpdb->prefix}membership_member_event_tickets t
            ON t.event_id = e.id AND t.member_id = %d
