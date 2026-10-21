@@ -360,7 +360,7 @@ $editing_ticket_prices = $editing_event ? mmgr_get_event_ticket_prices($editing_
                     if ($summary['other'] > 0) {
                         echo '<br>Other / unspecified: ' . (int) $summary['other'];
                     }
-                    echo '<br><small>Couples count as 2 tickets in the total.</small></td>';
+                    echo '<br><small>A total of ' . (int) $summary['total'] . ' people are coming.</small></td>';
                     echo '<td>';
                     echo '<a href="' . admin_url('admin.php?page=membership_events&edit=' . $event['id']) . '" class="button button-small">✏️ Edit</a> ';
                     echo '<a href="' . wp_nonce_url(admin_url('admin.php?page=membership_events&delete=' . $event['id']), 'delete_event_' . $event['id']) . '" class="button button-small" style="color:#d63638;" onclick="return confirm(\'Delete this event?\');">🗑️ Delete</a>';
