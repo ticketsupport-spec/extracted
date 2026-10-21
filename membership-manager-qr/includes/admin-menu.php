@@ -418,6 +418,10 @@ function mmgr_members_page() {
         echo '<div class="notice notice-success"><p>Member unbanned successfully!</p></div>';
     }
     
+    $bio_fields_tbl = $wpdb->prefix . 'membership_bio_fields';
+    $bio_values_tbl = $wpdb->prefix . 'membership_bio_field_values';
+    $has_bio_tables = $wpdb->get_var("SHOW TABLES LIKE '$bio_fields_tbl'") === $bio_fields_tbl &&
+        $wpdb->get_var("SHOW TABLES LIKE '$bio_values_tbl'") === $bio_values_tbl;
     $search = isset($_GET['member_search']) && is_string($_GET['member_search'])
         ? sanitize_text_field(wp_unslash($_GET['member_search'])) : '';
     $members_query = "SELECT * FROM $tbl";
@@ -430,6 +434,14 @@ function mmgr_members_page() {
             $where .= " OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', ''), '+', ''), '.', '') LIKE %s";
             $args[] = '%' . $wpdb->esc_like($phone_digits) . '%';
         }
+        if ($has_bio_tables) {
+            $where .= " OR EXISTS (SELECT 1 FROM $bio_values_tbl v
+                INNER JOIN $bio_fields_tbl f ON f.id = v.field_id
+                WHERE v.member_id = $tbl.id AND f.active = 1
+                AND LOWER(TRIM(f.field_name)) = %s AND v.field_value LIKE %s)";
+            $args[] = 'fetlife name';
+            $args[] = $like;
+        }
         $members_query .= ' WHERE ' . $where . ')';
         $members_query = $wpdb->prepare($members_query, $args);
     }
@@ -437,10 +449,7 @@ function mmgr_members_page() {
     $total = $search === '' ? count($members) : (int) $wpdb->get_var("SELECT COUNT(*) FROM $tbl");
 
     $fetlife_names = array();
-    $bio_fields_tbl = $wpdb->prefix . 'membership_bio_fields';
-    $bio_values_tbl = $wpdb->prefix . 'membership_bio_field_values';
-    if ($wpdb->get_var("SHOW TABLES LIKE '$bio_fields_tbl'") === $bio_fields_tbl &&
-        $wpdb->get_var("SHOW TABLES LIKE '$bio_values_tbl'") === $bio_values_tbl) {
+    if ($has_bio_tables) {
         $fetlife_rows = $wpdb->get_results($wpdb->prepare(
             "SELECT v.member_id, v.field_value
              FROM $bio_values_tbl v
@@ -500,7 +509,7 @@ function mmgr_members_page() {
             <div>
                 <label for="mmgr-member-search">Search members</label>
                 <input type="search" id="mmgr-member-search" name="member_search"
-                       value="<?php echo esc_attr($search); ?>" placeholder="First or last name, phone, or email">
+                       value="<?php echo esc_attr($search); ?>" placeholder="First or last name, Fetlife name, phone, or email">
             </div>
             <button type="submit" class="button button-primary">Search</button>
             <?php if ($search !== ''): ?>
@@ -546,7 +555,7 @@ function mmgr_members_page() {
                     <tr>
                         <td class="mmgr-members-empty" colspan="10" style="text-align:center;padding:40px;color:#666;">
                             <?php if ($search !== ''): ?>
-                                No members match your search. Try another name, phone number, or email address.
+                                No members match your search. Try another name, Fetlife name, phone number, or email address.
                             <?php else: ?>
                                 No members found. <a href="<?php echo admin_url('admin.php?page=membership_add'); ?>">Add your first member</a>
                             <?php endif; ?>

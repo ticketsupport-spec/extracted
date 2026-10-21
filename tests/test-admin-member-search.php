@@ -29,13 +29,18 @@ class MemberSearchDatabase {
     public $query = '';
     public $prepared_query = '';
     public $args = array();
+    public $bio_fields_table_exists = false;
+    public $bio_values_table_exists = false;
 
     public function esc_like($value) {
         return addcslashes($value, '_%\\');
     }
     public function prepare($query, $args) {
-        $this->prepared_query = $query;
-        $this->args = $args;
+        $args = is_array($args) ? $args : array($args);
+        if (strpos($query, 'SELECT * FROM site_2_memberships') === 0) {
+            $this->prepared_query = $query;
+            $this->args = $args;
+        }
         foreach ($args as $arg) {
             $query = preg_replace_callback('/%s/', function() use ($arg) {
                 return "'" . str_replace("'", "''", $arg) . "'";
@@ -51,6 +56,12 @@ class MemberSearchDatabase {
         return array();
     }
     public function get_var($query) {
+        if ($query === "SHOW TABLES LIKE 'site_2_membership_bio_fields'") {
+            return $this->bio_fields_table_exists ? 'site_2_membership_bio_fields' : null;
+        }
+        if ($query === "SHOW TABLES LIKE 'site_2_membership_bio_field_values'") {
+            return $this->bio_values_table_exists ? 'site_2_membership_bio_field_values' : null;
+        }
         if ($query === 'SELECT COUNT(*) FROM site_2_memberships') {
             return 12;
         }
@@ -108,6 +119,29 @@ expect(strpos($html, 'No members match your search') !== false, 'No-match search
 expect(strpos($html, 'Add your first member') === false, 'No-match search does not imply an empty membership database');
 expect(strpos($html, 'Clear search') !== false, 'Active search offers a reset control');
 expect(strpos($html, '<h3 style="margin:0;font-size:32px;">12</h3>') !== false, 'Search preserves the overall member total');
+
+expect(strpos($wpdb->query, 'EXISTS') === false, 'Search works without optional bio tables');
+$wpdb->bio_fields_table_exists = true;
+render_members('FetUser');
+expect(strpos($wpdb->query, 'EXISTS') === false, 'Search works when the bio values table is missing');
+$wpdb->bio_fields_table_exists = false;
+$wpdb->bio_values_table_exists = true;
+render_members('FetUser');
+expect(strpos($wpdb->query, 'EXISTS') === false, 'Search works when the bio fields table is missing');
+$wpdb->bio_fields_table_exists = true;
+$html = render_members('FetUser');
+expect(strpos($wpdb->prepared_query, 'OR EXISTS (SELECT 1 FROM site_2_membership_bio_field_values v') !== false, 'Fetlife matches extend rather than restrict existing search without duplicating members');
+expect(strpos($wpdb->prepared_query, 'INNER JOIN site_2_membership_bio_fields f ON f.id = v.field_id') !== false, 'Fetlife search joins values to their field definitions');
+expect(strpos($wpdb->prepared_query, 'v.member_id = site_2_memberships.id AND f.active = 1') !== false, 'Fetlife search is scoped to each member and active fields');
+expect(strpos($wpdb->prepared_query, 'LOWER(TRIM(f.field_name)) = %s AND v.field_value LIKE %s') !== false, 'Fetlife search uses the same normalized field label as display');
+expect(array_slice($wpdb->args, -2) === array('fetlife name', '%FetUser%'), 'Fetlife field label and partial name are bound parameters');
+expect(strpos($html, 'placeholder="First or last name, Fetlife name, phone, or email"') !== false, 'Search hint includes Fetlife names');
+render_members('100%_match');
+expect(end($wpdb->args) === '%100\\%\\_match%', 'Fetlife search treats SQL wildcard characters literally');
+render_members('+1 (555) 123-4567');
+expect($wpdb->args[4] === '%15551234567%' && end($wpdb->args) === '%+1 (555) 123-4567%', 'Phone normalization remains available alongside Fetlife matching');
+render_members();
+expect($wpdb->query === 'SELECT * FROM site_2_memberships ORDER BY paid ASC, id DESC', 'Bio tables do not affect the unfiltered member query');
 
 $wpdb->members = array(array(
     'id' => 7, 'name' => 'Jane Smith', 'partner_name' => 'John Smith',
