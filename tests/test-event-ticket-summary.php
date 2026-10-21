@@ -77,7 +77,7 @@ expect(str_contains($html, '<th>Tickets Sold</th>'), 'Admin events list has a ti
 expect(str_contains($html, 'Total: 19') && str_contains($html, 'Single men: 4') && str_contains($html, 'Single ladies: 3') && str_contains($html, 'Couples: 5'), 'Admin shows total and all requested categories');
 expect(str_contains($html, 'Other / unspecified: 2'), 'Unclassified tickets remain visible in the breakdown');
 expect(str_contains($html, 'Total: 0') && str_contains($html, 'Single men: 0') && str_contains($html, 'Single ladies: 0') && str_contains($html, 'Couples: 0'), 'Events without sales show zeros even when ticket sales are disabled');
-expect(str_contains($html, 'Couples count as 2 tickets in the total.'), 'Explains how couples contribute to the total');
+expect(str_contains($html, 'A total of 19 people are coming.'), 'Shows the total number of attendees with couples counted twice');
 expect(str_contains($html, 'Party &lt;test&gt;') && !str_contains($html, 'Party <test>'), 'Event names remain escaped');
 
 echo "\nResults: $passed passed, 0 failed\n";
