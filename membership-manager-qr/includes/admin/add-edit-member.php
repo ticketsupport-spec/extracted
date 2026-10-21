@@ -1,5 +1,10 @@
 <?php
 if (!defined('ABSPATH')) exit;
+require_once __DIR__ . '/../account-transactions.php';
+if (!current_user_can('manage_options')) {
+    echo '<div class="notice notice-error"><p>You are not allowed to manage members.</p></div>';
+    return;
+}
 
 global $wpdb;
 $tbl = $wpdb->prefix . 'memberships';
@@ -116,23 +121,11 @@ if (!isset($_POST['mmgr_note_action']) && isset($_POST['mmgr_save_member'])) {
         
         $admin_note = isset($_POST['admin_note']) ? sanitize_textarea_field(wp_unslash($_POST['admin_note'])) : '';
         $unsaved_note = $admin_note;
-        if ($editing) {
-            $member_saved = $wpdb->update($tbl, $data, array('id' => intval($_GET['id'])));
-            $saved_member_id = intval($_GET['id']);
-        } else {
-            $data['member_code'] = mmgr_generate_member_code($data['name']);
-            $member_saved = $wpdb->insert($tbl, $data);
-            $saved_member_id = $wpdb->insert_id;
-        }
+        $saved_member_id = mmgr_save_admin_account($editing ? intval($_GET['id']) : 0, $data, wp_unslash($_POST));
+        $member_saved = $saved_member_id !== false;
 
         $note_saved = true;
         $tickets_saved = true;
-        if ($editing && $member_saved !== false && isset($_POST['mmgr_paid_tickets_present'])) {
-            $tickets_saved = mmgr_save_member_paid_tickets($saved_member_id, wp_unslash($_POST['paid_event_ids'] ?? array()));
-            if (!$tickets_saved) {
-                echo '<div class="notice notice-error"><p>Member details saved, but paid event tickets could not all be saved. Please review the selections below and try again.</p></div>';
-            }
-        }
         if ($member_saved !== false && $admin_note !== '') {
             $note_saved = mmgr_ensure_member_notes_table() &&
                 $wpdb->insert($member_notes_tbl, array(
@@ -149,7 +142,7 @@ if (!isset($_POST['mmgr_note_action']) && isset($_POST['mmgr_save_member'])) {
         }
 
         if ($member_saved === false) {
-            echo '<div class="notice notice-error"><p>Member could not be saved. Please try again. Any submitted note has not been saved.</p></div>';
+            echo '<div class="notice notice-error"><p>Member could not be saved. No membership or ticket changes were committed. Check the amount, event prices and selections, then try again. If this persists, verify database access and InnoDB storage support. Any submitted note has not been saved.</p></div>';
         } elseif ($editing) {
             
             // Handle password management
@@ -171,7 +164,8 @@ if (!isset($_POST['mmgr_note_action']) && isset($_POST['mmgr_save_member'])) {
             $new_id = $saved_member_id;
             
             // Generate QR code file
-            mmgr_generate_qr_file($data['member_code']);
+            $created_member = $wpdb->get_row($wpdb->prepare("SELECT * FROM $tbl WHERE id = %d", $new_id), ARRAY_A);
+            mmgr_generate_qr_file($created_member['member_code']);
 
             // Set password if provided
             if (isset($_POST['member_password']) && !empty($_POST['member_password'])) {
@@ -203,6 +197,20 @@ if (!isset($_POST['mmgr_note_action']) && isset($_POST['mmgr_save_member'])) {
 $levels = $wpdb->get_results("SELECT level_name, price FROM {$wpdb->prefix}membership_levels ORDER BY level_name", ARRAY_A);
 $member_notes = array();
 $ticket_options = $editing && $member ? mmgr_get_member_ticket_options((int) $member['id']) : array();
+$account_ledger_ready = mmgr_ensure_account_transactions_table();
+$account_transactions = $account_ledger_ready && $editing ? mmgr_get_account_transactions((int) $member['id']) : array();
+$ticket_comp_status = array();
+if ($account_ledger_ready && $editing) {
+    $ticket_activity = $wpdb->get_results($wpdb->prepare(
+        "SELECT event_id, activity FROM {$wpdb->prefix}membership_account_transactions
+         WHERE member_id = %d AND event_id IS NOT NULL ORDER BY id DESC", (int) $member['id']
+    ), ARRAY_A);
+    foreach ((array) $ticket_activity as $activity) {
+        if (!array_key_exists($activity['event_id'], $ticket_comp_status)) {
+            $ticket_comp_status[$activity['event_id']] = $activity['activity'] === 'ticket_comp';
+        }
+    }
+}
 if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($member_notes_tbl))) === $member_notes_tbl) {
     $member_notes = $wpdb->get_results($wpdb->prepare(
         "SELECT id, note, created_by, created_at, hidden FROM `$member_notes_tbl` WHERE member_id = %d ORDER BY created_at DESC, id DESC",
@@ -216,6 +224,7 @@ if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', 
     
     <form method="post" action="<?php echo esc_url(admin_url('admin.php?page=membership_add' . ($editing ? '&id=' . intval($member['id']) : ''))); ?>" style="max-width:800px;">
         <?php wp_nonce_field('mmgr_save_member', 'member_nonce'); ?>
+        <input type="hidden" name="account_operation_key" value="<?php echo esc_attr(bin2hex(random_bytes(16))); ?>">
         
         <table class="form-table">
             <tr>
@@ -353,6 +362,21 @@ if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', 
                 <th colspan="2"><h2 style="margin:20px 0 0 0;">Payment</h2></th>
             </tr>
             <tr>
+                <th><label for="membership_operation">Membership payment / COMP</label></th>
+                <td>
+                    <select name="membership_operation" id="membership_operation">
+                        <option value="">Normal save (retain existing payment / COMP)</option>
+                        <option value="paid">Record a new paid membership / renewal</option>
+                        <option value="comp_1">COMP membership — 1 month free</option>
+                        <option value="comp_12">COMP membership — 12 months free</option>
+                    </select>
+                    <p class="description">COMP grants paid access for the selected term starting today (replaces current dates), charges $0 and records COMP'D MEMBERSHIP. Select a new paid membership / renewal to record another payment using Amount Paid and the entered dates. Normal saves log only unpaid-to-paid transitions; correcting amounts or dates on an already-paid account does not record another sale.</p>
+                    <?php if (($member['payment_method'] ?? '') === 'COMP'): ?>
+                        <strong>COMP'D MEMBERSHIP — $0.00</strong>
+                    <?php endif; ?>
+                </td>
+            </tr>
+            <tr>
                 <th><label for="paid">Payment Status</label></th>
                 <td>
                     <label>
@@ -381,14 +405,21 @@ if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', 
                     <th>Paid Event Tickets</th>
                     <td>
                         <input type="hidden" name="mmgr_paid_tickets_present" value="1">
-                        <p class="description">Check each event after receiving payment. Uncheck to remove its paid ticket. These tickets are separate from membership payment and Going RSVPs.</p>
+                        <p class="description">Check an event and select Paid or COMP before saving. Paid records the configured price for the selected membership level (couple price is per couple). COMP grants free access and records COMP'D TICKET. Existing ticket status is retained on resave; unchecking revokes access, not a refund, and retains its RSVP and audit history.</p>
                         <?php if ($ticket_options): ?>
                             <?php foreach ($ticket_options as $ticket_event): ?>
                                 <label style="display:block;margin:10px 0;">
                                     <input type="checkbox" name="paid_event_ids[]" value="<?php echo esc_attr($ticket_event['id']); ?>" <?php checked(!empty($ticket_event['paid_ticket_id'])); ?>>
                                     <?php echo esc_html($ticket_event['event_name']); ?>
                                     — <?php echo esc_html(date_i18n('F j, Y', strtotime($ticket_event['event_date']))); ?>
-                                    (PAID)
+                                    <?php if (!empty($ticket_event['paid_ticket_id'])): ?>
+                                        <strong><?php echo !empty($ticket_comp_status[$ticket_event['id']]) ? "COMP'D TICKET" : 'PAID'; ?></strong>
+                                    <?php else: ?>
+                                        <select name="ticket_methods[<?php echo (int) $ticket_event['id']; ?>]" aria-label="Ticket payment method">
+                                            <option value="paid">Paid</option>
+                                            <option value="comp">COMP — free ticket</option>
+                                        </select>
+                                    <?php endif; ?>
                                 </label>
                             <?php endforeach; ?>
                         <?php else: ?>
@@ -398,6 +429,17 @@ if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', 
                 </tr>
             <?php endif; ?>
             
+            <?php if ($editing): ?>
+                <tr><th>Account transaction log</th><td>
+                    <?php if ($account_ledger_ready) {
+                        mmgr_render_account_transactions($account_transactions);
+                    } else {
+                        echo '<p>Account transaction log unavailable. Payment changes cannot be saved until the database is available.</p>';
+                    } ?>
+                    <a href="<?php echo esc_url(admin_url('admin.php?page=membership_logs')); ?>">Accounting — all account transactions and revenue</a>
+                    <p class="description">Latest 50 entries. Full history is available in the account transactions CSV.</p>
+                </td></tr>
+            <?php endif; ?>
             <!-- PASSWORD MANAGEMENT SECTION -->
             <tr>
                 <th colspan="2"><h2 style="margin:20px 0 0 0;">🔐 Password Management</h2></th>

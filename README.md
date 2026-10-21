@@ -19,6 +19,49 @@ upcoming active events are also added when upgrading. Paid ticket holders see
 **YOU ARE GOING** instead of **BUY TICKETS**, even after ticket sales close.
 Removing a paid ticket does not remove the member's RSVP.
 
+### Admin sales and complimentary access
+
+**Memberships → Add / Edit Member** records newly paid memberships (including
+new accounts) and newly assigned paid event tickets in a separate account
+transaction ledger. Paid tickets use the event's configured price for the
+account's membership level; a couple price is charged once, not per person.
+No historical sales are guessed or backfilled.
+
+For a free membership, choose **COMP membership — 1 month free** or **12 months
+free**, then save. This sets paid access, method `COMP`, amount `$0`, and dates
+from today's WordPress-local date through the selected calendar term, clamped
+to the last day of the destination month when needed. It replaces current dates
+rather than extending an existing term. Ordinary saves retain COMP status.
+For an event, check its ticket and select **COMP — free ticket** before saving.
+It grants the same admission and Going RSVP as a paid ticket, without charging.
+Existing tickets retain their paid/COMP status; revoke and reassign deliberately
+if a different grant is required.
+
+The member's **Account transaction log** and **Accounting**
+(`admin.php?page=membership_logs`) clearly show **COMP'D TICKET** /
+**COMP'D MEMBERSHIP**, dates, administrator ID, and zero amount. The logs page
+includes account transaction pagination and a separate full-history CSV with
+amounts, methods, event/member IDs and audit descriptions. Paid sales contribute
+to today's/month's revenue; COMPs do not. Neither sales nor COMPs create visits
+or inflate attendance. Deleting visits leaves account audit history intact.
+
+Normal resaves do not create another sale. Correcting paid membership dates or
+amounts does not record another payment or change the payment method. Use
+**Record a new paid membership / renewal** to explicitly record another payment
+(including converting a COMP to paid), using **Amount Paid** and the entered
+dates. An unpaid-to-paid transition is recorded automatically. Membership and
+ticket changes are committed together with their audit records or rolled back
+on failure. Removing a ticket logs revocation, not a refund, and preserves RSVPs
+and historical account transactions. These actions require administrator
+permission and a valid form nonce.
+
+Atomic grants require InnoDB storage. New ticket/RSVP tables explicitly use
+InnoDB; older ticket/RSVP tables using another engine are converted before the
+transaction starts. If engine verification or conversion fails, the account
+save is refused rather than granting access without a durable audit record.
+This ledger records the Add / Edit Member workflow; other pre-existing payment
+collection handlers retain their existing logging behavior.
+
 ## Couples account upgrades
 
 Single, male, and female members can use **Upgrade to a Couples Account** on

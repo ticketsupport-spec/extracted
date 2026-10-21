@@ -88,6 +88,7 @@ class NotesDatabase {
     public function get_charset_collate() { return 'DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'; }
     public function get_var($query) {
         $this->checks[] = $query;
+        if (str_contains($query, 'membership_account_transactions')) { return null; }
         if (str_contains($query, 'membership\\\\_admin\\\\_notes')) {
             return $this->table_exists ? $this->prefix . 'membership_admin_notes' : null;
         }
@@ -97,6 +98,10 @@ class NotesDatabase {
         return str_contains($query, $this->prefix . 'membership_admin_notes') ? $this->admin_columns : $this->legacy_schema;
     }
     public function query($query) {
+        if (in_array($query, array('START TRANSACTION', 'COMMIT', 'ROLLBACK'), true) ||
+            str_contains($query, 'CREATE TABLE IF NOT EXISTS `' . $this->prefix . 'membership_account_transactions`')) {
+            return 1;
+        }
         if (str_starts_with($query, 'RENAME TABLE')) {
             expect($query === "RENAME TABLE `{$this->prefix}membership_member_notes` TO `{$this->prefix}membership_admin_notes`", 'Migration renames only the current site legacy admin table');
             $this->renames++;
@@ -126,7 +131,9 @@ class NotesDatabase {
         $this->admin_columns = array('id', 'member_id', 'note', 'created_by', 'created_at', 'hidden');
         return $this->creation_fails ? false : 1;
     }
-    public function get_row($query, $format) { return $this->member; }
+    public function get_row($query, $format) {
+        return str_starts_with($query, 'SHOW TABLE STATUS') ? array('Engine' => 'InnoDB') : $this->member;
+    }
     public function get_results($query, $format) {
         $this->queries[] = $query;
         if (str_contains($query, 'LEFT JOIN') && str_contains($query, 'membership_member_event_tickets')) {
@@ -150,6 +157,7 @@ class NotesDatabase {
         return $this->member_fails ? false : $this->update_result;
     }
     public function insert($table, $data, $formats = null) {
+        if ($table === $this->prefix . 'membership_account_transactions') { return 1; }
         if ($table === $this->prefix . 'membership_event_rsvps') {
             return 1;
         }
@@ -221,6 +229,7 @@ function render_member_form($editing, $note, $tickets = null, $note_action = nul
         $_POST['mmgr_note_action'] = $note_action;
     }
     $_POST['member_nonce'] = 'test-nonce';
+    $_POST['account_operation_key'] = str_repeat('a', 32);
     $_POST['admin_note'] = addslashes($note);
     if ($tickets !== null) {
         $_POST['mmgr_paid_tickets_present'] = '1';
@@ -405,13 +414,14 @@ $valid_nonce = true;
 $wpdb = new NotesDatabase();
 $wpdb->ticket_options = array(array(
     'id' => 5, 'event_name' => '<b>Party</b>', 'event_date' => '2099-10-31', 'paid_ticket_id' => null,
+    'ticket_prices' => '{"":20}',
 ));
 $html = render_member_form(true, '', array('5'));
 expect(count($wpdb->ticket_writes) === 1 && $wpdb->ticket_writes[0]['member_id'] === 7, 'Editing a member saves the paid ticket on that account');
 expect(str_contains($html, 'name="paid_event_ids[]"') && str_contains($html, '&lt;b&gt;Party&lt;/b&gt;'), 'Edit form presents escaped ticket event options');
 $wpdb->ticket_fails = true;
 $html = render_member_form(true, '', array('5'));
-expect(str_contains($html, 'paid event tickets could not all be saved') && !str_contains($html, 'Member updated successfully!'), 'Ticket write failure is not reported as overall success');
+expect(str_contains($html, 'No membership or ticket changes were committed') && !str_contains($html, 'Member updated successfully!'), 'Ticket write failure is not reported as overall success');
 $wpdb->ticket_fails = false;
 $wpdb->member_fails = true;
 $html = render_member_form(true, '', array('5'));
