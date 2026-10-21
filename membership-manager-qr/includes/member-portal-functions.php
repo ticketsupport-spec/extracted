@@ -430,6 +430,44 @@ function mmgr_member_has_paid_event_ticket($member_id, $event_id) {
 }
 
 /**
+ * Paid ticket sales by event, counting each couple as two admissions.
+ */
+function mmgr_get_event_ticket_sales_summaries() {
+    global $wpdb;
+    $rows = $wpdb->get_results(
+        "SELECT t.event_id, m.level, m.sex, COUNT(*) AS ticket_count
+         FROM {$wpdb->prefix}membership_member_event_tickets t
+         LEFT JOIN {$wpdb->prefix}memberships m ON m.id = t.member_id
+         GROUP BY t.event_id, m.level, m.sex",
+        ARRAY_A
+    );
+    $summaries = array();
+    foreach ($rows as $row) {
+        $event_id = (int) $row['event_id'];
+        if (!isset($summaries[$event_id])) {
+            $summaries[$event_id] = array('total' => 0, 'single_men' => 0, 'single_ladies' => 0, 'couples' => 0, 'other' => 0);
+        }
+        $level = strtolower(trim($row['level'] ?? ''));
+        $sex = strtolower(trim($row['sex'] ?? ''));
+        $count = (int) $row['ticket_count'];
+        if (strpos($level, 'couple') !== false) {
+            $summaries[$event_id]['couples'] += $count;
+            $summaries[$event_id]['total'] += 2 * $count;
+            continue;
+        }
+        if ($sex === 'male' || ($sex === '' && in_array($level, array('male', 'single male'), true))) {
+            $summaries[$event_id]['single_men'] += $count;
+        } elseif ($sex === 'female' || ($sex === '' && in_array($level, array('female', 'single female'), true))) {
+            $summaries[$event_id]['single_ladies'] += $count;
+        } else {
+            $summaries[$event_id]['other'] += $count;
+        }
+        $summaries[$event_id]['total'] += $count;
+    }
+    return $summaries;
+}
+
+/**
  * Today's active events and whether a member has a paid ticket for each.
  */
 function mmgr_get_member_today_event_ticket_statuses($member_id) {

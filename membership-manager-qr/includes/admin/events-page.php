@@ -338,8 +338,9 @@ $editing_ticket_prices = $editing_event ? mmgr_get_event_ticket_prices($editing_
             if (empty($events)):
                 echo '<p style="color:#666;">No events created yet.</p>';
             else:
+                $ticket_summaries = mmgr_get_event_ticket_sales_summaries();
                 echo '<table class="widefat" style="margin-top:10px;">';
-                echo '<thead><tr><th>Event Name</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+                echo '<thead><tr><th>Event Name</th><th>Date</th><th>Status</th><th>Tickets Sold</th><th>Actions</th></tr></thead><tbody>';
                 
                 foreach ($events as $event):
                     $status = $event['active'] ? '✓ Active' : '⊘ Inactive';
@@ -351,6 +352,15 @@ $editing_ticket_prices = $editing_event ? mmgr_get_event_ticket_prices($editing_
                     echo '<td><strong>' . esc_html($event['event_name']) . '</strong>' . $is_past . '</td>';
                     echo '<td>' . esc_html(date('M d, Y', strtotime($event['event_date']))) . '</td>';
                     echo '<td>' . $status . '</td>';
+                    $summary = $ticket_summaries[(int) $event['id']] ?? array('total' => 0, 'single_men' => 0, 'single_ladies' => 0, 'couples' => 0, 'other' => 0);
+                    echo '<td><strong>Total: ' . (int) $summary['total'] . '</strong>';
+                    echo '<br>Single men: ' . (int) $summary['single_men'];
+                    echo '<br>Single ladies: ' . (int) $summary['single_ladies'];
+                    echo '<br>Couples: ' . (int) $summary['couples'];
+                    if ($summary['other'] > 0) {
+                        echo '<br>Other / unspecified: ' . (int) $summary['other'];
+                    }
+                    echo '<br><small>Couples count as 2 tickets in the total.</small></td>';
                     echo '<td>';
                     echo '<a href="' . admin_url('admin.php?page=membership_events&edit=' . $event['id']) . '" class="button button-small">✏️ Edit</a> ';
                     echo '<a href="' . wp_nonce_url(admin_url('admin.php?page=membership_events&delete=' . $event['id']), 'delete_event_' . $event['id']) . '" class="button button-small" style="color:#d63638;" onclick="return confirm(\'Delete this event?\');">🗑️ Delete</a>';
