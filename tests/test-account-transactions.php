@@ -40,6 +40,7 @@ class AccountDatabase {
     public $rsvps = array();
     public $ledger = array();
     public $events = array();
+    public $visits = array();
     public $queries = array();
     public $fail = '';
     public $engines = array();
@@ -116,7 +117,15 @@ class AccountDatabase {
                     in_array($row['activity'], array('membership_sale', 'ticket_sale'), true) ? $row['amount'] : 0;
             }, $this->ledger));
         } elseif (str_contains($query, 'COUNT(*)') && str_contains($query, 'membership_account_transactions')) {
-            return count($this->ledger);
+            return count(array_filter($this->ledger, function($row) use ($query) {
+                return !str_contains($query, 'amount > 0') || ($row['amount'] > 0 &&
+                    in_array($row['activity'], array('membership_sale', 'ticket_sale'), true));
+            }));
+        } elseif (str_contains($query, 'COUNT(*)') && str_contains($query, 'membership_visits')) {
+            return count(array_filter($this->visits, function($row) use ($query) {
+                return !str_contains($query, 'daily_fee > 0') ||
+                    ($row['daily_fee'] > 0 && str_starts_with($row['notes'], 'PAID'));
+            }));
         } elseif (str_contains($query, 'membership_event_rsvps')) {
             preg_match('/event_id = (\d+) AND member_id = (\d+)/', $query, $matches);
             return isset($this->rsvps[$matches[2]][$matches[1]]) ? 1 : null;
@@ -145,11 +154,28 @@ class AccountDatabase {
             if (preg_match('/(?:a\.)?member_id = (\d+)/', $query, $matches)) {
                 $rows = array_values(array_filter($rows, function($row) use ($matches) { return $row['member_id'] == $matches[1]; }));
             }
+            if (str_contains($query, 'a.amount > 0')) {
+                $rows = array_values(array_filter($rows, function($row) {
+                    return $row['amount'] > 0 && in_array($row['activity'], array('membership_sale', 'ticket_sale'), true);
+                }));
+            }
             foreach ($rows as &$row) {
                 $row['name'] = $this->members[$row['member_id']]['name'] ?? '';
                 $row['member_code'] = $this->members[$row['member_id']]['member_code'] ?? '';
             }
             unset($row);
+            if (preg_match('/LIMIT (\d+) OFFSET (\d+)/', $query, $matches)) {
+                $rows = array_slice($rows, (int) $matches[2], (int) $matches[1]);
+            }
+            return $rows;
+        }
+        if (str_contains($query, 'FROM wp_membership_visits v')) {
+            $rows = $this->visits;
+            if (str_contains($query, "v.daily_fee > 0 AND v.notes LIKE 'PAID")) {
+                $rows = array_values(array_filter($rows, function($row) {
+                    return $row['daily_fee'] > 0 && str_starts_with($row['notes'], 'PAID');
+                }));
+            }
             if (preg_match('/LIMIT (\d+) OFFSET (\d+)/', $query, $matches)) {
                 $rows = array_slice($rows, (int) $matches[2], (int) $matches[1]);
             }
@@ -233,8 +259,10 @@ if (isset($argv[1]) && $argv[1] === '--export') {
         $wpdb->events[5]['event_name'] = '=HYPERLINK("https://example.test","title")';
         $fields = array('first_name' => '=SUM(1,2)', 'last_name' => '');
     }
-    account_form(array_merge(array('membership_operation' => 'comp_1', 'mmgr_paid_tickets_present' => 1,
-        'paid_event_ids' => array('5'), 'ticket_methods' => array(5 => 'comp')), $fields));
+    account_form(array('membership_operation' => 'comp_1'));
+    account_form(array_merge(array('membership_operation' => 'paid', 'amount_paid' => 150,
+        'mmgr_paid_tickets_present' => 1, 'paid_event_ids' => array('5', '6'),
+        'ticket_methods' => array(5 => 'paid', 6 => 'comp')), $fields));
     $_GET = array('export_account_csv' => 1, '_wpnonce' => $argv[2] ?? 'valid');
     if (($argv[2] ?? '') === 'malicious') { $_GET['_wpnonce'] = 'valid'; }
     if (($argv[2] ?? '') === 'denied') { $can_manage = false; }
@@ -400,20 +428,28 @@ expect(mmgr_account_revenue('2028-01-31') === 170.0 && mmgr_account_revenue('202
     'Daily and monthly revenue include paid membership/ticket once, exclude COMPs');
 expect(mmgr_account_revenue('2028-02', true) === 0.0, 'Revenue is restricted to WordPress-local date interval');
 $html = account_logs();
-expect(str_contains($html, '$170.00') && str_contains($html, 'COMP&#039;D TICKET') &&
-    str_contains($html, 'PAID MEMBERSHIP'), 'Existing logs route displays ledger and combined revenue');
+expect(str_contains($html, '$170.00') && !str_contains($html, 'COMP&#039;D TICKET') &&
+    str_contains($html, 'PAID MEMBERSHIP') && str_contains($html, '2 account transactions'),
+    'Existing logs route displays only positive payments and their count with combined revenue');
 expect(str_contains($html, '>Accounting</h1>'), 'Logs heading matches Accounting admin menu');
 expect(strpos($html, "This Month's Revenue") < strpos($html, 'Account transactions — membership'),
     'Account ledger follows all four dashboard cards');
 expect(preg_match('/This Month\'s Revenue<\/p>\s*<\/div>\s*<\/div>\s*<h2>Account transactions/', $html) === 1,
     'Account ledger starts outside the stats dashboard grid');
-expect(str_contains($html, "Today's Visits") && str_contains($html, 'No visit logs yet.'),
+expect(str_contains($html, "Today's Visits") && str_contains($html, 'No paid visit logs yet.'),
     'Financial activity does not create fake visits');
 expect(!str_contains(implode("\n", $wpdb->queries), 'INSERT INTO wp_membership_visits'), 'No attendance records written by grants');
 $row = mmgr_account_csv_row($wpdb->ledger[2]);
 expect($row[5] === 'ticket_comp' && $row[6] === '0.00' && $row[7] === 'COMP' &&
     str_contains($row[10], "COMP'D TICKET"), 'CSV preserves explicit COMP type and zero charge');
 expect(count(mmgr_get_account_transactions(7, 1, 1)) === 1, 'Account history supports pagination');
+expect(count(mmgr_get_account_transactions(7)) === 3, 'Member history retains zero-dollar audit entries');
+expect(count(mmgr_get_account_transactions(7, 50, 0, true)) === 2 &&
+    count(mmgr_get_account_transactions(0, 1, 2, true)) === 0,
+    'Paid filtering applies with member filters and before pagination');
+account_form(array('membership_operation' => 'paid', 'amount_paid' => 0));
+expect(count(mmgr_get_account_transactions(0, 50, 0, true)) === 2 &&
+    str_contains(account_logs(), '2 account transactions'), 'Zero-dollar paid operations are excluded from accounting');
 foreach (array('=SUM(1,2)', '+SUM(1,2)', '-SUM(1,2)', '@SUM(1,2)', "\tformula", "\rformula", "\nformula", '  =SUM(1,2)') as $payload) {
     $unsafe = array_merge($wpdb->ledger[2], array('name' => $payload, 'member_code' => $payload, 'description' => $payload));
     $safe = mmgr_account_csv_row($unsafe);
@@ -425,15 +461,35 @@ $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__FILE__) . ' --exp
 $csv = shell_exec($command . 'valid');
 $lines = array_map('str_getcsv', explode("\n", trim($csv)));
 expect(count($lines) === 3 && $lines[0][5] === 'Activity' &&
-    str_contains($csv, "COMP'D MEMBERSHIP") && str_contains($csv, "COMP'D TICKET"),
-    'Real logs CSV endpoint exports membership and ticket COMPs');
+    str_contains($csv, 'PAID MEMBERSHIP') && str_contains($csv, 'PAID TICKET') &&
+    !str_contains($csv, "COMP'D") && $lines[1][6] === '20.00' && $lines[2][6] === '150.00',
+    'Real logs CSV endpoint exports only positive membership and ticket payments');
 expect(str_contains(shell_exec($command . 'invalid'), 'security check failed'), 'CSV endpoint requires valid export nonce');
 expect(str_contains(shell_exec($command . 'denied'), 'not allowed'), 'CSV endpoint requires administrator capability');
 $malicious = shell_exec($command . 'malicious');
 $malicious_rows = array_map('str_getcsv', explode("\n", trim($malicious)));
 expect(str_starts_with($malicious_rows[1][3], "'=") && str_starts_with($malicious_rows[1][4], "'@"),
     'Real CSV endpoint safely exports malicious account names and codes');
-expect(str_starts_with($malicious_rows[1][10], "COMP'D TICKET") &&
+expect(str_starts_with($malicious_rows[1][10], 'PAID TICKET') &&
     str_contains($malicious_rows[1][10], '=HYPERLINK('),
     'Malicious event title remains literal inside safe audit description');
+
+$wpdb = new AccountDatabase();
+$visit = array('id' => 1, 'visit_time' => $now, 'daily_fee' => 12, 'notes' => 'PAID - Paid visit',
+    'name' => 'Paid visitor', 'member_code' => 'PAID1', 'level' => 'Single', 'photo_url' => '',
+    'is_first_visit' => 0, 'orientation_done' => 0, 'id_verified' => 0);
+$wpdb->visits = array(
+    $visit,
+    array_merge($visit, array('id' => 2, 'daily_fee' => 0, 'name' => 'Zero fee visitor')),
+    array_merge($visit, array('id' => 3, 'notes' => 'UNPAID', 'name' => 'Unpaid visitor')),
+);
+$html = account_logs();
+expect(str_contains($html, 'Paid visitor') && !str_contains($html, 'Zero fee visitor') &&
+    !str_contains($html, 'Unpaid visitor') && str_contains($html, '<strong>Total Logs:</strong> 1'),
+    'Visit accounting lists and counts exclude zero fees and unpaid visits');
+expect(str_contains($html, '<h3 style="margin:0;font-size:32px;">3</h3>') && count($wpdb->visits) === 3,
+    'Attendance totals and stored visit history still include every check-in');
+$visit_source = file_get_contents(__DIR__ . '/../membership-manager-qr/includes/admin/visit-logs.php');
+expect(str_contains($visit_source, "WHERE v.daily_fee > 0 AND v.notes LIKE 'PAID%'\n"),
+    'Visit CSV export uses the same positive paid visit filter');
 echo "\nResults: $passed passed, 0 failed\n";
