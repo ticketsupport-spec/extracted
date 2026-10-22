@@ -304,6 +304,22 @@ if (!empty($coc_content)): ?>
             
             <button type="submit" name="mmgr_register" class="mmgr-submit">Register</button>
         </form>
+        <script>
+        (function() {
+            var dateFields = document.currentScript.parentElement.querySelectorAll('input[type="date"]');
+            dateFields.forEach(function(field) {
+                field.addEventListener('click', function() {
+                    if (typeof field.showPicker === 'function') {
+                        try {
+                            field.showPicker();
+                        } catch (error) {
+                            // Keep native date entry available if the browser blocks the picker.
+                        }
+                    }
+                });
+            });
+        })();
+        </script>
     </div>
     <?php
     return ob_get_clean();

@@ -351,6 +351,17 @@ add_action('wp_head', function() {
         border-color: #FF2197;
     }
 
+    .mmgr-registration-form .mmgr-field input[type="date"] {
+        color-scheme: dark;
+        cursor: pointer;
+    }
+
+    .mmgr-registration-form .mmgr-field input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: brightness(0) invert(1);
+        opacity: 1;
+        cursor: pointer;
+    }
+
     .mmgr-registration-form .mmgr-field input:focus,
     .mmgr-registration-form .mmgr-field select:focus,
     .mmgr-registration-form .mmgr-field textarea:focus {
