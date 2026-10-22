@@ -354,11 +354,23 @@ add_action('wp_head', function() {
     .mmgr-registration-form .mmgr-field input[type="date"] {
         color-scheme: dark;
         cursor: pointer;
+        position: relative;
+        padding-right: 44px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M16 3v4M8 3v4M3 11h18'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        background-size: 20px 20px;
     }
 
     .mmgr-registration-form .mmgr-field input[type="date"]::-webkit-calendar-picker-indicator {
-        filter: brightness(0) invert(1);
-        opacity: 1;
+        /* Keep the native picker clickable over the entire field, even without JavaScript. */
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        opacity: 0;
         cursor: pointer;
     }
 

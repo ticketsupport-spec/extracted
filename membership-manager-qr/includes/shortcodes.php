@@ -308,10 +308,11 @@ if (!empty($coc_content)): ?>
         (function() {
             var dateFields = document.currentScript.parentElement.querySelectorAll('input[type="date"]');
             dateFields.forEach(function(field) {
-                field.addEventListener('click', function() {
+                field.addEventListener('click', function(event) {
                     if (typeof field.showPicker === 'function') {
                         try {
                             field.showPicker();
+                            event.preventDefault();
                         } catch (error) {
                             // Keep native date entry available if the browser blocks the picker.
                         }
