@@ -214,9 +214,12 @@ function mmgr_save_admin_account($member_id, $data, $request) {
     }
 }
 
-function mmgr_get_account_transactions($member_id = 0, $limit = 50, $offset = 0) {
+function mmgr_get_account_transactions($member_id = 0, $limit = 50, $offset = 0, $paid_only = false) {
     global $wpdb;
     $where = $member_id ? $wpdb->prepare(' WHERE a.member_id = %d', $member_id) : '';
+    if ($paid_only) {
+        $where .= ($where ? ' AND' : ' WHERE') . " a.amount > 0 AND a.activity IN ('membership_sale', 'ticket_sale')";
+    }
     return $wpdb->get_results($wpdb->prepare(
         "SELECT a.*, m.name, m.member_code FROM {$wpdb->prefix}membership_account_transactions a
          LEFT JOIN {$wpdb->prefix}memberships m ON m.id = a.member_id

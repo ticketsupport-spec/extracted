@@ -370,7 +370,7 @@ if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', 
                         <option value="comp_1">COMP membership — 1 month free</option>
                         <option value="comp_12">COMP membership — 12 months free</option>
                     </select>
-                    <p class="description">COMP grants paid access for the selected term starting today (replaces current dates), charges $0 and records COMP'D MEMBERSHIP. Select a new paid membership / renewal to record another payment using Amount Paid and the entered dates. Normal saves log only unpaid-to-paid transitions; correcting amounts or dates on an already-paid account does not record another sale.</p>
+                    <p class="description">Mark as paid defaults to recording a new paid membership / renewal using Amount Paid and the entered dates. COMP must be selected explicitly; it grants free access for the selected term starting today (replaces current dates). Normal saves retain existing payment / COMP without recording another sale.</p>
                     <?php if (($member['payment_method'] ?? '') === 'COMP'): ?>
                         <strong>COMP'D MEMBERSHIP — $0.00</strong>
                     <?php endif; ?>
@@ -555,6 +555,17 @@ function togglePasswordVisibility() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    const paid = document.getElementById('paid');
+    const operation = document.getElementById('membership_operation');
+    if (paid && operation) {
+        paid.addEventListener('change', function() {
+            if (this.checked && operation.value === '') {
+                operation.value = 'paid';
+            } else if (!this.checked && operation.value === 'paid') {
+                operation.value = '';
+            }
+        });
+    }
     const checkbox = document.getElementById('generate_random_password');
     if (checkbox) {
         checkbox.addEventListener('change', function() {

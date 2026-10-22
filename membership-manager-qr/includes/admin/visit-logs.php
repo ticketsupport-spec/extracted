@@ -22,7 +22,7 @@ if (isset($_GET['export_account_csv'])) {
     fputcsv($output, array('ID', 'Date/Time', 'Member ID', 'Member Name', 'Member Code', 'Activity', 'Amount', 'Payment Method', 'Event ID', 'Administrator ID', 'Description'));
     $export_offset = 0;
     do {
-        $account_rows = mmgr_get_account_transactions(0, 500, $export_offset);
+        $account_rows = mmgr_get_account_transactions(0, 500, $export_offset, true);
         foreach ((array) $account_rows as $row) {
             fputcsv($output, mmgr_account_csv_row($row));
         }
@@ -66,6 +66,7 @@ if (isset($_GET['export_logs_csv']) && current_user_can('manage_options')) {
             m.email
         FROM $visits_tbl v
         LEFT JOIN $members_tbl m ON v.member_id = m.id
+        WHERE v.daily_fee > 0 AND v.notes LIKE 'PAID%'
         ORDER BY v.visit_time DESC
     ", ARRAY_A);
     
@@ -102,7 +103,7 @@ $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
 $offset = ($current_page - 1) * $per_page;
 
 // Get total count
-$total_logs = $wpdb->get_var("SELECT COUNT(*) FROM $visits_tbl");
+$total_logs = $wpdb->get_var("SELECT COUNT(*) FROM $visits_tbl WHERE daily_fee > 0 AND notes LIKE 'PAID%'");
 $total_pages = ceil($total_logs / $per_page);
 
 // Get logs with member info
@@ -121,6 +122,7 @@ $logs = $wpdb->get_results($wpdb->prepare("
         m.photo_url
     FROM $visits_tbl v
     LEFT JOIN $members_tbl m ON v.member_id = m.id
+    WHERE v.daily_fee > 0 AND v.notes LIKE 'PAID%%'
     ORDER BY v.visit_time DESC
     LIMIT %d OFFSET %d
 ", $per_page, $offset), ARRAY_A);
@@ -135,9 +137,9 @@ $today_visits = $wpdb->get_var($wpdb->prepare(
 ));
 
 $today_revenue = $wpdb->get_var($wpdb->prepare(
-    "SELECT SUM(daily_fee) FROM $visits_tbl WHERE DATE(visit_time) = %s AND notes LIKE %s",
+    "SELECT SUM(daily_fee) FROM $visits_tbl WHERE DATE(visit_time) = %s AND daily_fee > 0 AND notes LIKE %s",
     $today,
-    '%PAID%'
+    'PAID%'
 ));
 
 $month_visits = $wpdb->get_var($wpdb->prepare(
@@ -146,17 +148,17 @@ $month_visits = $wpdb->get_var($wpdb->prepare(
 ));
 
 $month_revenue = $wpdb->get_var($wpdb->prepare(
-    "SELECT SUM(daily_fee) FROM $visits_tbl WHERE DATE_FORMAT(visit_time, '%%Y-%%m') = %s AND notes LIKE %s",
+    "SELECT SUM(daily_fee) FROM $visits_tbl WHERE DATE_FORMAT(visit_time, '%%Y-%%m') = %s AND daily_fee > 0 AND notes LIKE %s",
     $this_month,
-    '%PAID%'
+    'PAID%'
 ));
 if ($account_ledger_ready) {
     $today_revenue += mmgr_account_revenue($today);
     $month_revenue += mmgr_account_revenue($this_month, true);
 }
 $account_page = max(1, intval($_GET['account_paged'] ?? 1));
-$account_total = $account_ledger_ready ? (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}membership_account_transactions") : 0;
-$account_rows = $account_ledger_ready ? mmgr_get_account_transactions(0, 50, ($account_page - 1) * 50) : array();
+$account_total = $account_ledger_ready ? (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}membership_account_transactions WHERE amount > 0 AND activity IN ('membership_sale', 'ticket_sale')") : 0;
+$account_rows = $account_ledger_ready ? mmgr_get_account_transactions(0, 50, ($account_page - 1) * 50, true) : array();
 
 ?>
 
@@ -191,7 +193,7 @@ $account_rows = $account_ledger_ready ? mmgr_get_account_transactions(0, 50, ($a
         </div>
     </div>
     <h2>Account transactions — membership and event tickets</h2>
-    <p>Sales and complimentary grants do not count as visits. Revenue includes paid account sales plus paid visit fees. Removing a ticket is not a refund. Deleting visit logs does not delete account transactions.</p>
+    <p>Only positive payments appear in these lists and CSV exports. Complimentary grants and other $0 activity remain in member account history; attendance totals still include all check-ins. Revenue includes paid account sales plus paid visit fees. Deleting visit logs does not delete account transactions.</p>
     <?php if ($account_ledger_ready): ?>
         <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?page=membership_logs&export_account_csv=1'), 'export_account_csv')); ?>">Export account transactions CSV</a>
         <p><?php echo (int) $account_total; ?> account transactions</p>
@@ -207,7 +209,7 @@ $account_rows = $account_ledger_ready ? mmgr_get_account_transactions(0, 50, ($a
     <?php else: ?>
         <p>Account transaction log unavailable. Revenue above excludes account sales until the database is available.</p>
     <?php endif; ?>
-    <h2>Visits / check-ins</h2>
+    <h2>Paid visits / check-ins</h2>
     
     <p><strong>Total Logs:</strong> <?php echo number_format($total_logs); ?></p>
     
@@ -251,7 +253,7 @@ $account_rows = $account_ledger_ready ? mmgr_get_account_transactions(0, 50, ($a
             <?php if (empty($logs)): ?>
                 <tr>
                     <td colspan="8" style="text-align:center;padding:40px;color:#666;">
-                        No visit logs yet. Check-ins will appear here.
+                        No paid visit logs yet. Paid check-ins will appear here.
                     </td>
                 </tr>
             <?php else: ?>
