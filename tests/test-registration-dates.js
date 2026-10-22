@@ -42,18 +42,30 @@ vm.runInNewContext(script, {
     }
 });
 expect(primaryOpens === 0 && partnerOpens === 0, 'Calendars do not open before user interaction');
-primary.handlers.click();
-partner.handlers.click();
+let prevented = 0;
+const click = { preventDefault() { prevented++; } };
+primary.handlers.click(click);
+partner.handlers.click(click);
 expect(primaryOpens === 1, 'Clicking the primary DOB field opens its calendar');
 expect(partnerOpens === 1, 'Clicking the partner DOB field opens its calendar');
-assert.doesNotThrow(() => unsupported.handlers.click());
+expect(prevented === 2, 'Successful picker requests prevent a second native activation');
+assert.doesNotThrow(() => unsupported.handlers.click(click));
 expect(true, 'Browsers without showPicker keep native date entry');
-assert.doesNotThrow(() => blocked.handlers.click());
+assert.doesNotThrow(() => blocked.handlers.click(click));
 expect(true, 'Blocked picker requests do not break date entry');
+expect(prevented === 2, 'Unsupported or blocked picker requests preserve native click behavior');
 expect(/type="date" name="dob" required max=/.test(registration), 'Primary DOB remains required with its age limit');
 expect(/type="date" name="partner_dob" max=/.test(registration), 'Partner DOB retains its age limit');
 expect(/\.mmgr-registration-form \.mmgr-field input\[type="date"\]\s*\{[^}]*color-scheme: dark;/.test(styles),
     'Registration date controls use a dark color scheme');
-expect(/\.mmgr-registration-form \.mmgr-field input\[type="date"\]::-webkit-calendar-picker-indicator\s*\{[^}]*filter: brightness\(0\) invert\(1\);[^}]*opacity: 1;/.test(styles),
-    'Registration calendar icons are white and fully visible');
+const dateStyles = styles.match(/\.mmgr-registration-form \.mmgr-field input\[type="date"\]\s*\{([^}]*)\}/)[1];
+expect(/background-image: url\("data:image\/svg\+xml,[^"]*stroke='%23fff'/.test(dateStyles),
+    'Registration calendar icons are explicitly white, independent of native icon colors');
+expect(/padding-right: 44px;/.test(dateStyles) && /background-repeat: no-repeat;/.test(dateStyles),
+    'Date text has reserved space for a single calendar icon');
+const indicatorStyles = styles.match(/\.mmgr-registration-form \.mmgr-field input\[type="date"\]::-webkit-calendar-picker-indicator\s*\{([^}]*)\}/)[1];
+expect(/position: relative;/.test(dateStyles) && /position: absolute;/.test(indicatorStyles)
+    && /inset: 0;/.test(indicatorStyles) && /width: 100%;/.test(indicatorStyles)
+    && /height: 100%;/.test(indicatorStyles) && /opacity: 0;/.test(indicatorStyles),
+    'The native calendar target covers the entire date field without obscuring the white icon');
 console.log(`Results: ${passed} passed`);
