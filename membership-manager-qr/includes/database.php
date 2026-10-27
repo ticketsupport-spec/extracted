@@ -236,6 +236,8 @@ function mmgr_create_tables() {
         photo_url VARCHAR(500),
         posted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         edited_at DATETIME NULL DEFAULT NULL,
+        admin_read_at DATETIME NULL DEFAULT NULL,
+        INDEX idx_admin_read (admin_read_at),
         INDEX idx_member (member_id),
         INDEX idx_topic (topic_id),
         INDEX idx_posted (posted_at)

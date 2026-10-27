@@ -131,6 +131,15 @@ add_action('admin_menu', function() {
 		}
 	);
 
+	add_submenu_page(
+		'membership_manager',
+		'Forum Posts',
+		mmgr_forum_posts_menu_label(),
+		'manage_options',
+		'membership_forum_posts',
+		'mmgr_admin_forum_page'
+	);
+
 	// Card Requests with pending count badge
 	add_submenu_page(
 		'membership_manager',
