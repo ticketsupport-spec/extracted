@@ -201,6 +201,16 @@ add_action('admin_menu', function() {
 		}
 	);
 
+	$bio_updates_hook = add_submenu_page(
+		'membership_manager',
+		'Bio Updates',
+		mmgr_bio_updates_menu_label(),
+		'manage_options',
+		'membership_bio_updates',
+		'mmgr_admin_bio_updates_page'
+	);
+	add_action('load-' . $bio_updates_hook, 'mmgr_admin_bio_updates_load');
+
 	// Help Topics
 	add_submenu_page(
 		'membership_manager',
