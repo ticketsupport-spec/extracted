@@ -123,8 +123,8 @@ $base = array('id' => 1, 'member_id' => 7, 'topic_id' => 3, 'message' => '<scrip
     'posted_at' => '2026-10-27 12:00:00', 'edited_at' => null, 'admin_read_at' => null,
     'photo_url' => 'https://example.com/legacy.jpg', 'hidden' => 1, 'topic_name' => null);
 for ($id = 1; $id <= 25; $id++) $wpdb->posts[$id] = array_replace($base, array('id' => $id));
-expect($actions['admin_init'] === array('mmgr_admin_forum_load', 20), 'Page loads after schema initialization and before menu rendering');
 expect(strpos(mmgr_forum_posts_menu_label(), '>25</span>') !== false, 'Menu counts all unread posts including hidden and orphaned posts');
+$submenu = array('membership_manager' => array(array(mmgr_forum_posts_menu_label(), 'manage_options', 'membership_forum_posts')));
 $wpdb->column_exists = false;
 expect(mmgr_forum_posts_menu_label() === 'Forum Posts', 'Menu tolerates a not-yet-migrated installation');
 $wpdb->column_exists = true;
@@ -138,7 +138,7 @@ mmgr_admin_forum_load();
 expect(count($mmgr_admin_forum['rows']) === 20, 'Management page is paginated');
 expect($wpdb->posts[6]['admin_read_at'] !== null && $wpdb->posts[5]['admin_read_at'] === null, 'Only displayed posts are marked read');
 expect($wpdb->posts[26]['admin_read_at'] === null, 'A post arriving during page load stays unread');
-expect(strpos(mmgr_forum_posts_menu_label(), '>6</span>') !== false, 'Menu immediately reflects viewed posts');
+expect(strpos($submenu['membership_manager'][0][0], '>6</span>') !== false, 'Already-registered menu immediately reflects viewed posts');
 expect($mmgr_admin_forum['rows'][0]['admin_read_at'] === null, 'New labels use the original unread snapshot');
 ob_start();
 mmgr_admin_forum_page();
@@ -155,6 +155,7 @@ mmgr_admin_forum_load();
 $_GET = array('page' => 'membership_forum_posts', 'edit' => 26);
 mmgr_admin_forum_load();
 expect(count($mmgr_admin_forum['rows']) === 1 && mmgr_forum_posts_menu_label() === 'Forum Posts', 'Opening a single post clears only its unread flag; badge disappears at zero');
+expect($submenu['membership_manager'][0][0] === 'Forum Posts', 'Already-registered menu hides the badge at zero');
 expect($wpdb->posts[25]['admin_read_at'] === '2026-10-26 10:00:00', 'Read state persists across management views');
 
 $input = array('forum_nonce' => 'mmgr_admin_forum_25', 'message' => "Updated \\'post\\' <b>text</b>", 'member_id' => 999, 'reason' => 'Spam');
@@ -205,4 +206,5 @@ expect(strpos($schema, 'admin_read_at DATETIME NULL DEFAULT NULL') !== false, 'F
 expect(strpos($migration, "LIKE 'admin_read_at'") !== false && strpos($migration, 'ADD COLUMN `admin_read_at` DATETIME NULL DEFAULT NULL') !== false, 'Existing installations receive an idempotent unread-column migration');
 $menu = file_get_contents(__DIR__ . '/../membership-manager-qr/includes/admin-menu.php');
 expect(strpos($menu, "'membership_forum_topics'") < strpos($menu, "'membership_forum_posts'") && strpos($menu, "'membership_forum_posts'") < strpos($menu, "'membership_card_requests'"), 'Forum Posts is registered directly below Forum Topics');
+expect(strpos($menu, "add_action('load-' . \$forum_posts_hook, 'mmgr_admin_forum_load')") !== false && !isset($actions['admin_init']), 'Post loading is scoped to the real page load hook, not AJAX or other admin requests');
 echo "Results: $passed passed\n";

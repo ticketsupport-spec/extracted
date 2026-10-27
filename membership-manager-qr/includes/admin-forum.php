@@ -94,7 +94,7 @@ function mmgr_admin_forum_load() {
     if (!current_user_can('manage_options')) {
         wp_die('Permission denied.');
     }
-    global $wpdb, $mmgr_admin_forum;
+    global $wpdb, $mmgr_admin_forum, $submenu;
     $notice = '';
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['forum_action'])) {
         $notice = mmgr_admin_forum_moderate(
@@ -136,8 +136,16 @@ function mmgr_admin_forum_load() {
         'rows' => $rows, 'photos' => $photos, 'notice' => $notice, 'page' => $page, 'edit' => $edit,
         'total' => (int) $wpdb->get_var("SELECT COUNT(*) FROM `$posts`"),
     );
+    // WordPress registers the menu before the page load hook; refresh it before rendering.
+    if (isset($submenu['membership_manager'])) {
+        foreach ($submenu['membership_manager'] as &$item) {
+            if ($item[2] === 'membership_forum_posts') {
+                $item[0] = mmgr_forum_posts_menu_label();
+            }
+        }
+        unset($item);
+    }
 }
-add_action('admin_init', 'mmgr_admin_forum_load', 20);
 
 function mmgr_admin_forum_page() {
     if (!current_user_can('manage_options')) {

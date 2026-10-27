@@ -131,7 +131,7 @@ add_action('admin_menu', function() {
 		}
 	);
 
-	add_submenu_page(
+	$forum_posts_hook = add_submenu_page(
 		'membership_manager',
 		'Forum Posts',
 		mmgr_forum_posts_menu_label(),
@@ -139,6 +139,7 @@ add_action('admin_menu', function() {
 		'membership_forum_posts',
 		'mmgr_admin_forum_page'
 	);
+	add_action('load-' . $forum_posts_hook, 'mmgr_admin_forum_load');
 
 	// Card Requests with pending count badge
 	add_submenu_page(
