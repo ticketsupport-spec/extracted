@@ -1947,6 +1947,14 @@ add_shortcode('mmgr_member_profile', function() {
             }
 
             if (empty($error)) {
+                $bio_before = mmgr_begin_bio_update($member['id']);
+                if (is_wp_error($bio_before)) {
+                    $error = $bio_before->get_error_message();
+                }
+            }
+
+            if (empty($error)) {
+                $bio_saved = true;
                 // Update member
                 $updated = $wpdb->update(
                     $tbl,
@@ -1971,23 +1979,29 @@ add_shortcode('mmgr_member_profile', function() {
                         "SELECT id, field_type FROM $bio_fields_tbl WHERE active = 1",
                         ARRAY_A
                     );
-                    foreach ($active_fields as $bf) {
+                    $bio_saved = !$wpdb->last_error && $bio_saved;
+                    foreach ($active_fields ?: array() as $bf) {
                         $post_key = 'bio_field_' . intval($bf['id']);
                         if ($bf['field_type'] === 'image') {
                             $file_key = 'bio_field_img_' . intval($bf['id']);
                             if (!empty($_FILES[$file_key]['name'])) {
-                                $allowed_mimes = array('image/jpeg', 'image/png', 'image/gif', 'image/webp');
+                                $allowed_mimes = array(
+                                    'jpg|jpeg|jpe' => 'image/jpeg',
+                                    'png' => 'image/png',
+                                    'gif' => 'image/gif',
+                                    'webp' => 'image/webp',
+                                );
                                 $file_type = wp_check_filetype_and_ext(
                                     $_FILES[$file_key]['tmp_name'],
                                     $_FILES[$file_key]['name'],
                                     $allowed_mimes
                                 );
                                 if (empty($file_type['type']) || !in_array($file_type['type'], $allowed_mimes, true)) {
-                                    // Skip invalid file type silently
+                                    $error = 'Only image files (JPEG, PNG, GIF, WebP) are allowed for bio images.';
                                 } else {
                                     $img_upload = wp_handle_upload($_FILES[$file_key], array('test_form' => false, 'mimes' => $allowed_mimes));
                                     if (isset($img_upload['url'])) {
-                                        $wpdb->replace(
+                                        $saved = $wpdb->replace(
                                             $bio_field_values_tbl,
                                             array(
                                                 'member_id'   => $member['id'],
@@ -1995,12 +2009,15 @@ add_shortcode('mmgr_member_profile', function() {
                                                 'field_value' => $img_upload['url'],
                                             )
                                         );
+                                        $bio_saved = $saved !== false && $bio_saved;
+                                    } else {
+                                        $error = 'Bio image upload failed.';
                                     }
                                 }
                             }
                         } elseif ($bf['field_type'] === 'html') {
                             $val = isset($_POST[$post_key]) ? wp_kses_post($_POST[$post_key]) : '';
-                            $wpdb->replace(
+                            $saved = $wpdb->replace(
                                 $bio_field_values_tbl,
                                 array(
                                     'member_id'   => $member['id'],
@@ -2008,9 +2025,10 @@ add_shortcode('mmgr_member_profile', function() {
                                     'field_value' => $val,
                                 )
                             );
+                            $bio_saved = $saved !== false && $bio_saved;
                         } elseif ($bf['field_type'] === 'textarea') {
                             $val = isset($_POST[$post_key]) ? sanitize_textarea_field($_POST[$post_key]) : '';
-                            $wpdb->replace(
+                            $saved = $wpdb->replace(
                                 $bio_field_values_tbl,
                                 array(
                                     'member_id'   => $member['id'],
@@ -2018,10 +2036,11 @@ add_shortcode('mmgr_member_profile', function() {
                                     'field_value' => $val,
                                 )
                             );
+                            $bio_saved = $saved !== false && $bio_saved;
                         } else {
                             // text or link
                             $val = isset($_POST[$post_key]) ? sanitize_text_field($_POST[$post_key]) : '';
-                            $wpdb->replace(
+                            $saved = $wpdb->replace(
                                 $bio_field_values_tbl,
                                 array(
                                     'member_id'   => $member['id'],
@@ -2029,6 +2048,7 @@ add_shortcode('mmgr_member_profile', function() {
                                     'field_value' => $val,
                                 )
                             );
+                            $bio_saved = $saved !== false && $bio_saved;
                         }
                     }
                 }
@@ -2043,24 +2063,34 @@ add_shortcode('mmgr_member_profile', function() {
                     $raw_orient_ids = isset($_POST['sexual_orientation']) ? (array) $_POST['sexual_orientation'] : array();
                     $selected_orient_ids = array_map('intval', $raw_orient_ids);
                     $active_orient_ids   = $wpdb->get_col("SELECT id FROM `$orient_opts_tbl` WHERE active = 1");
+                    $bio_saved = !$wpdb->last_error && $bio_saved;
                     $active_orient_ids   = array_map('intval', $active_orient_ids);
                     $valid_orient_ids    = array_intersect($selected_orient_ids, $active_orient_ids);
 
-                    $wpdb->delete($orient_sel_tbl, array('member_id' => (int) $member['id']));
+                    $bio_saved = $wpdb->delete($orient_sel_tbl, array('member_id' => (int) $member['id'])) !== false && $bio_saved;
                     foreach ($valid_orient_ids as $oid) {
-                        $wpdb->replace($orient_sel_tbl, array(
+                        $saved = $wpdb->replace($orient_sel_tbl, array(
                             'member_id'      => (int) $member['id'],
                             'orientation_id' => $oid,
                         ));
+                        $bio_saved = $saved !== false && $bio_saved;
                     }
                 }
 
-                if ($updated !== false) {
+                if ($updated !== false && $bio_saved && empty($error)) {
+                    $tracked = mmgr_finish_bio_update($member['id'], $bio_before);
+                    if (is_wp_error($tracked)) {
+                        $error = $tracked->get_error_message();
+                    }
+                } else {
+                    $tracking_error = mmgr_cancel_bio_update();
+                    if (empty($error)) $error = $tracking_error->get_error_message();
+                }
+
+                if (empty($error)) {
                     // PRG: redirect to avoid re-submission on refresh and to load fresh data
                     wp_redirect(esc_url_raw(add_query_arg('profile_updated', '1')));
                     exit;
-                } else {
-                    $error = 'Failed to update profile.';
                 }
             }
         }
@@ -2745,13 +2775,32 @@ add_action('wp_ajax_mmgr_upload_bio_photo', function() {
         wp_send_json_error(array('message' => 'Upload failed: ' . $upload['error']));
     }
 
-    $wpdb->insert($bio_photos_tbl, array(
+    $bio_before = mmgr_begin_bio_update($member['id']);
+    if (is_wp_error($bio_before)) {
+        wp_send_json_error(array('message' => $bio_before->get_error_message()));
+    }
+    $count = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $bio_photos_tbl WHERE member_id = %d", $member['id']
+    ));
+    if ($wpdb->last_error) {
+        $tracking_error = mmgr_cancel_bio_update();
+        wp_send_json_error(array('message' => $tracking_error->get_error_message()));
+    }
+    if ($count >= 50) {
+        mmgr_cancel_bio_update();
+        wp_send_json_error(array('message' => 'Maximum of 50 photos reached.'));
+    }
+    $saved = $wpdb->insert($bio_photos_tbl, array(
         'member_id'  => $member['id'],
         'photo_url'  => $upload['url'],
         'sort_order' => $count,
         'created_at' => current_time('mysql'),
     ));
     $new_id = (int) $wpdb->insert_id;
+    $tracked = $saved === false ? mmgr_cancel_bio_update() : mmgr_finish_bio_update($member['id'], $bio_before);
+    if (is_wp_error($tracked)) {
+        wp_send_json_error(array('message' => $tracked->get_error_message()));
+    }
 
     wp_send_json_success(array(
         'id'    => $new_id,
@@ -2773,6 +2822,11 @@ add_action('wp_ajax_mmgr_delete_bio_photo', function() {
     $bio_photos_tbl = $wpdb->prefix . 'membership_bio_photos';
     $photo_id = intval($_POST['photo_id']);
 
+    $bio_before = mmgr_begin_bio_update($member['id']);
+    if (is_wp_error($bio_before)) {
+        wp_send_json_error(array('message' => $bio_before->get_error_message()));
+    }
+
     // Verify the photo belongs to this member
     $photo = $wpdb->get_row($wpdb->prepare(
         "SELECT id, photo_url FROM $bio_photos_tbl WHERE id = %d AND member_id = %d",
@@ -2780,19 +2834,16 @@ add_action('wp_ajax_mmgr_delete_bio_photo', function() {
     ), ARRAY_A);
 
     if (!$photo) {
+        mmgr_cancel_bio_update();
         wp_send_json_error(array('message' => 'Photo not found.'));
     }
 
-    // Delete the file from disk
-    $upload_dir = wp_upload_dir();
-    $local_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $photo['photo_url']);
-    if (file_exists($local_path)) {
-        if (!unlink($local_path)) {
-            error_log('MMGR: Failed to delete bio photo file: ' . $local_path);
-        }
+    // Keep the uploaded file available for the moderation history.
+    $saved = $wpdb->delete($bio_photos_tbl, array('id' => $photo_id, 'member_id' => $member['id']));
+    $tracked = $saved === false ? mmgr_cancel_bio_update() : mmgr_finish_bio_update($member['id'], $bio_before);
+    if (is_wp_error($tracked)) {
+        wp_send_json_error(array('message' => $tracked->get_error_message()));
     }
-
-    $wpdb->delete($bio_photos_tbl, array('id' => $photo_id));
     wp_send_json_success();
 });
 

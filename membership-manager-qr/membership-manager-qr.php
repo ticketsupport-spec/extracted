@@ -24,6 +24,7 @@ require_once MMGR_PLUGIN_DIR . 'includes/email-functions.php';
 require_once MMGR_PLUGIN_DIR . 'includes/newsletter-functions.php';
 require_once MMGR_PLUGIN_DIR . 'includes/admin-messages.php';  // MUST be before admin-menu.php
 require_once MMGR_PLUGIN_DIR . 'includes/admin-forum.php';
+require_once MMGR_PLUGIN_DIR . 'includes/bio-updates.php';
 
 // Load UI/functionality files on plugins_loaded
 add_action('plugins_loaded', function() {

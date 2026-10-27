@@ -75,6 +75,29 @@ no upgrade debt or payment change. Existing payment records, membership dates,
 and QR codes are preserved. Staff can hide the reminder in **Edit Member** after
 collecting payment.
 
+## Bio update tracking
+
+Open **Memberships → Bio Updates**, directly below **BIO Fields**, to review
+member changes to community aliases, bios, profile photos, custom BIO fields
+(including images), bio gallery photos and orientation selections. Each saved
+change keeps dated before/after values. Unchanged saves do not create updates.
+Tracking starts on installation; existing profiles are not backfilled.
+
+The badge counts unviewed updates, shared across all administrators. Opening
+the page marks only its displayed updates viewed; other pages and changes made
+afterward remain unread. The badge disappears at zero and returns after a new
+change, on the next admin page load. History remains available after viewing.
+Profile changes and their history are saved together; a tracking failure is
+reported rather than silently saving an untracked change.
+This requires InnoDB membership storage; legacy BIO value, gallery and selection
+tables are converted to InnoDB before saving.
+
+Removing a gallery photo removes it from the member's profile but retains its
+uploaded file for the administrator's before/after history. This history is
+restricted to administrators with `manage_options`; uploaded images retain the
+site's existing upload URL access rules. Passwords, private notes and chemistry
+answers are not copied into this content-moderation history.
+
 ## Forum administration
 
 Open **Memberships → Forum Posts**, directly below **Forum Topics**, to review

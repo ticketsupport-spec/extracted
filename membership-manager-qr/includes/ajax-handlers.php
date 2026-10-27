@@ -1102,6 +1102,7 @@ add_action('wp_ajax_mmgr_save_chemistry_answers', function() {
 /**
  * AJAX: Save member sexual orientation selections.
  */
+add_action('wp_ajax_nopriv_mmgr_save_orientations', function() { do_action('wp_ajax_mmgr_save_orientations'); });
 add_action('wp_ajax_mmgr_save_orientations', function() {
     global $wpdb;
     if (!check_ajax_referer('mmgr_save_orientations', 'nonce', false)) {
@@ -1123,16 +1124,30 @@ add_action('wp_ajax_mmgr_save_orientations', function() {
 
     // Validate against active orientation IDs
     $active_ids = $wpdb->get_col("SELECT id FROM `$opts_tbl` WHERE active = 1");
+    if ($wpdb->last_error) {
+        wp_send_json_error(array('message' => 'Could not load orientation options. Please try again.'));
+    }
     $active_ids = array_map('intval', $active_ids);
     $valid_ids  = array_intersect($selected_ids, $active_ids);
 
+    $bio_before = mmgr_begin_bio_update($member['id']);
+    if (is_wp_error($bio_before)) {
+        wp_send_json_error(array('message' => $bio_before->get_error_message()));
+    }
+
     // Replace selections: delete existing, insert valid
-    $wpdb->delete($sel_tbl, array('member_id' => (int) $member['id']));
+    $saved = $wpdb->delete($sel_tbl, array('member_id' => (int) $member['id'])) !== false;
     foreach ($valid_ids as $oid) {
-        $wpdb->replace($sel_tbl, array(
+        $result = $wpdb->replace($sel_tbl, array(
             'member_id'      => (int) $member['id'],
             'orientation_id' => $oid,
         ));
+        $saved = $result !== false && $saved;
+    }
+
+    $tracked = $saved ? mmgr_finish_bio_update($member['id'], $bio_before) : mmgr_cancel_bio_update();
+    if (is_wp_error($tracked)) {
+        wp_send_json_error(array('message' => $tracked->get_error_message()));
     }
 
     wp_send_json_success(array('message' => 'Orientation saved!'));
