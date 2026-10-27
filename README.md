@@ -75,6 +75,22 @@ no upgrade debt or payment change. Existing payment records, membership dates,
 and QR codes are preserved. Staff can hide the reminder in **Edit Member** after
 collecting payment.
 
+## Forum administration
+
+Open **Memberships → Forum Posts**, directly below **Forum Topics**, to review
+discussion posts, including hidden posts and photos. The menu badge counts posts
+not yet viewed by an administrator. Opening the page marks only its displayed
+posts as read for all administrators; posts on other pages or arriving afterward
+remain unread. The badge disappears when no unread posts remain. Counts update
+on the next admin page load. Existing posts initially count as unread.
+
+Use **Edit** to update a message while preserving its edit history, **Delete** to
+permanently remove a post and its associated comments, likes, photo references,
+reports and edit history, or **Ban from forum** to prevent its author from
+posting and commenting. A forum ban does not disable membership or private
+messaging, and can be reversed with **Unban from forum**. These actions require
+administrator permission and a valid form nonce.
+
 ## Plugin Files
 
 ### Plugin Root

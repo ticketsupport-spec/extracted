@@ -68,6 +68,12 @@ function mmgr_create_portal_tables() {
         $wpdb->query("ALTER TABLE `$forum_posts_tbl` ADD COLUMN `edited_at` DATETIME NULL DEFAULT NULL");
     }
 
+    // Track whether any administrator has viewed a forum post.
+    $row = $wpdb->get_results("SHOW COLUMNS FROM `$forum_posts_tbl` LIKE 'admin_read_at'");
+    if (empty($row)) {
+        $wpdb->query("ALTER TABLE `$forum_posts_tbl` ADD COLUMN `admin_read_at` DATETIME NULL DEFAULT NULL, ADD INDEX idx_admin_read (admin_read_at)");
+    }
+
     // Add forum suspension/ban columns to memberships
     $memberships_tbl = $wpdb->prefix . 'memberships';
     $forum_cols = array(
