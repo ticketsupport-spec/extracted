@@ -2,6 +2,15 @@
 
 A WordPress plugin for complete membership management with QR code check-ins.
 
+## Admin unread messages
+
+In **Memberships → Messages**, **SHOW ALL UNREAD** displays every unread incoming
+admin message, including archived conversations, older messages and messages from
+deleted members. Opening this list does not mark messages as read.
+**MARK ALL READ** asks for confirmation, then marks all incoming admin messages
+read for all administrators. It preserves existing read timestamps and does not
+mark outgoing admin messages or member-to-member messages read.
+
 ## Paid event tickets
 
 In **Memberships → Edit Member**, use **Paid Event Tickets** to check events
@@ -74,6 +83,20 @@ next visit**, shown to administrators during QR check-in. Unpaid accounts receiv
 no upgrade debt or payment change. Existing payment records, membership dates,
 and QR codes are preserved. Staff can hide the reminder in **Edit Member** after
 collecting payment.
+
+### Converting a couples account back to single
+
+In **Memberships → Edit Member**, use **Convert to single** to keep either the
+current primary member or the partner. Select a configured single membership
+level (Single, Male, Female, Single Male or Single Female), check the retained
+person's name, sex and date of birth in the form, then save. The selected person
+becomes the primary member and all partner fields are cleared. No second account
+is created.
+
+The existing account ID, QR code, history, tickets and payment records stay with
+the account; conversion alone does not charge or refund anything. Shared contact
+details, login and profile content are unchanged. Review those details and reset
+the password if the departing person should no longer have access.
 
 ## Bio update tracking
 

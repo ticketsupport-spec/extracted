@@ -58,7 +58,7 @@ class ReceiptDatabase {
         return array('id' => 7, 'name' => 'Recipient', 'photo_url' => '', 'email' => 'member@example.com',
             'member_code' => 'ABC', 'level' => 'Member', 'phone' => '', 'paid' => 1);
     }
-    public function update($table, $data, $where) { $this->updates[] = $where; }
+    public function query($query) { $this->updates[] = $query; return 1; }
 }
 $wpdb = new ReceiptDatabase();
 require __DIR__ . '/../membership-manager-qr/includes/admin-messages.php';
@@ -80,7 +80,9 @@ mmgr_admin_messages_page();
 $html = ob_get_clean();
 preg_match_all('/<div class="mmgr-admin-message-time mmgr-admin-message-read-status">(.*?)<\/div>/', $html, $matches);
 expect($matches[1] === array('Unread', 'Read on 20/10/2026 18:45', 'Read on 20/10/2026 18:45'), 'Initial view shows receipts only under outgoing messages');
-expect($wpdb->updates === array(array('from_member_id' => 7, 'to_member_id' => 0)), 'Viewing as admin does not mark outgoing messages read');
+expect(count($wpdb->updates) === 1 &&
+    str_contains($wpdb->updates[0], 'WHERE from_member_id = %d AND to_member_id = 0 AND read_at IS NULL'),
+    'Viewing as admin marks only incoming unread messages and preserves first-read timestamps');
 expect($wpdb->messages[1]['read_at'] === '2026-10-20 18:45:00', 'Rendering preserves the recorded first-read time');
 
 function load_earlier_receipts() {

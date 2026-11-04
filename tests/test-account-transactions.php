@@ -44,6 +44,7 @@ class AccountDatabase {
     public $queries = array();
     public $fail = '';
     public $engines = array();
+    public $levels = array('Single', 'Couple', 'Male', 'Female');
     private $snapshot;
     public function __construct($level = 'Single') {
         $this->members[7] = array('id' => 7, 'name' => 'Test Account', 'member_code' => 'CODE7',
@@ -105,7 +106,10 @@ class AccountDatabase {
     }
     public function get_var($query) {
         $this->queries[] = $query;
-        if (str_contains($query, 'operation_key =')) {
+        if (str_contains($query, 'FROM wp_membership_levels')) {
+            preg_match("/level_name = '([^']+)'/", $query, $matches);
+            return in_array($matches[1] ?? '', $this->levels, true) ? $matches[1] : null;
+        } elseif (str_contains($query, 'operation_key =')) {
             preg_match("/operation_key = '([^']+)'/", $query, $matches);
             foreach ($this->ledger as $row) {
                 if ($row['operation_key'] === $matches[1]) { return $row['id']; }
@@ -137,6 +141,9 @@ class AccountDatabase {
     }
     public function get_results($query, $format) {
         $this->queries[] = $query;
+        if (str_contains($query, 'FROM wp_membership_levels')) {
+            return array_map(function($level) { return array('level_name' => $level, 'price' => 150); }, $this->levels);
+        }
         if (str_contains($query, 'FROM wp_membership_events e')) {
             preg_match('/t.member_id = (\d+)/', $query, $matches);
             $id = (int) $matches[1];
@@ -269,6 +276,126 @@ if (isset($argv[1]) && $argv[1] === '--export') {
     include __DIR__ . '/../membership-manager-qr/includes/admin/visit-logs.php';
     exit;
 }
+
+function couple_conversion_form($overrides = array()) {
+    return account_form(array_merge(array(
+        'single_account_holder' => 'primary', 'single_account_level' => 'Single',
+        'first_name' => 'Alex', 'last_name' => 'Primary', 'sex' => 'Male', 'age' => '1980-01-02',
+        'partner_first_name' => 'Sam', 'partner_last_name' => 'Partner',
+        'partner_sex' => 'Female', 'partner_age' => '1982-03-04',
+    ), $overrides));
+}
+
+foreach (array('primary', 'partner') as $holder) {
+    foreach (array('Couple', 'Couples') as $level) {
+        $wpdb = new AccountDatabase($level);
+        $wpdb->members[7] = array_merge($wpdb->members[7], array(
+            'paid' => 1, 'payment_amount' => 250.0, 'payment_method' => 'Card',
+            'payment_date' => '2027-01-31 10:00:00', 'password_hash' => 'existing-hash',
+            'partner_age' => '1982-03-04', 'photo_url' => 'existing-photo',
+        ));
+        $wpdb->tickets[7][5] = array('id' => 99);
+        $wpdb->rsvps[7][5] = array('status' => 'going');
+        $before = $wpdb->members[7];
+        $html = couple_conversion_form(array('single_account_holder' => $holder,
+            'mmgr_paid_tickets_present' => 1, 'paid_event_ids' => array('5')));
+        $after = $wpdb->members[7];
+        expect(str_contains($html, 'Member updated successfully!') && $after['level'] === 'Single',
+            "$level conversion retaining $holder saves through actual form");
+        expect($after['first_name'] === ($holder === 'partner' ? 'Sam' : 'Alex') &&
+            $after['last_name'] === ($holder === 'partner' ? 'Partner' : 'Primary') &&
+            $after['name'] === ($holder === 'partner' ? 'Sam Partner' : 'Alex Primary') &&
+            $after['sex'] === ($holder === 'partner' ? 'Female' : 'Male') &&
+            $after['age'] === ($holder === 'partner' ? '1982-03-04' : '1980-01-02'),
+            'Retained person supplies all primary identity fields');
+        expect($after['partner_first_name'] === '' && $after['partner_last_name'] === '' &&
+            $after['partner_name'] === '' && $after['partner_sex'] === '' && $after['partner_age'] === null,
+            'All partner fields including the stored date of birth are cleared');
+        foreach (array('id', 'member_code', 'email', 'paid', 'payment_amount', 'payment_method',
+            'payment_date', 'start_date', 'expire_date', 'password_hash', 'photo_url') as $field) {
+            expect($after[$field] === $before[$field], "Conversion preserves $field");
+        }
+        expect(count($wpdb->members) === 1 && !$wpdb->ledger && isset($wpdb->tickets[7][5]) &&
+            $wpdb->rsvps[7][5]['status'] === 'going', 'No second account, sale or refund; tickets and RSVP remain');
+        expect(!str_contains($html, 'id="single_account_holder"'), 'Conversion controls disappear on a single account');
+    }
+}
+
+$wpdb = new AccountDatabase('Couple');
+$html = account_form();
+expect(str_contains($html, 'id="single_account_holder"') && str_contains($html, '>Male</option>') &&
+    str_contains($html, '>Female</option>') && !str_contains($html, '>Couple</option>'),
+    'Couples editor offers conversion with configured single levels only');
+expect($wpdb->members[7]['level'] === 'Couple', 'Normal save does not convert couples');
+
+$wpdb = new AccountDatabase('Couple');
+couple_conversion_form(array('single_account_holder' => 'partner', 'single_account_level' => 'Female'));
+expect($wpdb->members[7]['level'] === 'Female', 'Configured gender-specific single level is supported');
+
+foreach (array(
+    array('single_account_holder' => 'invalid'),
+    array('single_account_holder' => array('partner')),
+    array('single_account_level' => ''),
+    array('single_account_level' => 'Couple'),
+    array('single_account_level' => 'Single Male'),
+    array('single_account_level' => array('Single')),
+    array('single_account_holder' => 'partner', 'partner_first_name' => ''),
+    array('single_account_holder' => 'partner', 'partner_last_name' => ''),
+    array('single_account_holder' => 'partner', 'partner_age' => ''),
+    array('single_account_holder' => 'partner', 'partner_age' => '1982-02-31'),
+    array('first_name' => ''),
+    array('age' => 'not-a-date'),
+    array('member_nonce' => 'invalid'),
+) as $invalid) {
+    $wpdb = new AccountDatabase('Couple');
+    $before = $wpdb->members;
+    $html = couple_conversion_form($invalid);
+    expect($wpdb->members === $before && !$wpdb->ledger && !str_contains($html, 'Member updated successfully!'),
+        'Invalid conversion or nonce leaves the account unchanged: ' . json_encode($invalid));
+}
+
+$wpdb = new AccountDatabase('Single');
+$before = $wpdb->members;
+couple_conversion_form();
+expect($wpdb->members === $before, 'Non-couples cannot submit a conversion');
+$wpdb = new AccountDatabase('Couple');
+$before = $wpdb->members;
+$can_manage = false;
+couple_conversion_form();
+$can_manage = true;
+expect($wpdb->members === $before, 'Conversion requires administrator permission');
+foreach (array('member', 'commit') as $failure) {
+    $wpdb = new AccountDatabase('Couple');
+    $before = $wpdb->members;
+    $wpdb->fail = $failure;
+    $html = couple_conversion_form();
+    expect($wpdb->members === $before && str_contains($html, 'Member could not be saved'),
+        "Conversion rolls back and reports $failure failure");
+}
+
+$wpdb = new AccountDatabase('Couple');
+$before = $wpdb->members;
+$wpdb->fail = 'ticket';
+$html = couple_conversion_form(array('mmgr_paid_tickets_present' => 1, 'paid_event_ids' => array('5')));
+expect($wpdb->members === $before && !$wpdb->tickets && !$wpdb->ledger &&
+    str_contains($html, 'Member could not be saved'), 'Failed ticket assignment also rolls back conversion');
+
+$wpdb = new AccountDatabase('Couple');
+couple_conversion_form(array('mmgr_paid_tickets_present' => 1, 'paid_event_ids' => array('5')));
+expect(count($wpdb->ledger) === 1 && $wpdb->ledger[0]['activity'] === 'ticket_sale' &&
+    $wpdb->ledger[0]['amount'] == 20, 'New ticket assigned during conversion uses the single price');
+
+$wpdb = new AccountDatabase('Couple');
+couple_conversion_form();
+expect($wpdb->members[7]['paid'] === 0 && !$wpdb->ledger, 'Unpaid conversion does not grant paid access');
+
+$wpdb = new AccountDatabase('Couple');
+$wpdb->members[7]['paid'] = 1;
+$wpdb->members[7]['payment_method'] = 'COMP';
+$wpdb->members[7]['payment_amount'] = 0.0;
+couple_conversion_form();
+expect($wpdb->members[7]['payment_method'] === 'COMP' && !$wpdb->ledger,
+    'Conversion retains complimentary membership without recording a sale');
 
 foreach (array('Single' => 20, 'Couple' => 35) as $level => $price) {
     foreach (array('paid', 'comp') as $method) {
