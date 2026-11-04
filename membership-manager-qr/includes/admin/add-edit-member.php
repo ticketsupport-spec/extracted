@@ -142,7 +142,7 @@ if (!isset($_POST['mmgr_note_action']) && isset($_POST['mmgr_save_member'])) {
         }
 
         if ($member_saved === false) {
-            echo '<div class="notice notice-error"><p>Member could not be saved. No membership or ticket changes were committed. Check the amount, event prices and selections, then try again. If this persists, verify database access and InnoDB storage support. Any submitted note has not been saved.</p></div>';
+            echo '<div class="notice notice-error"><p>Member could not be saved. No membership or ticket changes were committed. Check the amount, event prices and selections, then try again. For a couples-to-single conversion, select a configured single membership level and enter the retained person\'s first name, last name and valid date of birth. If this persists, verify database access and InnoDB storage support. Any submitted note has not been saved.</p></div>';
         } elseif ($editing) {
             
             // Handle password management
@@ -227,6 +227,29 @@ if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', 
         <input type="hidden" name="account_operation_key" value="<?php echo esc_attr(bin2hex(random_bytes(16))); ?>">
         
         <table class="form-table">
+            <?php if ($editing && in_array(strtolower(trim($member['level'] ?? '')), array('couple', 'couples'), true)): ?>
+                <tr>
+                    <th><label for="single_account_holder">Convert to single</label></th>
+                    <td>
+                        <select name="single_account_holder" id="single_account_holder">
+                            <option value="">Do not convert</option>
+                            <option value="primary">Keep current primary member</option>
+                            <option value="partner">Make partner the primary member</option>
+                        </select>
+                        <p class="description">On Save, keep the selected person's name, sex and date of birth from the fields below and remove all partner details. No separate account is created for the other person.</p>
+                        <label for="single_account_level">Single membership level</label>
+                        <select name="single_account_level" id="single_account_level">
+                            <option value="">Select single level</option>
+                            <?php foreach ($levels as $lvl): ?>
+                                <?php if (mmgr_can_upgrade_to_couple(array('level' => $lvl['level_name']))): ?>
+                                    <option value="<?php echo esc_attr($lvl['level_name']); ?>"><?php echo esc_html($lvl['level_name']); ?></option>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </select>
+                        <p class="description">Required when converting; replaces Membership Level below. If no single levels are listed, configure one in Membership Levels first. The same account ID, QR code, history, tickets and existing payment records are retained. Conversion alone does not charge or refund anything. Shared email, phone, login and profile content remain unchanged; review them and reset the password below if needed.</p>
+                    </td>
+                </tr>
+            <?php endif; ?>
             <tr>
                 <th colspan="2"><h2 style="margin:0;">Primary Member</h2></th>
             </tr>

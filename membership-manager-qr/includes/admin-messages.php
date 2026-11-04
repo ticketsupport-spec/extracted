@@ -23,12 +23,41 @@ function mmgr_admin_message_read_status($message) {
  * Admin Messages Page - View and reply to member messages
  */
 function mmgr_admin_messages_page() {
+    if (!current_user_can('manage_options')) {
+        echo '<div class="notice notice-error"><p>You are not allowed to manage member messages.</p></div>';
+        return;
+    }
     global $wpdb;
     $messages_table = $wpdb->prefix . 'membership_messages';
     $members_table = $wpdb->prefix . 'memberships';
     
     // Get active conversation from URL
     $active_member_id = isset($_GET['member']) ? intval($_GET['member']) : null;
+    $show_unread = isset($_GET['unread']) && $_GET['unread'] === '1';
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mmgr_mark_all_admin_messages_read'])) {
+        check_admin_referer('mmgr_mark_all_admin_messages_read');
+        $result = $wpdb->query($wpdb->prepare(
+            "UPDATE $messages_table SET read_at = %s WHERE to_member_id = 0 AND read_at IS NULL",
+            current_time('mysql')
+        ));
+        if ($result === false) {
+            echo '<div class="notice notice-error"><p>Messages could not be marked as read. Please try again.</p></div>';
+        } else {
+            echo '<div class="notice notice-success"><p>All incoming admin messages marked as read.</p></div>';
+        }
+    }
+
+    if ($show_unread) {
+        $unread_messages = $wpdb->get_results(
+            "SELECT msg.*, m.name AS member_name
+             FROM $messages_table msg
+             LEFT JOIN $members_table m ON m.id = msg.from_member_id
+             WHERE msg.to_member_id = 0 AND msg.read_at IS NULL
+             ORDER BY msg.sent_at ASC, msg.id ASC",
+            ARRAY_A
+        );
+    }
     
     // Handle sending reply
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_admin_reply'])) {
@@ -115,7 +144,7 @@ function mmgr_admin_messages_page() {
 		// Get messages for active conversation
 		$messages = array();
 		$active_member = null;
-		if ($active_member_id) {
+		if ($active_member_id && !$show_unread) {
 			$messages = $wpdb->get_results($wpdb->prepare(
 				"SELECT * FROM $messages_table 
 				 WHERE (from_member_id = 0 AND to_member_id = %d)
@@ -134,11 +163,13 @@ function mmgr_admin_messages_page() {
         ), ARRAY_A);
         
         // Mark as read
-        $wpdb->update(
-            $messages_table,
-            array('read_at' => current_time('mysql')),
-            array('from_member_id' => $active_member_id, 'to_member_id' => 0)
-        );
+        if ($wpdb->query($wpdb->prepare(
+            "UPDATE $messages_table SET read_at = %s
+             WHERE from_member_id = %d AND to_member_id = 0 AND read_at IS NULL",
+            current_time('mysql'), $active_member_id
+        )) === false) {
+            echo '<div class="notice notice-error"><p>Messages could not be marked as read. Please try again.</p></div>';
+        }
     }
 
     $is_conversation_archived = $active_member_id ? mmgr_is_conversation_archived(0, $active_member_id) : false;
@@ -148,6 +179,42 @@ function mmgr_admin_messages_page() {
     <div class="wrap mmgr-admin-messages-wrap">
         <h1 class="wp-heading-inline">💬 Member Messages</h1>
         <hr class="wp-header-end">
+        <div style="display:flex;gap:8px;align-items:center;margin:15px 0;">
+            <a class="button" href="<?php echo esc_url(admin_url('admin.php?page=membership_messages&unread=1')); ?>">SHOW ALL UNREAD</a>
+            <a class="button" href="<?php echo esc_url(admin_url('admin.php?page=membership_messages')); ?>">Show all conversations</a>
+            <form method="post" action="<?php echo esc_url(admin_url('admin.php?page=membership_messages' . ($show_unread ? '&unread=1' : ''))); ?>">
+                <?php wp_nonce_field('mmgr_mark_all_admin_messages_read'); ?>
+                <button type="submit" class="button" name="mmgr_mark_all_admin_messages_read" value="1"
+                        onclick="return confirm('Mark all incoming admin messages as read, including archived conversations and deleted members?')">MARK ALL READ</button>
+            </form>
+        </div>
+        <?php if ($show_unread): ?>
+            <h2>All unread messages</h2>
+            <p>Includes archived conversations and deleted members. Viewing this list does not mark messages as read.</p>
+            <?php if ($unread_messages === null): ?>
+                <div class="notice notice-error"><p>Unread messages could not be loaded. Please try again.</p></div>
+            <?php elseif (empty($unread_messages)): ?>
+                <p>No unread messages.</p>
+            <?php else: ?>
+                <?php foreach ($unread_messages as $unread_message): ?>
+                    <div class="card" style="max-width:none;">
+                        <h3><?php echo esc_html($unread_message['member_name'] ?? ('Deleted Member #' . (int) $unread_message['from_member_id'])); ?></h3>
+                        <p><?php echo esc_html($unread_message['sent_at']); ?></p>
+                        <p><?php echo nl2br(esc_html($unread_message['message'])); ?></p>
+                        <?php if (!empty($unread_message['image_url']) && empty($unread_message['image_deleted'])): ?>
+                            <p><a href="<?php echo esc_url($unread_message['image_url']); ?>" target="_blank" rel="noopener noreferrer">View attached image</a></p>
+                        <?php elseif (!empty($unread_message['image_deleted'])): ?>
+                            <p><em>Image removed</em></p>
+                        <?php endif; ?>
+                        <?php if ($unread_message['member_name'] !== null): ?>
+                            <p><a class="button" href="<?php echo esc_url(admin_url('admin.php?page=membership_messages&member=' . (int) $unread_message['from_member_id'])); ?>">Open conversation</a></p>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+    </div>
+            <?php return; ?>
+        <?php endif; ?>
         
         <div class="mmgr-admin-messages-grid">
             <!-- Sidebar: Conversations List -->
@@ -709,11 +776,11 @@ add_action('admin_footer', function() {
          WHERE to_member_id = 0 AND read_at IS NULL"
     );
     
-    if ($unread_count > 0) {
+    if (current_user_can('manage_options')) {
         ?>
         <script>
         jQuery(document).ready(function($) {
-            $('#mmgr-message-count').text('<?php echo $unread_count; ?>');
+            $('#mmgr-message-count').text('<?php echo (int) $unread_count > 0 ? (int) $unread_count : ''; ?>');
         });
         </script>
         <?php

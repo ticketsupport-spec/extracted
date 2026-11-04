@@ -34,6 +34,7 @@ function esc_html($value) { return htmlspecialchars((string) $value, ENT_QUOTES,
 function esc_attr($value) { return esc_html($value); }
 function esc_url($value) { return esc_html($value); }
 function wp_create_nonce($action) { return $action . '-nonce'; }
+function wp_nonce_field($action) {}
 function human_time_diff($from, $to) { return '1 hour'; }
 
 class ArchiveResponse extends RuntimeException {

@@ -105,6 +105,36 @@ function mmgr_save_admin_account($member_id, $data, $request) {
         if ($member_id && !$old) {
             throw new RuntimeException('Missing member');
         }
+        $single_holder = $request['single_account_holder'] ?? '';
+        if ($single_holder !== '') {
+            $single_level = $request['single_account_level'] ?? '';
+            if (!in_array($single_holder, array('primary', 'partner'), true) ||
+                !in_array(strtolower(trim($old['level'] ?? '')), array('couple', 'couples'), true) ||
+                !is_string($single_level) || !mmgr_can_upgrade_to_couple(array('level' => $single_level)) ||
+                !$wpdb->get_var($wpdb->prepare(
+                    "SELECT level_name FROM {$wpdb->prefix}membership_levels WHERE level_name = %s", $single_level
+                ))) {
+                throw new RuntimeException('Invalid single account conversion');
+            }
+            $prefix = $single_holder === 'partner' ? 'partner_' : '';
+            $first_name = trim($data[$prefix . 'first_name'] ?? '');
+            $last_name = trim($data[$prefix . 'last_name'] ?? '');
+            $dob = $data[$prefix . 'age'] ?? '';
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $dob);
+            if ($first_name === '' || $last_name === '' || !$date || $date->format('Y-m-d') !== $dob) {
+                throw new RuntimeException('Retained member details are incomplete');
+            }
+            $data['first_name'] = $first_name;
+            $data['last_name'] = $last_name;
+            $data['name'] = $first_name . ' ' . $last_name;
+            $data['sex'] = $data[$prefix . 'sex'] ?? '';
+            $data['age'] = $dob;
+            $data['level'] = $single_level;
+            foreach (array('partner_first_name', 'partner_last_name', 'partner_name', 'partner_sex') as $field) {
+                $data[$field] = '';
+            }
+            $data['partner_age'] = null;
+        }
         $replayed = $member_id && $wpdb->get_var($wpdb->prepare(
             "SELECT id FROM $ledger WHERE member_id = %d AND operation_key = %s",
             $member_id, $key . ':membership'
