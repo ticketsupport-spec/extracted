@@ -217,6 +217,7 @@ function mmgr_create_tables() {
         ticket_pay_etransfer TINYINT(1) NOT NULL DEFAULT 0,
         ticket_etransfer_email VARCHAR(255) NULL DEFAULT NULL,
         ticket_instructions TEXT NULL DEFAULT NULL,
+        ticket_paid_holder_note TEXT NULL DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_event_date (event_date),

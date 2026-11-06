@@ -28,6 +28,13 @@ upcoming active events are also added when upgrading. Paid ticket holders see
 **YOU ARE GOING** instead of **BUY TICKETS**, even after ticket sales close.
 Removing a paid ticket does not remove the member's RSVP.
 
+In **Upcoming Events & Advertising → Edit Event**, set **PAID TICKET HOLDER
+NOTE** to share an address or other private details. The note appears only on
+that event's paid card under **Your upcoming events**, not in advertisements,
+the Events listing, or the Buy Tickets/payment page. Removing the member's paid
+ticket hides the note, even if their membership is paid or they remain Going.
+Leave the field blank to show no note.
+
 ### Admin sales and complimentary access
 
 **Memberships → Add / Edit Member** records newly paid memberships (including

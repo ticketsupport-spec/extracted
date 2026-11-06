@@ -355,6 +355,7 @@ function mmgr_create_portal_tables() {
             'ticket_pay_etransfer'   => "ADD COLUMN `ticket_pay_etransfer` TINYINT(1) NOT NULL DEFAULT 0",
             'ticket_etransfer_email' => "ADD COLUMN `ticket_etransfer_email` VARCHAR(255) NULL DEFAULT NULL",
             'ticket_instructions'    => "ADD COLUMN `ticket_instructions` TEXT NULL DEFAULT NULL",
+            'ticket_paid_holder_note' => "ADD COLUMN `ticket_paid_holder_note` TEXT NULL DEFAULT NULL",
         );
         $existing_cols = (array) $wpdb->get_col("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND table_name = '" . esc_sql($events_tbl) . "' AND column_name LIKE 'ticket%'");
         foreach ($ticket_cols as $col => $alter) {
@@ -574,7 +575,7 @@ function mmgr_save_member_paid_tickets($member_id, $event_ids) {
 function mmgr_get_member_paid_events($member_id) {
     global $wpdb;
     return $wpdb->get_results($wpdb->prepare(
-        "SELECT e.id, e.event_name, e.event_date, e.start_time
+        "SELECT e.id, e.event_name, e.event_date, e.start_time, e.ticket_paid_holder_note
          FROM {$wpdb->prefix}membership_events e
          INNER JOIN {$wpdb->prefix}membership_member_event_tickets t ON t.event_id = e.id
          WHERE t.member_id = %d AND e.active = 1 AND e.event_date >= %s
