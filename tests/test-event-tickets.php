@@ -113,6 +113,9 @@ class TestDatabase {
             return $rows;
         }
         if (str_contains($query, 'JOIN wp_membership_member_event_tickets')) {
+            if (str_contains($query, 'INNER JOIN')) {
+                expect(str_contains($query, 'e.ticket_paid_holder_note'), 'Paid events query selects the event-specific private note');
+            }
             preg_match('/t.member_id = (\d+)/', $query, $match);
             $member_id = (int) $match[1];
             expect(str_contains($query, "e.event_date >= '2026-10-11'"), 'Upcoming tickets use the WordPress local date');
@@ -202,6 +205,7 @@ $event = array(
     'ticket_prices' => json_encode(array('Single' => '20', 'Couple' => 35.5, 'Youth' => '')),
     'ticket_pay_cash' => 1, 'ticket_pay_etransfer' => 1,
     'ticket_etransfer_email' => 'pay@example.com', 'ticket_instructions' => "Tickets are limited\n<b>No refunds</b>",
+    'ticket_paid_holder_note' => "Private party address: 123 Secret Street\n<script>alert(\"note\")</script>",
 );
 $plain_event = array_merge($event, array('id' => 6, 'event_name' => 'Regular Night', 'tickets_enabled' => 0));
 $wpdb->events = array($event, $plain_event);
@@ -240,6 +244,7 @@ expect(mmgr_event_tickets_url(5, $paid) === 'https://example.com/member-events/?
 $current_member = $paid;
 $html = $shortcodes['mmgr_upcoming_events'](array());
 expect(substr_count($html, 'BUY TICKETS') === 1, 'Widget shows BUY TICKETS only for ticketed events');
+expect(!str_contains($html, '123 Secret Street'), 'Private note is not exposed in Upcoming Events advertisements');
 expect(str_contains($html, '/member-events/?usercod=CODE8&amp;tickets=5'), 'Widget button links to ticket page');
 $current_member = null;
 $html = $shortcodes['mmgr_upcoming_events'](array());
@@ -249,6 +254,7 @@ $current_member = $paid;
 unset($_GET['tickets']);
 $html = $shortcodes['mmgr_member_events']();
 expect(substr_count($html, 'BUY TICKETS') === 1, 'Events page shows BUY TICKETS next to Going button');
+expect(!str_contains($html, '123 Secret Street'), 'Private note is not exposed on the Events listing');
 
 // Buy Tickets page
 $_GET['tickets'] = '5';
@@ -258,6 +264,7 @@ expect(str_contains($html, 'Halloween Party') && str_contains($html, 'Main Hall'
 expect(str_contains($html, 'Membership fee (Single)') && str_contains($html, '$170.00'), 'Ticket page shows membership + ticket total for unpaid member');
 expect(str_contains($html, 'Cash in Person') && str_contains($html, 'pay@example.com'), 'Enabled payment options shown');
 expect(str_contains($html, '&lt;b&gt;No refunds&lt;/b&gt;'), 'Ticket instructions are escaped');
+expect(!str_contains($html, '123 Secret Street'), 'Private note is not exposed on the payment page');
 
 $current_member = $paid;
 $html = $shortcodes['mmgr_member_events']();
@@ -281,7 +288,7 @@ expect(str_contains($html, 'Tickets are not available for this event'), 'Non-tic
 // Admin-assigned paid tickets and digital card display.
 $wpdb->events = array(
     $event,
-    array_merge($event, array('id' => 11, 'event_name' => '<script>alert(1)</script>', 'event_date' => '2026-10-11')),
+    array_merge($event, array('id' => 11, 'event_name' => '<script>alert(1)</script>', 'event_date' => '2026-10-11', 'ticket_paid_holder_note' => 'Bring your costume')),
     array_merge($event, array('id' => 12, 'event_date' => '2000-01-01')),
     array_merge($event, array('id' => 13, 'active' => 0)),
     array_merge($event, array('id' => 14, 'event_name' => 'Same-day event without ticket', 'event_date' => '2026-10-11', 'tickets_enabled' => 0)),
@@ -321,6 +328,18 @@ expect(str_contains($html, 'Your upcoming events') && substr_count($html, '>PAID
 expect(str_contains($html, 'October 11, 2026') && str_contains($html, '8:00 PM'), 'Cards include event date and start time');
 expect(str_contains($html, '&lt;script&gt;') && !str_contains($html, '<script>'), 'Paid event titles are escaped');
 expect(strpos($html, 'October 11, 2026') < strpos($html, 'October 31, 2099'), 'Paid tickets appear in chronological order');
+expect(substr_count($html, 'mmgr-paid-ticket-holder-note') === 2, 'Each paid ticket displays its own note');
+expect(preg_match('/Bring your costume.*Halloween Party.*123 Secret Street/s', $html) === 1, 'Notes are attached to the matching event cards');
+expect(str_contains($html, "123 Secret Street<br />\n&lt;script&gt;"), 'Private note preserves line breaks and escapes markup');
+expect(!str_contains(mmgr_render_member_paid_events($unpaid), '123 Secret Street'), 'Non-holder cannot see a private note');
+expect(!str_contains(mmgr_render_member_paid_events($youth), '123 Secret Street'), 'Paid membership alone does not reveal a private note');
+foreach (array('', '   ', null) as $blank_note) {
+    $wpdb->events[0]['ticket_paid_holder_note'] = $blank_note;
+    expect(substr_count(mmgr_render_member_paid_events($paid), 'mmgr-paid-ticket-holder-note') === 1, 'Blank private notes have no note container');
+}
+$wpdb->events[0]['ticket_paid_holder_note'] = 'Updated private address';
+expect(str_contains(mmgr_render_member_paid_events($paid), 'Updated private address'), 'Existing paid ticket holders see event note edits');
+$wpdb->events[0]['ticket_paid_holder_note'] = $event['ticket_paid_holder_note'];
 expect(str_contains(mmgr_render_member_paid_events($unpaid), 'No prepaid event tickets yet.'), 'Another member cannot see assigned tickets');
 expect(mmgr_render_member_paid_events(null) === '', 'Visitors cannot see paid ticket cards');
 $wpdb->events[0]['tickets_enabled'] = 0;
@@ -332,6 +351,7 @@ expect(count(mmgr_get_member_paid_events(8)) === 2, 'Past and inactive paid even
 expect(mmgr_save_member_paid_tickets(8, array('11')), 'Admin can remove a paid ticket after sales close');
 expect(!isset($wpdb->tickets[8][5]) && isset($wpdb->tickets[8][12], $wpdb->tickets[8][13]), 'Removing upcoming tickets retains historical and inactive assignments');
 expect(isset($wpdb->rsvps[8][5]), 'Removing payment does not remove Going RSVP');
+expect(!str_contains(mmgr_render_member_paid_events($paid), '123 Secret Street'), 'Revocation hides the note despite paid membership and remaining RSVP');
 $wpdb->write_fails = true;
 expect(!mmgr_save_member_paid_tickets(8, array()), 'Failed ticket removal reports failure');
 $wpdb->write_fails = false;

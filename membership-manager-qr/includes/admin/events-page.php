@@ -29,6 +29,7 @@ if (!$table_exists) {
         ticket_pay_etransfer TINYINT(1) NOT NULL DEFAULT 0,
         ticket_etransfer_email VARCHAR(255) NULL DEFAULT NULL,
         ticket_instructions TEXT NULL DEFAULT NULL,
+        ticket_paid_holder_note TEXT NULL DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_event_date (event_date),
@@ -87,6 +88,7 @@ if (isset($_POST['save_event']) && isset($_POST['event_nonce'])) {
         $ticket_pay_etransfer = isset($_POST['ticket_pay_etransfer']) ? 1 : 0;
         $ticket_etransfer_email = sanitize_email(wp_unslash($_POST['ticket_etransfer_email'] ?? ''));
         $ticket_instructions  = sanitize_textarea_field(wp_unslash($_POST['ticket_instructions'] ?? ''));
+        $ticket_paid_holder_note = sanitize_textarea_field(wp_unslash($_POST['ticket_paid_holder_note'] ?? ''));
         $ticket_prices = array();
         if (!empty($_POST['ticket_prices']) && is_array($_POST['ticket_prices'])) {
             foreach (wp_unslash($_POST['ticket_prices']) as $level_name => $price) {
@@ -105,6 +107,7 @@ if (isset($_POST['save_event']) && isset($_POST['event_nonce'])) {
             'ticket_pay_etransfer'   => $ticket_pay_etransfer,
             'ticket_etransfer_email' => $ticket_etransfer_email,
             'ticket_instructions'    => $ticket_instructions,
+            'ticket_paid_holder_note' => $ticket_paid_holder_note,
         );
         
         // Handle image upload
@@ -315,6 +318,13 @@ $editing_ticket_prices = $editing_event ? mmgr_get_event_ticket_prices($editing_
                         <td>
                             <textarea name="ticket_instructions" id="ticket_instructions" class="large-text" rows="3"><?php echo esc_textarea($editing_event['ticket_instructions'] ?? ''); ?></textarea>
                             <p class="description">Optional extra information shown on the Buy Tickets page.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="ticket_paid_holder_note">PAID TICKET HOLDER NOTE</label></th>
+                        <td>
+                            <textarea name="ticket_paid_holder_note" id="ticket_paid_holder_note" class="large-text" rows="4"><?php echo esc_textarea($editing_event['ticket_paid_holder_note'] ?? ''); ?></textarea>
+                            <p class="description">Shown only to this event's paid ticket holders under Your upcoming events on their digital membership card. Use this for a private party address or note; it is not shown in advertisements or payment instructions.</p>
                         </td>
                     </tr>
                 </table>
