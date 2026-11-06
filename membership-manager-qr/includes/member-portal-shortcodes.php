@@ -412,7 +412,7 @@ function mmgr_render_member_paid_events($member) {
                     <?php endif; ?>
                     <?php if (isset($event['ticket_paid_holder_note']) && trim($event['ticket_paid_holder_note']) !== ''): ?>
                         <div class="mmgr-paid-ticket-holder-note" style="margin-top:12px;color:#43564b;font-size:14px;">
-                            <strong>Paid ticket holder note</strong>
+                            <strong>Ticket Holder Info</strong>
                             <p style="margin:6px 0 0;"><?php echo nl2br(esc_html($event['ticket_paid_holder_note'])); ?></p>
                         </div>
                     <?php endif; ?>
