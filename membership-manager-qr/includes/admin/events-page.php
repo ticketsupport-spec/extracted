@@ -24,6 +24,7 @@ if (!$table_exists) {
         active TINYINT(1) DEFAULT 1,
         sort_order INT DEFAULT 0,
         tickets_enabled TINYINT(1) NOT NULL DEFAULT 0,
+        ticket_limit INT UNSIGNED NOT NULL DEFAULT 0,
         ticket_prices TEXT NULL DEFAULT NULL,
         ticket_pay_cash TINYINT(1) NOT NULL DEFAULT 0,
         ticket_pay_etransfer TINYINT(1) NOT NULL DEFAULT 0,
@@ -71,6 +72,8 @@ if (isset($_GET['delete']) && isset($_GET['_wpnonce'])) {
 if (isset($_POST['save_event']) && isset($_POST['event_nonce'])) {
     if (!wp_verify_nonce($_POST['event_nonce'], 'save_event')) {
         echo '<div class="notice notice-error"><p>Security check failed.</p></div>';
+    } elseif (filter_var($_POST['ticket_limit'] ?? '0', FILTER_VALIDATE_INT, array('options' => array('min_range' => 0, 'max_range' => 2147483647))) === false) {
+        echo '<div class="notice notice-error"><p>Ticket limit must be a whole number of people, zero or greater.</p></div>';
     } else {
         $event_id = isset($_POST['event_id']) ? intval($_POST['event_id']) : null;
         $event_name = sanitize_text_field($_POST['event_name']);
@@ -102,6 +105,7 @@ if (isset($_POST['save_event']) && isset($_POST['event_nonce'])) {
         }
         $ticket_data = array(
             'tickets_enabled'        => $tickets_enabled,
+            'ticket_limit'           => (int) ($_POST['ticket_limit'] ?? 0),
             'ticket_prices'          => wp_json_encode($ticket_prices),
             'ticket_pay_cash'        => $ticket_pay_cash,
             'ticket_pay_etransfer'   => $ticket_pay_etransfer,
@@ -143,11 +147,10 @@ if (isset($_POST['save_event']) && isset($_POST['event_nonce'])) {
                 $update_data['image_url'] = $image_url;
             }
             
-            $wpdb->update($events_table, $update_data, array('id' => $event_id));
-            echo '<div class="notice notice-success"><p>✓ Event updated successfully!</p></div>';
+            $event_saved = mmgr_save_admin_event($event_id, $update_data);
         } else {
             // Create new event
-            $wpdb->insert($events_table, array(
+            $event_saved = mmgr_save_admin_event(0, array(
                 'event_name' => $event_name,
                 'event_date' => $event_date,
                 'start_time' => $start_time,
@@ -158,8 +161,10 @@ if (isset($_POST['save_event']) && isset($_POST['event_nonce'])) {
                 'active' => $active,
                 'sort_order' => $sort_order
             ) + $ticket_data);
-            echo '<div class="notice notice-success"><p>✓ Event created successfully!</p></div>';
         }
+        echo $event_saved
+            ? '<div class="notice notice-success"><p>Event saved successfully, including automatic VIP tickets.</p></div>'
+            : '<div class="notice notice-error"><p>Event and VIP tickets could not be saved. No database changes were committed. Please try again and verify database access and InnoDB storage support.</p></div>';
     }
 }
 
@@ -270,6 +275,13 @@ $editing_ticket_prices = $editing_event ? mmgr_get_event_ticket_prices($editing_
                         </td>
                     </tr>
 
+                    <tr>
+                        <th><label for="ticket_limit">Ticket Limit (People)</label></th>
+                        <td>
+                            <input type="number" name="ticket_limit" id="ticket_limit" min="0" max="2147483647" step="1" value="<?php echo esc_attr($editing_event['ticket_limit'] ?? 0); ?>">
+                            <p class="description">0 means unlimited. Couples use two places. Paid and complimentary tickets count; RSVPs alone do not. At capacity, members see SOLD OUT on their dashboard and Events page. VIPs are admitted even above the limit.</p>
+                        </td>
+                    </tr>
                     <tr>
                         <th>Ticket Price per Level</th>
                         <td>

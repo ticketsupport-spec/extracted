@@ -404,7 +404,7 @@ function mmgr_render_member_paid_events($member) {
         <?php else: ?>
             <?php foreach ($events as $event): ?>
                 <div class="mmgr-paid-event" style="background:#f0faf5;border:1px solid #b7dfca;border-radius:14px;padding:16px;margin-bottom:12px;overflow-wrap:anywhere;">
-                    <span style="display:inline-block;background:#167443;color:#fff;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:bold;margin-bottom:8px;">PAID</span>
+                    <span style="display:inline-block;background:#167443;color:#fff;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:bold;margin-bottom:8px;"><?php echo !empty($event['vip_grant']) ? "VIP COMP'D" : 'PAID'; ?></span>
                     <h5 style="margin:0 0 6px;font-size:17px;"><?php echo esc_html($event['event_name']); ?></h5>
                     <time datetime="<?php echo esc_attr($event['event_date']); ?>" style="color:#43564b;font-size:14px;"><?php echo esc_html(date_i18n('F j, Y', strtotime($event['event_date']))); ?></time>
                     <?php if (!empty($event['start_time'])): ?>
@@ -435,6 +435,10 @@ function mmgr_render_buy_tickets_button($event, $member) {
     }
     if (empty($event['tickets_enabled'])) {
         return '';
+    }
+    if (!mmgr_event_has_ticket_capacity($event, $member)) {
+        return '<span class="mmgr-sold-out-status" aria-disabled="true"'
+            . ' style="display:inline-block;margin-bottom:12px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:bold;background:#666;color:white;">SOLD OUT</span>';
     }
     return '<a href="' . esc_url(mmgr_event_tickets_url((int) $event['id'], $member)) . '" class="mmgr-buy-tickets-btn"'
         . ' style="display:inline-block;margin-bottom:12px;padding:8px 16px;border:none;border-radius:6px;font-size:13px;font-weight:bold;background:#ff9800;color:white;text-decoration:none;">'
@@ -478,6 +482,10 @@ function mmgr_render_event_tickets_page($member, $event_id) {
             <div class="mmgr-portal-card">
                 <p style="text-align:center;color:#666;">Tickets are not available for this event.</p>
             </div>
+        <?php elseif (mmgr_member_has_paid_event_ticket((int) $member['id'], (int) $event['id'])): ?>
+            <div class="mmgr-portal-card"><p><?php echo !empty($member['vip']) ? "VIP COMP'D TICKET — " : ''; ?>YOU ARE GOING. You already have a ticket to this event.</p></div>
+        <?php elseif (!mmgr_event_has_ticket_capacity($event, $member)): ?>
+            <div class="mmgr-portal-card"><p>SOLD OUT — There are not enough places available for your ticket.</p></div>
         <?php else:
             $calc = mmgr_calculate_event_ticket_total($event, $member);
         ?>

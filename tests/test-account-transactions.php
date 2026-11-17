@@ -43,6 +43,7 @@ class AccountDatabase {
     public $visits = array();
     public $queries = array();
     public $fail = '';
+    public $last_error = '';
     public $engines = array();
     public $levels = array('Single', 'Couple', 'Male', 'Female');
     private $snapshot;
@@ -82,10 +83,10 @@ class AccountDatabase {
             return 1;
         }
         if ($query === 'START TRANSACTION') {
-            $this->snapshot = array($this->members, $this->tickets, $this->rsvps, $this->ledger);
+            $this->snapshot = array($this->members, $this->tickets, $this->rsvps, $this->ledger, $this->events);
         } elseif ($query === 'ROLLBACK') {
             if ($this->snapshot !== null) {
-                list($this->members, $this->tickets, $this->rsvps, $this->ledger) = $this->snapshot;
+                list($this->members, $this->tickets, $this->rsvps, $this->ledger, $this->events) = $this->snapshot;
             }
             $this->snapshot = null;
         } elseif ($query === 'COMMIT') {
@@ -102,10 +103,23 @@ class AccountDatabase {
             return array('Engine' => $this->engines[$matches[1]] ?? 'InnoDB');
         }
         preg_match('/id = (\d+)/', $query, $matches);
+        if (str_contains($query, 'FROM wp_membership_events ')) {
+            return $this->events[(int) ($matches[1] ?? 0)] ?? null;
+        }
         return $this->members[(int) ($matches[1] ?? 0)] ?? null;
     }
     public function get_var($query) {
         $this->queries[] = $query;
+        if (str_contains($query, 'COALESCE(SUM(')) {
+            preg_match('/t.event_id = (\d+)/', $query, $matches);
+            $total = 0;
+            foreach ($this->tickets as $id => $tickets) {
+                if (isset($tickets[$matches[1]])) {
+                    $total += stripos($this->members[$id]['level'] ?? '', 'couple') !== false ? 2 : 1;
+                }
+            }
+            return $total;
+        }
         if (str_contains($query, 'FROM wp_membership_levels')) {
             preg_match("/level_name = '([^']+)'/", $query, $matches);
             return in_array($matches[1] ?? '', $this->levels, true) ? $matches[1] : null;
@@ -141,6 +155,18 @@ class AccountDatabase {
     }
     public function get_results($query, $format) {
         $this->queries[] = $query;
+        $this->last_error = '';
+        if (($this->fail === 'vip_members_read' && str_contains($query, 'SELECT id, vip, level')) ||
+            ($this->fail === 'vip_events_read' && str_contains($query, 'SELECT e.*'))) {
+            $this->last_error = 'Read failed';
+            return array();
+        }
+        if (str_contains($query, 'SELECT id, vip, level FROM wp_memberships')) {
+            preg_match('/WHERE id = (\d+)/', $query, $matches);
+            return array_values(array_filter($this->members, function($member) use ($matches) {
+                return isset($matches[1]) ? $member['id'] == $matches[1] : !empty($member['vip']);
+            }));
+        }
         if (str_contains($query, 'FROM wp_membership_levels')) {
             return array_map(function($level) { return array('level_name' => $level, 'price' => 150); }, $this->levels);
         }
@@ -149,9 +175,15 @@ class AccountDatabase {
             $id = (int) $matches[1];
             $rows = array();
             foreach ($this->events as $event) {
-                if ($event['active'] && $event['event_date'] >= substr(current_time('mysql'), 0, 10) &&
-                    ($event['tickets_enabled'] || isset($this->tickets[$id][$event['id']]))) {
-                    $rows[] = array_merge($event, array('paid_ticket_id' => $this->tickets[$id][$event['id']]['id'] ?? null));
+                $sync = str_contains($query, 'SELECT e.*');
+                preg_match('/AND e.id = (\d+)/', $query, $event_match);
+                if ((!$sync || !isset($event_match[1]) || $event['id'] == $event_match[1]) &&
+                    ($sync || $event['active']) && $event['event_date'] >= substr(current_time('mysql'), 0, 10) &&
+                    ($sync || $event['tickets_enabled'] || isset($this->tickets[$id][$event['id']]))) {
+                    $rows[] = array_merge($event, array(
+                        'paid_ticket_id' => $this->tickets[$id][$event['id']]['id'] ?? null,
+                        'vip_grant' => $this->tickets[$id][$event['id']]['vip_grant'] ?? 0,
+                    ));
                 }
             }
             return $rows;
@@ -192,6 +224,10 @@ class AccountDatabase {
     }
     public function update($table, $data, $where) {
         if ($this->fail === 'member') { return false; }
+        if ($table === 'wp_membership_events') {
+            $this->events[$where['id']] = array_merge($this->events[$where['id']], $data);
+            return 1;
+        }
         $this->members[$where['id']] = array_merge($this->members[$where['id']], $data);
         return 1;
     }
@@ -209,7 +245,11 @@ class AccountDatabase {
             $this->ledger[] = array_merge($data, array('id' => $this->insert_id));
         } elseif ($table === 'wp_membership_member_event_tickets') {
             if ($this->fail === 'ticket') { return false; }
-            $this->tickets[$data['member_id']][$data['event_id']] = array_merge($data, array('id' => 99));
+            $this->insert_id = 100 + count($this->ledger);
+            $this->tickets[$data['member_id']][$data['event_id']] = array_merge($data, array('id' => $this->insert_id));
+        } elseif ($table === 'wp_membership_events') {
+            $this->insert_id = max(array_keys($this->events)) + 1;
+            $this->events[$this->insert_id] = array_merge($data, array('id' => $this->insert_id));
         } elseif ($table === 'wp_membership_event_rsvps') {
             if ($this->fail === 'rsvp') { return false; }
             $this->rsvps[$data['member_id']][$data['event_id']] = $data;
@@ -219,6 +259,14 @@ class AccountDatabase {
         return 1;
     }
     public function delete($table, $where, $formats = null) {
+        if (isset($where['id'])) {
+            foreach ($this->tickets as $member_id => $tickets) {
+                foreach ($tickets as $event_id => $ticket) {
+                    if ($ticket['id'] === $where['id']) { unset($this->tickets[$member_id][$event_id]); }
+                }
+            }
+            return 1;
+        }
         unset($this->tickets[$where['member_id']][$where['event_id']]);
         return 1;
     }
@@ -237,8 +285,10 @@ function account_form($overrides = array(), $editing = true) {
         'level' => $member['level'], 'start_date' => $member['start_date'], 'expire_date' => $member['expire_date'],
         'amount_paid' => $member['payment_amount'], 'member_nonce' => 'valid',
         'mmgr_save_member' => 1, 'account_operation_key' => bin2hex(random_bytes(16)),
-    ), !empty($member['paid']) ? array('paid' => 1) : array(), $overrides);
+    ), !empty($member['paid']) ? array('paid' => 1) : array(),
+        !empty($member['vip']) ? array('vip' => 1) : array(), $overrides);
     if (isset($_POST['paid']) && $_POST['paid'] === null) { unset($_POST['paid']); }
+    if (isset($_POST['vip']) && $_POST['vip'] === null) { unset($_POST['vip']); }
     ob_start();
     include __DIR__ . '/../membership-manager-qr/includes/admin/add-edit-member.php';
     return ob_get_clean();
@@ -619,4 +669,79 @@ expect(str_contains($html, '<h3 style="margin:0;font-size:32px;">3</h3>') && cou
 $visit_source = file_get_contents(__DIR__ . '/../membership-manager-qr/includes/admin/visit-logs.php');
 expect(str_contains($visit_source, "WHERE v.daily_fee > 0 AND v.notes LIKE 'PAID%'\n"),
     'Visit CSV export uses the same positive paid visit filter');
+
+// VIP tickets are durable, audited COMPs, including future events and sold-out events.
+$wpdb = new AccountDatabase('Couple');
+$wpdb->events[5]['ticket_limit'] = 1;
+$wpdb->events[6]['tickets_enabled'] = 0;
+$wpdb->events[6]['ticket_prices'] = '{}';
+$html = account_form(array('vip' => 1));
+expect(!str_contains($html, 'Member could not be saved') && $wpdb->members[7]['vip'] === 1,
+    'Admin can enable VIP on a member account');
+expect(count($wpdb->tickets[7]) === 2 && !empty($wpdb->tickets[7][5]['vip_grant']) &&
+    !empty($wpdb->tickets[7][6]['vip_grant']), 'VIP automatically gets comp tickets even above capacity and without ticket sales');
+expect(isset($wpdb->rsvps[7][5], $wpdb->rsvps[7][6]) && !isset($wpdb->tickets[7][8], $wpdb->tickets[7][9]),
+    'VIP grants create Going RSVPs only for active upcoming events');
+expect(count($wpdb->ledger) === 2 && $wpdb->ledger[0]['activity'] === 'ticket_comp' &&
+    $wpdb->ledger[0]['amount'] === 0 && $wpdb->ledger[0]['payment_method'] === 'COMP' &&
+    str_contains($wpdb->ledger[0]['description'], "VIP COMP'D TICKET"), 'VIP grants have explicit zero-dollar audit records');
+expect(!$wpdb->members[7]['paid'] && mmgr_account_revenue('2028-01-31') === 0.0, 'VIP does not pay membership or inflate revenue');
+$tickets = $wpdb->tickets;
+account_form(array('mmgr_paid_tickets_present' => 1));
+expect($wpdb->tickets === $tickets && count($wpdb->ledger) === 2, 'VIP form resaves retain automatic tickets without duplicate grants or logs');
+$new_event = array_merge($wpdb->events[6], array('event_name' => 'New VIP party', 'ticket_limit' => 1));
+unset($new_event['id']);
+$new_event_id = mmgr_save_admin_event(0, $new_event);
+expect($new_event_id && isset($wpdb->tickets[7][$new_event_id]) &&
+    count($wpdb->ledger) === 3, 'Creating a new event immediately grants tickets to existing VIPs');
+expect(mmgr_save_admin_event($new_event_id, array('event_name' => 'Renamed VIP party')) === $new_event_id &&
+    count($wpdb->ledger) === 3, 'Editing an event does not duplicate VIP grants');
+$wpdb->tickets[7][8] = array('id' => 8, 'vip_grant' => 1);
+$wpdb->events[6]['active'] = 0;
+account_form(array('vip' => null));
+expect(empty($wpdb->members[7]['vip']) && count($wpdb->tickets[7]) === 1 &&
+    isset($wpdb->tickets[7][8]), 'Removing VIP revokes only automatic upcoming tickets, including inactive events');
+expect(count($wpdb->ledger) === 6 && isset($wpdb->rsvps[7][5], $wpdb->rsvps[7][6]),
+    'VIP removal logs revocations and preserves Going history');
+account_form(array('vip' => 1));
+expect(isset($wpdb->tickets[7][5], $wpdb->tickets[7][$new_event_id]) &&
+    count($wpdb->ledger) === 8, 'Re-enabling VIP creates fresh grants without audit-key collisions');
+
+$wpdb = new AccountDatabase();
+account_form(array('mmgr_paid_tickets_present' => 1, 'paid_event_ids' => array('5')));
+$original = $wpdb->tickets[7][5];
+account_form(array('vip' => 1));
+account_form(array('vip' => null));
+expect($wpdb->tickets[7][5] === $original && count($wpdb->tickets[7]) === 1,
+    'VIP enable and removal preserve separately purchased tickets');
+
+foreach (array('ticket', 'rsvp', 'ledger', 'second_log', 'commit', 'vip_members_read', 'vip_events_read') as $failure) {
+    $wpdb = new AccountDatabase();
+    $before = $wpdb->members;
+    $wpdb->fail = $failure;
+    $html = account_form(array('vip' => 1));
+    expect($wpdb->members === $before && !$wpdb->tickets && !$wpdb->rsvps && !$wpdb->ledger &&
+        str_contains($html, 'Member could not be saved'), "$failure failure rolls back VIP status and every automatic grant");
+}
+$wpdb = new AccountDatabase();
+account_form(array('vip' => 1));
+$before = array($wpdb->events, $wpdb->tickets, $wpdb->rsvps, $wpdb->ledger);
+$wpdb->fail = 'ledger';
+expect(mmgr_save_admin_event(0, $new_event) === false &&
+    array($wpdb->events, $wpdb->tickets, $wpdb->rsvps, $wpdb->ledger) === $before,
+    'Failed VIP grant rolls back new event and related records');
+
+// Capacity enforcement is part of the same transaction as the account and ledger.
+foreach (array('paid', 'comp') as $method) {
+    $wpdb = new AccountDatabase('Couple');
+    $wpdb->events[5]['ticket_limit'] = 1;
+    $before = $wpdb->members;
+    $html = account_form(array('first_name' => 'Changed', 'mmgr_paid_tickets_present' => 1,
+        'paid_event_ids' => array('5'), 'ticket_methods' => array(5 => $method)));
+    expect($wpdb->members === $before && !$wpdb->ledger && !$wpdb->tickets && !$wpdb->rsvps &&
+        str_contains($html, 'Check event capacity'), "Over-capacity $method assignment rolls back member, ticket and ledger changes");
+    expect((bool) array_filter($wpdb->queries, function($query) {
+        return str_contains($query, 'SUM(CASE') && str_ends_with($query, 'FOR UPDATE');
+    }), 'Capacity assignments use a current locking read, not a stale transaction snapshot');
+}
 echo "\nResults: $passed passed, 0 failed\n";
