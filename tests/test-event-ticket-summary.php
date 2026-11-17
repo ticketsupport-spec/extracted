@@ -74,6 +74,8 @@ require __DIR__ . '/../membership-manager-qr/includes/admin/events-page.php';
 $html = ob_get_clean();
 expect($wpdb->summary_queries === $queries_before + 1, 'Admin listing loads summaries once, not once per event');
 expect(str_contains($html, '<th>Tickets Sold</th>'), 'Admin events list has a ticket sales column');
+expect(str_contains($html, 'name="ticket_limit"') && str_contains($html, 'Couples use two places'),
+    'Admin event editor exposes a people-based capacity setting');
 expect(str_contains($html, 'Total: 19') && str_contains($html, 'Single men: 4') && str_contains($html, 'Single ladies: 3') && str_contains($html, 'Couples: 5'), 'Admin shows total and all requested categories');
 expect(str_contains($html, 'Other / unspecified: 2'), 'Unclassified tickets remain visible in the breakdown');
 expect(str_contains($html, 'Total: 0') && str_contains($html, 'Single men: 0') && str_contains($html, 'Single ladies: 0') && str_contains($html, 'Couples: 0'), 'Events without sales show zeros even when ticket sales are disabled');

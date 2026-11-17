@@ -114,6 +114,7 @@ if (!isset($_POST['mmgr_note_action']) && isset($_POST['mmgr_save_member'])) {
             'start_date' => sanitize_text_field($_POST['start_date']),
             'expire_date' => sanitize_text_field($_POST['expire_date']) ?: null,
             'paid' => isset($_POST['paid']) ? 1 : 0,
+            'vip' => isset($_POST['vip']) ? 1 : 0,
             'payment_amount' => floatval($_POST['amount_paid'] ?? 0),
         );
         // Remove null values so MySQL uses column defaults
@@ -142,7 +143,7 @@ if (!isset($_POST['mmgr_note_action']) && isset($_POST['mmgr_save_member'])) {
         }
 
         if ($member_saved === false) {
-            echo '<div class="notice notice-error"><p>Member could not be saved. No membership or ticket changes were committed. Check the amount, event prices and selections, then try again. For a couples-to-single conversion, select a configured single membership level and enter the retained person\'s first name, last name and valid date of birth. If this persists, verify database access and InnoDB storage support. Any submitted note has not been saved.</p></div>';
+            echo '<div class="notice notice-error"><p>Member could not be saved. No membership or ticket changes were committed. Check event capacity (couples need two places), the amount, event prices and selections, then try again. For a couples-to-single conversion, select a configured single membership level and enter the retained person\'s first name, last name and valid date of birth. If this persists, verify database access and InnoDB storage support. Any submitted note has not been saved.</p></div>';
         } elseif ($editing) {
             
             // Handle password management
@@ -412,6 +413,13 @@ if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', 
                 <th><label for="amount_paid">Amount Paid</label></th>
                 <td><input type="number" name="amount_paid" id="amount_paid" step="0.01" value="<?php echo esc_attr($member['payment_amount'] ?? '0.00'); ?>"></td>
             </tr>
+            <tr>
+                <th><label for="vip">VIP Event Access</label></th>
+                <td>
+                    <label><input type="checkbox" name="vip" id="vip" value="1" <?php checked($member['vip'] ?? 0, 1); ?>> Automatically COMP tickets to all upcoming events</label>
+                    <p class="description">Includes newly created events and sold-out events. VIP places count toward capacity but may exceed it. This does not change membership payment or expiry. Removing VIP revokes automatic upcoming tickets, not separately purchased or manually comped tickets.</p>
+                </td>
+            </tr>
             
             <tr>
                 <th><label for="newsletter">Newsletter</label></th>
@@ -431,6 +439,10 @@ if ($editing && $member && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', 
                         <p class="description">Check an event and select Paid or COMP before saving. Paid records the configured price for the selected membership level (couple price is per couple). COMP grants free access and records COMP'D TICKET. Existing ticket status is retained on resave; unchecking revokes access, not a refund, and retains its RSVP and audit history.</p>
                         <?php if ($ticket_options): ?>
                             <?php foreach ($ticket_options as $ticket_event): ?>
+                                <?php if (!empty($ticket_event['vip_grant'])): ?>
+                                    <p><?php echo esc_html($ticket_event['event_name']); ?> — <strong>VIP COMP'D TICKET</strong> (automatic)</p>
+                                    <?php continue; ?>
+                                <?php endif; ?>
                                 <label style="display:block;margin:10px 0;">
                                     <input type="checkbox" name="paid_event_ids[]" value="<?php echo esc_attr($ticket_event['id']); ?>" <?php checked(!empty($ticket_event['paid_ticket_id'])); ?>>
                                     <?php echo esc_html($ticket_event['event_name']); ?>

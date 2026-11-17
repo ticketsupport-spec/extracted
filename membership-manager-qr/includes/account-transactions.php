@@ -44,7 +44,7 @@ function mmgr_ensure_account_grant_storage($with_tickets) {
     global $wpdb;
     $tables = array('memberships', 'membership_account_transactions');
     if ($with_tickets) {
-        $tables = array_merge($tables, array('membership_member_event_tickets', 'membership_event_rsvps'));
+        $tables = array_merge($tables, array('membership_member_event_tickets', 'membership_event_rsvps', 'membership_events'));
     }
     foreach ($tables as $suffix) {
         $table = $wpdb->prefix . $suffix;
@@ -57,7 +57,7 @@ function mmgr_ensure_account_grant_storage($with_tickets) {
         }
         // Older portal tables inherited the server default, which could be MyISAM.
         // Convert before START TRANSACTION: ALTER TABLE implicitly commits.
-        if (!in_array($suffix, array('membership_member_event_tickets', 'membership_event_rsvps'), true) ||
+        if (!in_array($suffix, array('membership_member_event_tickets', 'membership_event_rsvps', 'membership_events'), true) ||
             $wpdb->query("ALTER TABLE `$table` ENGINE=InnoDB") === false) {
             return false;
         }
@@ -67,6 +67,92 @@ function mmgr_ensure_account_grant_storage($with_tickets) {
         }
     }
     return true;
+}
+
+/**
+ * Synchronize automatic VIP grants inside the caller's transaction.
+ * Real ticket rows keep check-in, private notes, Going and ticket totals consistent.
+ */
+function mmgr_sync_vip_event_tickets($member_id = 0, $event_id = 0) {
+    global $wpdb;
+    $members = $wpdb->get_results(
+        "SELECT id, vip, level FROM {$wpdb->prefix}memberships WHERE " .
+        ($member_id ? $wpdb->prepare('id = %d', $member_id) : 'vip = 1') . ' ORDER BY id FOR UPDATE',
+        ARRAY_A
+    );
+    if ($members === null || !empty($wpdb->last_error)) {
+        return false;
+    }
+    $tickets = $wpdb->prefix . 'membership_member_event_tickets';
+    foreach ($members as $member) {
+        $events = $wpdb->get_results($wpdb->prepare(
+            "SELECT e.*, t.id AS paid_ticket_id, t.vip_grant
+             FROM {$wpdb->prefix}membership_events e
+             LEFT JOIN $tickets t ON t.event_id = e.id AND t.member_id = %d
+             WHERE e.event_date >= %s" .
+             ($event_id ? $wpdb->prepare(' AND e.id = %d', $event_id) : '') .
+             ' ORDER BY e.id FOR UPDATE',
+            (int) $member['id'], substr(current_time('mysql'), 0, 10)
+        ), ARRAY_A);
+        if ($events === null || !empty($wpdb->last_error)) {
+            return false;
+        }
+        foreach ($events as $event) {
+            $id = (int) $event['id'];
+            $grant = !empty($member['vip']) && !empty($event['active']);
+            if ($grant && empty($event['paid_ticket_id'])) {
+                if ($wpdb->insert($tickets, array(
+                    'member_id' => $member['id'], 'event_id' => $id,
+                    'vip_grant' => 1, 'created_at' => current_time('mysql'),
+                    'created_by' => get_current_user_id(),
+                )) === false) {
+                    return false;
+                }
+                $ticket_id = (int) $wpdb->insert_id;
+                if (!mmgr_record_account_transaction($member['id'], 'ticket_comp', 0, 'COMP',
+                    "VIP COMP'D TICKET — " . $event['event_name'] . ' (' . $event['event_date'] . ') — ' . $member['level'],
+                    'vip:grant:' . $ticket_id, $id)) {
+                    return false;
+                }
+            } elseif (empty($member['vip']) && !empty($event['vip_grant'])) {
+                if ($wpdb->delete($tickets, array('id' => $event['paid_ticket_id']), array('%d')) === false ||
+                    !mmgr_record_account_transaction($member['id'], 'ticket_removed', 0, 'Admin',
+                        'VIP TICKET ACCESS REMOVED (not a refund) — ' . $event['event_name'] . ' (' . $event['event_date'] . ')',
+                        'vip:remove:' . $event['paid_ticket_id'], $id)) {
+                    return false;
+                }
+            }
+            if ($grant) {
+                $rsvps = $wpdb->prefix . 'membership_event_rsvps';
+                $existing = $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM $rsvps WHERE event_id = %d AND member_id = %d", $id, (int) $member['id']
+                ));
+                if (!$existing && $wpdb->insert($rsvps, array(
+                    'member_id' => $member['id'], 'event_id' => $id, 'created_at' => current_time('mysql'),
+                )) === false) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+function mmgr_save_admin_event($event_id, $data) {
+    global $wpdb;
+    if (!current_user_can('manage_options') || !mmgr_ensure_account_transactions_table() ||
+        !mmgr_ensure_account_grant_storage(true) || $wpdb->query('START TRANSACTION') === false) {
+        return false;
+    }
+    $table = $wpdb->prefix . 'membership_events';
+    $saved = $event_id ? $wpdb->update($table, $data, array('id' => $event_id)) : $wpdb->insert($table, $data);
+    $event_id = $event_id ?: (int) $wpdb->insert_id;
+    if ($saved === false || !$event_id || !mmgr_sync_vip_event_tickets(0, $event_id) ||
+        $wpdb->query('COMMIT') === false) {
+        $wpdb->query('ROLLBACK');
+        return false;
+    }
+    return $event_id;
 }
 
 function mmgr_comp_expiry($start, $months) {
@@ -94,7 +180,7 @@ function mmgr_save_admin_account($member_id, $data, $request) {
         (isset($request['amount_paid']) && !is_numeric($request['amount_paid'])) ||
         !is_finite((float) $data['payment_amount']) || $data['payment_amount'] < 0 || $data['payment_amount'] > 99999999.99 ||
         !mmgr_ensure_account_transactions_table() ||
-        !mmgr_ensure_account_grant_storage(isset($request['mmgr_paid_tickets_present'])) ||
+        !mmgr_ensure_account_grant_storage(isset($request['mmgr_paid_tickets_present']) || array_key_exists('vip', $data)) ||
         $wpdb->query('START TRANSACTION') === false) {
         return false;
     }
@@ -205,6 +291,9 @@ function mmgr_save_admin_account($member_id, $data, $request) {
                 throw new RuntimeException('Ticket save failed');
             }
             foreach ($before as $event) {
+                if (!empty($event['vip_grant'])) {
+                    continue;
+                }
                 $id = (int) $event['id'];
                 $selected = in_array($id, $ids, true);
                 if ($selected === !empty($event['paid_ticket_id'])) {
@@ -233,6 +322,9 @@ function mmgr_save_admin_account($member_id, $data, $request) {
                     throw new RuntimeException('Ticket log failed');
                 }
             }
+        }
+        if (array_key_exists('vip', $data) && !mmgr_sync_vip_event_tickets($member_id)) {
+            throw new RuntimeException('VIP ticket sync failed');
         }
         if ($wpdb->query('COMMIT') === false) {
             throw new RuntimeException('Commit failed');

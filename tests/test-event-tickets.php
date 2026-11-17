@@ -47,6 +47,7 @@ class TestDatabase {
     public $backfill_runs = 0;
     public $write_fails = false;
     public $writes = 0;
+    public $members = array();
 
     public function prepare($query, ...$args) {
         if (count($args) === 1 && is_array($args[0])) {
@@ -58,6 +59,16 @@ class TestDatabase {
         return $query;
     }
     public function get_var($query) {
+        if (str_contains($query, 'COALESCE(SUM(')) {
+            preg_match('/t.event_id = (\d+)/', $query, $m);
+            $total = 0;
+            foreach ($this->tickets as $member_id => $tickets) {
+                if (isset($tickets[$m[1]])) {
+                    $total += stripos($this->members[$member_id]['level'] ?? '', 'couple') !== false ? 2 : 1;
+                }
+            }
+            return $total;
+        }
         if (str_contains($query, 'FROM wp_membership_member_event_tickets')) {
             preg_match('/member_id = (\d+) AND event_id = (\d+)/', $query, $m);
             return isset($this->tickets[$m[1]][$m[2]]) ? 1 : null;
@@ -74,6 +85,9 @@ class TestDatabase {
     }
     public function get_row($query, $format) {
         preg_match('/id = (\d+)/', $query, $m);
+        if (str_contains($query, 'FROM wp_memberships ')) {
+            return $this->members[(int) $m[1]] ?? null;
+        }
         foreach ($this->events as $event) {
             if ((int) $event['id'] === (int) $m[1] && $event['active']) {
                 return $event;
@@ -214,6 +228,7 @@ $unpaid  = array('id' => 7, 'member_code' => 'CODE7', 'level' => 'Single', 'paid
 $paid    = array('id' => 8, 'member_code' => 'CODE8', 'level' => 'Couple', 'paid' => 1, 'expire_date' => '2099-01-01');
 $expired = array('id' => 9, 'member_code' => 'CODE9', 'level' => 'Single', 'paid' => 1, 'expire_date' => '2000-01-01');
 $youth   = array('id' => 10, 'member_code' => 'CODE10', 'level' => 'Youth', 'paid' => 1, 'expire_date' => null);
+$wpdb->members = array(7 => $unpaid, 8 => $paid, 9 => $expired, 10 => $youth);
 
 // Price decoding
 $prices = mmgr_get_event_ticket_prices($event);
@@ -382,5 +397,36 @@ expect(!isset($wpdb->rsvps[8][12]) && !isset($wpdb->rsvps[8][13]), 'Backfill doe
 $runs = $wpdb->backfill_runs;
 mmgr_backfill_paid_ticket_rsvps();
 expect($wpdb->backfill_runs === $runs, 'Successful backfill runs only once');
+
+// Capacity uses admissions, not purchases or RSVPs.
+$wpdb->tickets = array(8 => array(5 => array('created_at' => current_time('mysql'))));
+$wpdb->rsvps[9][5] = array('created_at' => current_time('mysql'));
+$wpdb->events = array(array_merge($event, array('ticket_limit' => 3)));
+$limited = $wpdb->events[0];
+expect(mmgr_event_has_ticket_capacity($limited, $unpaid), 'A single can use the final place after a couple');
+expect(!mmgr_event_has_ticket_capacity($limited, $paid), 'A couple needs two remaining places');
+expect(mmgr_event_has_ticket_capacity(array_merge($limited, array('ticket_limit' => 0)), $paid), 'Zero capacity setting means unlimited');
+expect(mmgr_event_has_ticket_capacity($limited, array_merge($paid, array('vip' => 1))), 'VIP capacity exemption applies even without two remaining places');
+expect(mmgr_save_member_paid_tickets(7, array('5')), 'Admin can assign the final available single ticket');
+expect(!mmgr_save_member_paid_tickets(9, array('5')), 'Admin cannot assign above the capacity');
+expect(!isset($wpdb->tickets[9][5]), 'Rejected over-capacity assignment does not create a ticket');
+$current_member = $expired;
+unset($_GET['tickets']);
+$html = $shortcodes['mmgr_upcoming_events'](array());
+expect(str_contains($html, 'SOLD OUT') && !str_contains($html, 'BUY TICKETS'), 'Dashboard replaces buy link at exactly the limit');
+$html = $shortcodes['mmgr_member_events']();
+expect(str_contains($html, 'SOLD OUT') && !str_contains($html, 'BUY TICKETS'), 'Events page replaces buy link at exactly the limit');
+$html = mmgr_render_event_tickets_page($expired, 5);
+expect(str_contains($html, 'SOLD OUT') && !str_contains($html, 'pay@example.com') && !str_contains($html, 'Cash in Person'), 'Direct sold-out ticket links hide payment instructions');
+expect(str_contains(mmgr_render_buy_tickets_button($limited, $paid), 'YOU ARE GOING'), 'Existing ticket remains valid at capacity');
+$wpdb->tickets[7][5]['vip_grant'] = 1;
+$wpdb->events[0]['vip_grant'] = 1;
+expect(str_contains(mmgr_render_member_paid_events($unpaid), "VIP COMP'D"), 'Automatic complimentary ticket cards identify VIP access');
+$wpdb->events[0]['vip_grant'] = 0;
+expect(mmgr_save_member_paid_tickets(7, array()), 'Admin can free a manually assigned place');
+expect(mmgr_event_has_ticket_capacity($limited, $expired), 'Removing a ticket reopens availability');
+expect(mmgr_save_member_paid_tickets(9, array('5')), 'A reopened place can be assigned');
+$wpdb->events[0]['ticket_limit'] = 1;
+expect(!mmgr_event_has_ticket_capacity($wpdb->events[0], $youth), 'Lowering limit below existing admissions leaves event sold out');
 
 echo "\nResults: $passed passed, 0 failed\n";

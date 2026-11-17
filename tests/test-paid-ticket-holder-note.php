@@ -20,6 +20,11 @@ function wp_nonce_field($action, $name) {}
 function wp_editor($value, $id, $settings) {}
 function checked($value, $expected) {}
 function mmgr_get_event_ticket_prices($event) { return array(); }
+function mmgr_save_admin_event($id, $data) {
+    global $wpdb;
+    return $id ? $wpdb->update('wp_membership_events', $data, array('id' => $id)) :
+        $wpdb->insert('wp_membership_events', $data);
+}
 
 class NoteDatabase {
     public $prefix = 'wp_';
@@ -75,6 +80,21 @@ expect($wpdb->events[2]['ticket_paid_holder_note'] === 'Different party', 'Editi
 $_POST['ticket_paid_holder_note'] = '';
 render_admin_event();
 expect($wpdb->events[1]['ticket_paid_holder_note'] === '', 'Event edit can clear the note');
+$_POST['ticket_limit'] = '125';
+render_admin_event();
+expect($wpdb->events[1]['ticket_limit'] === 125, 'Event edit persists an integer admission limit');
+$_GET['edit'] = 1;
+expect(str_contains(render_admin_event(), 'id="ticket_limit" min="0" max="2147483647" step="1" value="125"'),
+    'Event edit displays the saved admission limit');
+$writes = $wpdb->writes;
+foreach (array('-1', '1.5', 'many', '2147483648', array('10')) as $invalid_limit) {
+    $_POST['ticket_limit'] = $invalid_limit;
+    expect(str_contains(render_admin_event(), 'Ticket limit must be a whole number') &&
+        $wpdb->writes === $writes, 'Invalid admission limit is rejected without saving');
+}
+$_POST['ticket_limit'] = '0';
+render_admin_event();
+expect($wpdb->events[1]['ticket_limit'] === 0, 'Admin can clear the limit for unlimited availability');
 $writes = $wpdb->writes;
 $_POST['event_nonce'] = 'invalid';
 render_admin_event();

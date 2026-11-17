@@ -28,6 +28,24 @@ upcoming active events are also added when upgrading. Paid ticket holders see
 **YOU ARE GOING** instead of **BUY TICKETS**, even after ticket sales close.
 Removing a paid ticket does not remove the member's RSVP.
 
+In **Upcoming Events & Advertising → Edit Event**, set **Ticket Limit (People)**.
+Use `0` for unlimited availability. Each couple uses two places; other tickets
+use one. Both paid and complimentary tickets count, but Going RSVPs alone do not.
+At the limit, **BUY TICKETS** becomes a non-clickable **SOLD OUT** on the member
+dashboard and Events page. A couple also sees SOLD OUT when only one place is
+left. Direct ticket-page links hide payment instructions when sold out. Admin
+ticket assignments cannot exceed the limit; existing tickets remain valid if
+the limit is lowered.
+
+In **Memberships → Add / Edit Member**, enable **VIP Event Access** and save.
+VIPs automatically receive **VIP COMP'D** tickets and Going RSVPs for all active
+upcoming events, including events created later and events not selling tickets.
+VIPs may exceed capacity, but their places count toward the limit for others.
+Automatic grants are logged as zero-dollar COMPs, never sales. VIP status does
+not pay or renew membership. Removing VIP revokes only automatic upcoming
+tickets (including inactive events); purchased/manual COMP tickets, past
+tickets, RSVPs and audit history are retained.
+
 In **Upcoming Events & Advertising → Edit Event**, set **PAID TICKET HOLDER
 NOTE** to share an address or other private details. The note appears only on
 that event's paid card under **Your upcoming events**, not in advertisements,
@@ -72,7 +90,7 @@ and historical account transactions. These actions require administrator
 permission and a valid form nonce.
 
 Atomic grants require InnoDB storage. New ticket/RSVP tables explicitly use
-InnoDB; older ticket/RSVP tables using another engine are converted before the
+InnoDB; older ticket/RSVP/event tables using another engine are converted before the
 transaction starts. If engine verification or conversion fails, the account
 save is refused rather than granting access without a durable audit record.
 This ledger records the Add / Edit Member workflow; other pre-existing payment

@@ -341,15 +341,23 @@ function mmgr_create_portal_tables() {
         event_id INT NOT NULL,
         created_at DATETIME NOT NULL,
         created_by INT NOT NULL,
+        vip_grant TINYINT(1) NOT NULL DEFAULT 0,
         UNIQUE KEY unique_member_event (member_id, event_id),
         INDEX idx_event_id (event_id)
     ) ENGINE=InnoDB $charset_collate");
+
+    foreach (array($memberships_tbl => 'vip', $event_tickets_tbl => 'vip_grant') as $table => $column) {
+        if (!$wpdb->get_var("SHOW COLUMNS FROM `$table` LIKE '$column'")) {
+            $wpdb->query("ALTER TABLE `$table` ADD COLUMN `$column` TINYINT(1) NOT NULL DEFAULT 0");
+        }
+    }
 
     // Ticket sale columns for upcoming events
     $events_tbl = $wpdb->prefix . 'membership_events';
     if ($wpdb->get_var("SHOW TABLES LIKE '" . esc_sql($events_tbl) . "'") === $events_tbl) {
         $ticket_cols = array(
             'tickets_enabled'        => "ADD COLUMN `tickets_enabled` TINYINT(1) NOT NULL DEFAULT 0",
+            'ticket_limit'           => "ADD COLUMN `ticket_limit` INT UNSIGNED NOT NULL DEFAULT 0",
             'ticket_prices'          => "ADD COLUMN `ticket_prices` TEXT NULL DEFAULT NULL",
             'ticket_pay_cash'        => "ADD COLUMN `ticket_pay_cash` TINYINT(1) NOT NULL DEFAULT 0",
             'ticket_pay_etransfer'   => "ADD COLUMN `ticket_pay_etransfer` TINYINT(1) NOT NULL DEFAULT 0",
@@ -475,6 +483,29 @@ function mmgr_get_event_ticket_sales_summaries() {
 }
 
 /**
+ * Ticket rows, not RSVPs, consume places. Couples use two admissions.
+ */
+function mmgr_event_has_ticket_capacity($event, $member = null, $for_update = false) {
+    $limit = (int) ($event['ticket_limit'] ?? 0);
+    if ($limit === 0 || !empty($member['vip'])) {
+        return true;
+    }
+    global $wpdb;
+    $used = $wpdb->get_var($wpdb->prepare(
+        "SELECT COALESCE(SUM(CASE WHEN LOWER(TRIM(m.level)) LIKE '%%couple%%' THEN 2 ELSE 1 END), 0)
+         FROM {$wpdb->prefix}membership_member_event_tickets t
+         LEFT JOIN {$wpdb->prefix}memberships m ON m.id = t.member_id
+         WHERE t.event_id = %d" . ($for_update ? ' FOR UPDATE' : ''),
+        (int) $event['id']
+    ));
+    if ($used === null) {
+        throw new RuntimeException('Unable to load event ticket availability. Please try again.');
+    }
+    $required = $member && strpos(strtolower(trim($member['level'] ?? '')), 'couple') !== false ? 2 : 1;
+    return (int) $used + $required <= $limit;
+}
+
+/**
  * Today's active events and whether a member has a paid ticket for each.
  */
 function mmgr_get_member_today_event_ticket_statuses($member_id) {
@@ -499,7 +530,8 @@ function mmgr_get_member_today_event_ticket_statuses($member_id) {
 function mmgr_get_member_ticket_options($member_id) {
     global $wpdb;
     return $wpdb->get_results($wpdb->prepare(
-        "SELECT e.id, e.event_name, e.event_date, e.ticket_prices, t.id AS paid_ticket_id
+        "SELECT e.id, e.event_name, e.event_date, e.ticket_prices, e.ticket_limit,
+                t.id AS paid_ticket_id, t.vip_grant
          FROM {$wpdb->prefix}membership_events e
          LEFT JOIN {$wpdb->prefix}membership_member_event_tickets t
            ON t.event_id = e.id AND t.member_id = %d
@@ -519,7 +551,7 @@ function mmgr_save_member_paid_tickets($member_id, $event_ids) {
     }
     global $wpdb;
     $options = mmgr_get_member_ticket_options($member_id);
-    if ($options === null) {
+    if ($options === null || !empty($wpdb->last_error)) {
         return false;
     }
     $selected = array();
@@ -537,7 +569,20 @@ function mmgr_save_member_paid_tickets($member_id, $event_ids) {
     $table = $wpdb->prefix . 'membership_member_event_tickets';
     foreach ($options as $event) {
         $event_id = (int) $event['id'];
+        if (!empty($event['vip_grant'])) {
+            continue;
+        }
         if (in_array($event_id, $selected, true) && empty($event['paid_ticket_id'])) {
+            // The caller's account transaction holds this lock until commit.
+            $locked_event = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}membership_events WHERE id = %d FOR UPDATE", $event_id
+            ), ARRAY_A);
+            $member = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}memberships WHERE id = %d", $member_id
+            ), ARRAY_A);
+            if (!$locked_event || !$member || !mmgr_event_has_ticket_capacity($locked_event, $member, true)) {
+                return false;
+            }
             if ($wpdb->insert($table, array(
                 'member_id' => $member_id,
                 'event_id' => $event_id,
@@ -575,7 +620,7 @@ function mmgr_save_member_paid_tickets($member_id, $event_ids) {
 function mmgr_get_member_paid_events($member_id) {
     global $wpdb;
     return $wpdb->get_results($wpdb->prepare(
-        "SELECT e.id, e.event_name, e.event_date, e.start_time, e.ticket_paid_holder_note
+        "SELECT e.id, e.event_name, e.event_date, e.start_time, e.ticket_paid_holder_note, t.vip_grant
          FROM {$wpdb->prefix}membership_events e
          INNER JOIN {$wpdb->prefix}membership_member_event_tickets t ON t.event_id = e.id
          WHERE t.member_id = %d AND e.active = 1 AND e.event_date >= %s
