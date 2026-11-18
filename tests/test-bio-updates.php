@@ -34,6 +34,9 @@ function esc_url($value) { return esc_html($value); }
 function admin_url($path) { return 'https://example.com/wp-admin/' . $path; }
 function add_query_arg($key, $value, $url = 'https://example.com/member-profile/') { return $url . '&' . $key . '=' . $value; }
 function wp_die($message) { throw new RuntimeException($message); }
+function wp_nonce_field($action) { echo '<input type="hidden" name="_wpnonce" value="test">'; }
+function check_admin_referer($action) { global $valid_nonce; if (!$valid_nonce) throw new RuntimeException('Invalid nonce'); return 1; }
+function wp_safe_redirect($url) { throw new BioResponse(true, $url); }
 function mmgr_get_current_member() { global $wpdb, $logged_in; return $logged_in ? array_merge($wpdb->member, array('id' => 7)) : null; }
 function mmgr_enforce_usercod($member) {}
 function nocache_headers() {}
@@ -143,6 +146,10 @@ class BioDatabase {
         $this->writes[] = $sql;
         if ($this->fail === 'create' && strpos($sql, 'CREATE TABLE') === 0) return false;
         if ($this->fail === 'commit' && $sql === 'COMMIT') return false;
+        if (strpos($sql, 'DELETE FROM `wp_membership_bio_updates`') === 0) {
+            if ($this->fail === 'clear') return false;
+            $this->updates = array();
+        }
         if ($sql === 'START TRANSACTION') $this->transaction = array($this->member, $this->values, $this->photos, $this->orientations, $this->updates);
         if ($sql === 'ROLLBACK' && $this->transaction) {
             list($this->member, $this->values, $this->photos, $this->orientations, $this->updates) = $this->transaction;
@@ -305,6 +312,7 @@ $html = ob_get_clean();
 expect(strpos($html, '<script>') === false && strpos($html, '&lt;script&gt;bad') !== false, 'Changed text is escaped in the admin history');
 expect(strpos($html, '&lt;b&gt;Member&lt;/b&gt;') !== false && strpos($html, 'custom.png') !== false, 'Member names are escaped and image history is displayed');
 expect(strpos($html, 'New</span>') !== false && strpos($html, '>Next</a>') !== false, 'New indicators and pagination render from the loaded snapshot');
+expect(strpos($html, 'name="action" value="mmgr_clear_bio_updates"') !== false && strpos($html, 'Clear All') !== false && strpos($html, 'mmgr_clear_bio_updates') !== false, 'Clear All form is shown with its action and nonce');
 $_GET['paged'] = 2;
 mmgr_admin_bio_updates_load();
 $_GET['paged'] = 1;
@@ -327,7 +335,27 @@ $writes = count($wpdb->writes);
 try { mmgr_admin_bio_updates_load(); } catch (RuntimeException $error) { expect($error->getMessage() === 'Permission denied.', 'Non-admin load is denied'); }
 try { mmgr_admin_bio_updates_page(); } catch (RuntimeException $error) { expect($error->getMessage() === 'Permission denied.', 'Non-admin rendering is denied'); }
 expect(count($wpdb->writes) === $writes, 'Non-admin access cannot change unread state');
+$request_method = $_SERVER['REQUEST_METHOD'] ?? null;
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$writes = count($wpdb->writes);
+try { mmgr_handle_clear_bio_updates(); } catch (RuntimeException $error) { expect($error->getMessage() === 'Permission denied.', 'Non-admin clear is denied'); }
+expect(count($wpdb->writes) === $writes, 'Non-admin clear cannot delete update history');
+$can_manage = true;
+$valid_nonce = false;
+try { mmgr_handle_clear_bio_updates(); } catch (RuntimeException $error) { expect($error->getMessage() === 'Invalid nonce', 'Clear requires a valid nonce'); }
+expect(count($wpdb->writes) === $writes, 'Invalid nonce cannot delete update history');
+$valid_nonce = true;
+$wpdb->fail = 'clear';
+try { mmgr_handle_clear_bio_updates(); } catch (RuntimeException $error) { expect($error->getMessage() === 'Could not clear bio updates. Please try again.', 'Clear failure is reported'); }
+expect(count($wpdb->updates) === 28, 'Failed clear preserves update history');
+$wpdb->fail = '';
+try { mmgr_handle_clear_bio_updates(); } catch (BioResponse $response) {
+    expect($response->success && strpos($response->data, 'cleared=1') !== false, 'Successful clear redirects with confirmation');
+}
+expect(!$wpdb->updates && mmgr_bio_updates_menu_label() === 'Bio Updates', 'Successful clear removes all history and the unread badge');
+if ($request_method === null) unset($_SERVER['REQUEST_METHOD']); else $_SERVER['REQUEST_METHOD'] = $request_method;
 $menu = file_get_contents(__DIR__ . '/../membership-manager-qr/includes/admin-menu.php');
 expect(strpos($menu, "'membership_bio_fields'") < strpos($menu, "'membership_bio_updates'") && strpos($menu, "'membership_bio_updates'") < strpos($menu, "'membership_help_topics'"), 'Bio Updates is directly below BIO Fields');
 expect(strpos($menu, "add_action('load-' . \$bio_updates_hook, 'mmgr_admin_bio_updates_load')") !== false, 'Read state changes only on the real admin page load hook');
+expect(strpos(file_get_contents(__DIR__ . '/../membership-manager-qr/includes/bio-updates.php'), "add_action('admin_post_mmgr_clear_bio_updates'") !== false, 'Clear handler is registered for admin POST requests');
 echo "Results: $passed passed\n";
