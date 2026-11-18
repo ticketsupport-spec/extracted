@@ -17,6 +17,22 @@ function mmgr_ensure_bio_updates_table() {
 }
 
 add_action('init', 'mmgr_ensure_bio_updates_table');
+add_action('admin_post_mmgr_clear_bio_updates', 'mmgr_handle_clear_bio_updates');
+
+function mmgr_handle_clear_bio_updates() {
+    if (!current_user_can('manage_options')) wp_die('Permission denied.');
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') wp_die('Invalid request method.');
+    check_admin_referer('mmgr_clear_bio_updates');
+
+    global $wpdb;
+    $table = $wpdb->prefix . 'membership_bio_updates';
+    if ($wpdb->query("DELETE FROM `$table`") === false) {
+        wp_die('Could not clear bio updates. Please try again.');
+    }
+
+    wp_safe_redirect(add_query_arg('cleared', '1', admin_url('admin.php?page=membership_bio_updates')));
+    exit;
+}
 
 function mmgr_bio_profile_snapshot($member_id) {
     global $wpdb;
@@ -212,6 +228,14 @@ function mmgr_admin_bio_updates_page() {
         <h1>Bio Updates</h1>
         <p>Profile changes shown here are automatically marked viewed for all administrators. Updates on other pages remain unread. History starts when update tracking is installed.</p>
         <?php if ($data['notice']): ?><div class="notice notice-error"><p><?php echo esc_html($data['notice']); ?></p></div><?php endif; ?>
+        <?php if (isset($_GET['cleared']) && $_GET['cleared'] === '1'): ?><div class="notice notice-success is-dismissible"><p>All bio updates were cleared.</p></div><?php endif; ?>
+        <?php if ($data['total']): ?>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-bottom:16px;">
+                <input type="hidden" name="action" value="mmgr_clear_bio_updates">
+                <?php wp_nonce_field('mmgr_clear_bio_updates'); ?>
+                <button type="submit" class="button" onclick="return confirm('Clear all bio update history? This cannot be undone.');">Clear All</button>
+            </form>
+        <?php endif; ?>
         <?php if (!$data['rows']): ?><p>No bio updates yet.</p><?php endif; ?>
         <?php foreach ($data['rows'] as $row): ?>
             <div class="card" style="max-width:none;">
