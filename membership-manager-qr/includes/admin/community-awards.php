@@ -15,9 +15,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_award'])) {
         echo '<div class="notice notice-error"><p>Security check failed.</p></div>';
     } else {
         $award_id      = isset($_POST['award_id']) ? intval($_POST['award_id']) : 0;
-        $award_name    = sanitize_text_field($_POST['award_name']);
-        $award_icon    = sanitize_text_field($_POST['award_icon']);
-        $criteria_type = sanitize_text_field($_POST['criteria_type']);
+        $award_name    = sanitize_text_field(wp_unslash($_POST['award_name']));
+        $award_icon    = sanitize_text_field(wp_unslash($_POST['award_icon']));
+        $criteria_type = sanitize_text_field(wp_unslash($_POST['criteria_type']));
         $min_threshold = absint($_POST['min_threshold']);
         $max_threshold = (isset($_POST['max_threshold']) && $_POST['max_threshold'] !== '') ? absint($_POST['max_threshold']) : null;
         $sort_order    = intval($_POST['sort_order']);

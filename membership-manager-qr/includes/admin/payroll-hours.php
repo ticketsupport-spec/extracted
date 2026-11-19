@@ -25,9 +25,9 @@ if (isset($_POST['mmgr_mark_staff_paid']) && wp_verify_nonce($_POST['payroll_non
 // ── Save edited entry ─────────────────────────────────────────────────────
 if (isset($_POST['mmgr_save_time_entry']) && wp_verify_nonce($_POST['payroll_nonce'], 'mmgr_payroll')) {
     $entry_id      = intval($_POST['entry_id']);
-    $clock_in_raw  = sanitize_text_field($_POST['clock_in']);
-    $clock_out_raw = sanitize_text_field($_POST['clock_out']);
-    $notes         = sanitize_textarea_field($_POST['notes']);
+    $clock_in_raw  = sanitize_text_field(wp_unslash($_POST['clock_in']));
+    $clock_out_raw = sanitize_text_field(wp_unslash($_POST['clock_out']));
+    $notes         = sanitize_textarea_field(wp_unslash($_POST['notes']));
 
     $clock_in  = !empty($clock_in_raw)  ? date('Y-m-d H:i:s', strtotime($clock_in_raw))  : null;
     $clock_out = !empty($clock_out_raw) ? date('Y-m-d H:i:s', strtotime($clock_out_raw)) : null;
@@ -50,9 +50,9 @@ if (isset($_POST['mmgr_save_time_entry']) && wp_verify_nonce($_POST['payroll_non
 // ── Add new entry ─────────────────────────────────────────────────────────
 if (isset($_POST['mmgr_add_time_entry']) && wp_verify_nonce($_POST['payroll_nonce'], 'mmgr_payroll')) {
     $add_staff_id  = intval($_POST['add_staff_id']);
-    $clock_in_raw  = sanitize_text_field($_POST['add_clock_in']);
-    $clock_out_raw = sanitize_text_field($_POST['add_clock_out']);
-    $notes         = sanitize_textarea_field($_POST['add_notes']);
+    $clock_in_raw  = sanitize_text_field(wp_unslash($_POST['add_clock_in']));
+    $clock_out_raw = sanitize_text_field(wp_unslash($_POST['add_clock_out']));
+    $notes         = sanitize_textarea_field(wp_unslash($_POST['add_notes']));
 
     $clock_in  = !empty($clock_in_raw)  ? date('Y-m-d H:i:s', strtotime($clock_in_raw))  : null;
     $clock_out = !empty($clock_out_raw) ? date('Y-m-d H:i:s', strtotime($clock_out_raw)) : null;
@@ -75,7 +75,7 @@ if (isset($_GET['delete_entry']) && wp_verify_nonce($_GET['_wpnonce'], 'delete_t
 
 // ── Filters ───────────────────────────────────────────────────────────────
 $filter_staff = isset($_GET['filter_staff']) ? intval($_GET['filter_staff']) : 0;
-$filter_paid  = isset($_GET['filter_paid'])  ? sanitize_text_field($_GET['filter_paid']) : 'unpaid';
+$filter_paid  = isset($_GET['filter_paid'])  ? sanitize_text_field(wp_unslash($_GET['filter_paid'])) : 'unpaid';
 
 $edit_entry_id = isset($_GET['edit_entry']) ? intval($_GET['edit_entry']) : 0;
 $editing_entry = $edit_entry_id ? $wpdb->get_row($wpdb->prepare("SELECT * FROM `$time_tbl` WHERE id = %d", $edit_entry_id), ARRAY_A) : null;

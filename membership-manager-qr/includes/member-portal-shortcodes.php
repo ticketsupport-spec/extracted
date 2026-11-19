@@ -814,7 +814,7 @@ add_shortcode('mmgr_password_setup', function() {
     $success = $error = '';
     
     // Get token from URL
-    $token = isset($_GET['token']) ? sanitize_text_field($_GET['token']) : '';
+    $token = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
     
     if (!$token) {
         return '<div class="mmgr-portal-card"><p style="color:#d00;">Invalid access. Please use the link from your email.</p></div>';
@@ -1933,10 +1933,10 @@ add_shortcode('mmgr_member_profile', function() {
         } else {
             $tbl = $wpdb->prefix . 'memberships';
             
-            $phone = sanitize_text_field($_POST['phone']);
+            $phone = sanitize_text_field(wp_unslash($_POST['phone']));
             $email = sanitize_email($_POST['email']);
             $community_alias = sanitize_text_field($_POST['community_alias']);
-            $community_bio = sanitize_textarea_field($_POST['community_bio'] ?? '');
+            $community_bio = sanitize_textarea_field(wp_unslash($_POST['community_bio'] ?? ''));
             $community_photo_url = $member['community_photo_url']; // Keep existing unless replaced
             
             // Handle community photo removal
@@ -2030,7 +2030,7 @@ add_shortcode('mmgr_member_profile', function() {
                                 }
                             }
                         } elseif ($bf['field_type'] === 'html') {
-                            $val = isset($_POST[$post_key]) ? wp_kses_post($_POST[$post_key]) : '';
+                            $val = isset($_POST[$post_key]) ? wp_kses_post(wp_unslash($_POST[$post_key])) : '';
                             $saved = $wpdb->replace(
                                 $bio_field_values_tbl,
                                 array(
@@ -2041,7 +2041,7 @@ add_shortcode('mmgr_member_profile', function() {
                             );
                             $bio_saved = $saved !== false && $bio_saved;
                         } elseif ($bf['field_type'] === 'textarea') {
-                            $val = isset($_POST[$post_key]) ? sanitize_textarea_field($_POST[$post_key]) : '';
+                            $val = isset($_POST[$post_key]) ? sanitize_textarea_field(wp_unslash($_POST[$post_key])) : '';
                             $saved = $wpdb->replace(
                                 $bio_field_values_tbl,
                                 array(
@@ -2053,7 +2053,7 @@ add_shortcode('mmgr_member_profile', function() {
                             $bio_saved = $saved !== false && $bio_saved;
                         } else {
                             // text or link
-                            $val = isset($_POST[$post_key]) ? sanitize_text_field($_POST[$post_key]) : '';
+                            $val = isset($_POST[$post_key]) ? sanitize_text_field(wp_unslash($_POST[$post_key])) : '';
                             $saved = $wpdb->replace(
                                 $bio_field_values_tbl,
                                 array(
@@ -2913,7 +2913,7 @@ add_shortcode('mmgr_member_community', function() {
                 $error = '⏸️ Your forum posting is suspended until ' . $until . '. Please contact a moderator if you have questions.';
             } else {
                 $topic_id  = intval($_POST['topic_id']);
-                $message   = sanitize_textarea_field($_POST['message']);
+                $message   = sanitize_textarea_field(wp_unslash($_POST['message']));
 
                 // Handle multiple photo uploads (up to 10)
                 $uploaded_photo_urls = array();
@@ -3799,7 +3799,7 @@ add_shortcode('mmgr_member_messages', function() {
             $error = 'Security check failed.';
         } else {
             $to_member_id = intval($_POST['to_member_id']);
-            $message = sanitize_textarea_field($_POST['message']);
+            $message = sanitize_textarea_field(wp_unslash($_POST['message']));
             $image_url = null;
             
             // Handle image upload
@@ -4579,7 +4579,7 @@ add_action('wp_ajax_mmgr_report_message', function() {
     }
     
     $message_id = intval($_POST['message_id']);
-    $reason = sanitize_textarea_field($_POST['reason']);
+    $reason = sanitize_textarea_field(wp_unslash($_POST['reason']));
     
     $result = mmgr_report_message($message_id, $reason);
     
@@ -4861,7 +4861,7 @@ add_action('wp_ajax_mmgr_send_pm', function() {
     }
     
     $recipient_id = intval($_POST['recipient_id']);
-    $message = sanitize_textarea_field($_POST['message']);
+    $message = sanitize_textarea_field(wp_unslash($_POST['message']));
     
     if (empty($message)) {
         wp_send_json_error('Message cannot be empty.');
@@ -6498,7 +6498,7 @@ add_action('wp_ajax_mmgr_save_member_note', function() {
         wp_send_json_error('Member not found');
     }
 
-    $note = sanitize_textarea_field($_POST['note'] ?? '');
+    $note = sanitize_textarea_field(wp_unslash($_POST['note'] ?? ''));
 
     $notes_table = $wpdb->prefix . 'membership_member_notes';
 
@@ -6729,7 +6729,7 @@ add_action('wp_ajax_mmgr_edit_forum_post', function() {
     }
 
     $post_id = intval($_POST['post_id']);
-    $message = sanitize_textarea_field($_POST['message'] ?? '');
+    $message = sanitize_textarea_field(wp_unslash($_POST['message'] ?? ''));
 
     if (empty($message)) {
         wp_send_json_error(array('message' => 'Message cannot be empty.'));
@@ -6786,7 +6786,7 @@ add_action('wp_ajax_mmgr_forum_suspend_member', function() {
     global $wpdb;
     $topic_id  = intval($_POST['topic_id']);
     $target_id = intval($_POST['member_id']);
-    $reason    = sanitize_textarea_field($_POST['reason'] ?? '');
+    $reason    = sanitize_textarea_field(wp_unslash($_POST['reason'] ?? ''));
 
     // Verify current member is a moderator of this topic
     $is_mod = $wpdb->get_var($wpdb->prepare(
@@ -6847,7 +6847,7 @@ add_action('wp_ajax_mmgr_forum_ban_member', function() {
     global $wpdb;
     $topic_id  = intval($_POST['topic_id']);
     $target_id = intval($_POST['member_id']);
-    $reason    = sanitize_textarea_field($_POST['reason'] ?? '');
+    $reason    = sanitize_textarea_field(wp_unslash($_POST['reason'] ?? ''));
 
     $is_mod = $wpdb->get_var($wpdb->prepare(
         "SELECT id FROM {$wpdb->prefix}membership_forum_topic_mods WHERE topic_id = %d AND member_id = %d",
@@ -7023,7 +7023,7 @@ add_action('wp_ajax_mmgr_add_post_comment', function() {
 
     global $wpdb;
     $post_id = intval($_POST['post_id']);
-    $comment = sanitize_textarea_field($_POST['comment'] ?? '');
+    $comment = sanitize_textarea_field(wp_unslash($_POST['comment'] ?? ''));
 
     if (empty($comment)) {
         wp_send_json_error(array('message' => 'Comment cannot be empty.'));
@@ -7092,7 +7092,7 @@ add_action('wp_ajax_mmgr_report_forum_post', function() {
 
     global $wpdb;
     $post_id = intval($_POST['post_id']);
-    $reason  = sanitize_textarea_field($_POST['reason'] ?? '');
+    $reason  = sanitize_textarea_field(wp_unslash($_POST['reason'] ?? ''));
 
     if (empty($reason)) {
         wp_send_json_error(array('message' => 'Please provide a reason for the report.'));

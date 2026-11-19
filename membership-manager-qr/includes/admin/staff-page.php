@@ -8,9 +8,9 @@ $success = $error = '';
 
 // ── Save (add / edit) ─────────────────────────────────────────────────────
 if (isset($_POST['save_staff']) && wp_verify_nonce($_POST['staff_nonce'], 'mmgr_save_staff')) {
-    $first_name = sanitize_text_field($_POST['first_name']);
-    $last_name  = sanitize_text_field($_POST['last_name']);
-    $position   = sanitize_text_field($_POST['position']);
+    $first_name = sanitize_text_field(wp_unslash($_POST['first_name']));
+    $last_name  = sanitize_text_field(wp_unslash($_POST['last_name']));
+    $position   = sanitize_text_field(wp_unslash($_POST['position']));
     $active     = isset($_POST['active']) ? 1 : 0;
     $staff_id   = intval($_POST['staff_id']);
 

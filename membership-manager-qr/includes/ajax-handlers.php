@@ -132,7 +132,7 @@ function mmgr_handle_checkin() {
     $tbl = $wpdb->prefix . 'memberships';
     $visits_tbl = $wpdb->prefix . 'membership_visits';
     
-    $code = isset($_POST['code']) ? sanitize_text_field($_POST['code']) : '';
+    $code = isset($_POST['code']) ? sanitize_text_field(wp_unslash($_POST['code'])) : '';
     
     if (empty($code)) {
         wp_send_json_error(array('message' => 'Please enter or scan a member code.'));
@@ -328,7 +328,7 @@ function mmgr_confirm_payment() {
     $member_id = isset($_POST['member_id']) ? intval($_POST['member_id']) : 0;
     $daily_fee = isset($_POST['daily_fee']) ? floatval($_POST['daily_fee']) : 0;
     $paid = isset($_POST['paid']) ? intval($_POST['paid']) : 0;
-    $notes = isset($_POST['notes']) ? sanitize_text_field($_POST['notes']) : '';
+    $notes = isset($_POST['notes']) ? sanitize_text_field(wp_unslash($_POST['notes'])) : '';
     
     if (!$member_id) {
         wp_send_json_error(array('message' => 'Invalid member ID'));
@@ -399,7 +399,7 @@ add_action('wp_ajax_mmgr_qrcode', 'mmgr_ajax_generate_qrcode');
 add_action('wp_ajax_nopriv_mmgr_qrcode', 'mmgr_ajax_generate_qrcode');
 
 function mmgr_ajax_generate_qrcode() {
-    $code = isset($_GET['code']) ? sanitize_text_field($_GET['code']) : '';
+    $code = isset($_GET['code']) ? sanitize_text_field(wp_unslash($_GET['code'])) : '';
     
     if (!$code) {
         header('HTTP/1.1 400 Bad Request');
@@ -668,7 +668,7 @@ function mmgr_ajax_checkin_save_photo() {
     $tbl = $wpdb->prefix . 'memberships';
 
     $member_id  = isset( $_POST['member_id'] )  ? intval( $_POST['member_id'] )           : 0;
-    $photo_data = isset( $_POST['photo_data'] ) ? sanitize_text_field( $_POST['photo_data'] ) : '';
+    $photo_data = isset( $_POST['photo_data'] ) ? sanitize_text_field(wp_unslash($_POST['photo_data'])) : '';
 
     if ( ! $member_id ) {
         wp_send_json_error( array( 'message' => 'Invalid member ID' ) );
@@ -799,7 +799,7 @@ function mmgr_ajax_checkin_collect_fee() {
     $tbl = $wpdb->prefix . 'memberships';
 
     $member_id      = isset( $_POST['member_id'] )      ? intval( $_POST['member_id'] )              : 0;
-    $payment_method = isset( $_POST['payment_method'] ) ? sanitize_text_field( $_POST['payment_method'] ) : 'cash';
+    $payment_method = isset( $_POST['payment_method'] ) ? sanitize_text_field(wp_unslash($_POST['payment_method'])) : 'cash';
     $payment_amount = isset( $_POST['payment_amount'] ) ? floatval( $_POST['payment_amount'] )        : 0.0;
 
     if ( ! $member_id ) {
@@ -872,7 +872,7 @@ function mmgr_handle_staff_scan() {
     check_ajax_referer('mmgr_staff_scan', 'nonce');
     global $wpdb;
 
-    $code = isset($_POST['code']) ? sanitize_text_field($_POST['code']) : '';
+    $code = isset($_POST['code']) ? sanitize_text_field(wp_unslash($_POST['code'])) : '';
     if (empty($code)) {
         wp_send_json_error(array('message' => 'No code provided.'));
     }
@@ -1064,7 +1064,7 @@ add_action('wp_ajax_mmgr_save_chemistry_answers', function() {
     }
 
     // Privacy
-    $privacy = isset($_POST['privacy']) ? sanitize_text_field($_POST['privacy']) : 'everyone';
+    $privacy = isset($_POST['privacy']) ? sanitize_text_field(wp_unslash($_POST['privacy'])) : 'everyone';
     if (!in_array($privacy, array('everyone', 'nobody'), true)) {
         $privacy = 'everyone';
     }

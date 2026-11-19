@@ -37,7 +37,7 @@ if ($editing && isset($_POST['mmgr_regenerate_qr']) && isset($_POST['member_nonc
 
 // Handle assigning a custom member code
 if ($editing && isset($_POST['mmgr_assign_code']) && isset($_POST['member_nonce_qr']) && wp_verify_nonce($_POST['member_nonce_qr'], 'mmgr_qr_actions')) {
-    $new_code = strtoupper(sanitize_text_field($_POST['custom_member_code'] ?? ''));
+    $new_code = strtoupper(sanitize_text_field(wp_unslash($_POST['custom_member_code'] ?? '')));
     if ($new_code && preg_match('/^[A-Z0-9]{4,20}$/', $new_code)) {
         // Check code is not already in use by another member
         $existing = $wpdb->get_var($wpdb->prepare("SELECT id FROM $tbl WHERE member_code = %s AND id != %d", $new_code, intval($_GET['id'])));
@@ -97,22 +97,22 @@ if (!isset($_POST['mmgr_note_action']) && isset($_POST['mmgr_save_member'])) {
         echo '<div class="notice notice-error"><p>Security check failed.</p></div>';
     } else {
         $data = array(
-            'first_name' => sanitize_text_field($_POST['first_name']),
-            'last_name' => sanitize_text_field($_POST['last_name']),
-            'name' => sanitize_text_field($_POST['first_name'] . ' ' . $_POST['last_name']),
-            'partner_first_name' => sanitize_text_field($_POST['partner_first_name']),
-            'partner_last_name' => sanitize_text_field($_POST['partner_last_name']),
-            'partner_name' => trim(sanitize_text_field($_POST['partner_first_name'] . ' ' . $_POST['partner_last_name'])),
+            'first_name' => sanitize_text_field(wp_unslash($_POST['first_name'])),
+            'last_name' => sanitize_text_field(wp_unslash($_POST['last_name'])),
+            'name' => sanitize_text_field(wp_unslash($_POST['first_name'] . ' ' . $_POST['last_name'])),
+            'partner_first_name' => sanitize_text_field(wp_unslash($_POST['partner_first_name'])),
+            'partner_last_name' => sanitize_text_field(wp_unslash($_POST['partner_last_name'])),
+            'partner_name' => trim(sanitize_text_field(wp_unslash($_POST['partner_first_name'] . ' ' . $_POST['partner_last_name']))),
             'email' => sanitize_email($_POST['email']),
-            'phone' => sanitize_text_field($_POST['phone']),
-            'sex' => sanitize_text_field($_POST['sex']),
-            'partner_sex' => sanitize_text_field($_POST['partner_sex']),
-            'age' => sanitize_text_field($_POST['age']),
-            'partner_age' => sanitize_text_field($_POST['partner_age']) ?: null,
-            'level' => sanitize_text_field($_POST['level']),
+            'phone' => sanitize_text_field(wp_unslash($_POST['phone'])),
+            'sex' => sanitize_text_field(wp_unslash($_POST['sex'])),
+            'partner_sex' => sanitize_text_field(wp_unslash($_POST['partner_sex'])),
+            'age' => sanitize_text_field(wp_unslash($_POST['age'])),
+            'partner_age' => sanitize_text_field(wp_unslash($_POST['partner_age'])) ?: null,
+            'level' => sanitize_text_field(wp_unslash($_POST['level'])),
             'newsletter' => isset($_POST['newsletter']) ? 1 : 0,
-            'start_date' => sanitize_text_field($_POST['start_date']),
-            'expire_date' => sanitize_text_field($_POST['expire_date']) ?: null,
+            'start_date' => sanitize_text_field(wp_unslash($_POST['start_date'])),
+            'expire_date' => sanitize_text_field(wp_unslash($_POST['expire_date'])) ?: null,
             'paid' => isset($_POST['paid']) ? 1 : 0,
             'vip' => isset($_POST['vip']) ? 1 : 0,
             'payment_amount' => floatval($_POST['amount_paid'] ?? 0),

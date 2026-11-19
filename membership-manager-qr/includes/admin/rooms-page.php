@@ -8,7 +8,7 @@ $success = $error = '';
 
 // ── Save (add / edit) ─────────────────────────────────────────────────────
 if (isset($_POST['save_room']) && wp_verify_nonce($_POST['room_nonce'], 'mmgr_save_room')) {
-    $room_name  = sanitize_text_field($_POST['room_name']);
+    $room_name  = sanitize_text_field(wp_unslash($_POST['room_name']));
     $sort_order = intval($_POST['sort_order']);
     $active     = isset($_POST['active']) ? 1 : 0;
     $room_id    = intval($_POST['room_id']);

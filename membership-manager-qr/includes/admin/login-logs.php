@@ -69,8 +69,8 @@ if (isset($_GET['export_login_logs_csv']) && current_user_can('manage_options'))
 
 // Filters
 $filter_success = isset($_GET['filter_success']) ? $_GET['filter_success'] : '';
-$filter_email   = isset($_GET['filter_email'])   ? sanitize_text_field($_GET['filter_email']) : '';
-$filter_type    = isset($_GET['filter_type'])    ? sanitize_text_field($_GET['filter_type'])  : '';
+$filter_email   = isset($_GET['filter_email'])   ? sanitize_text_field(wp_unslash($_GET['filter_email'])) : '';
+$filter_type    = isset($_GET['filter_type'])    ? sanitize_text_field(wp_unslash($_GET['filter_type']))  : '';
 
 // Pagination
 $per_page     = 50;

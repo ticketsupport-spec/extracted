@@ -18,8 +18,8 @@ $page_base = admin_url('admin.php?page=membership_chemistry');
 // ── Save trait ─────────────────────────────────────────────────────────────
 if (isset($_POST['save_trait']) && wp_verify_nonce($_POST['trait_nonce'], 'mmgr_save_trait')) {
     $trait_id    = intval($_POST['trait_id']);
-    $trait_name  = sanitize_text_field($_POST['trait_name']);
-    $description = sanitize_text_field($_POST['description'] ?? '');
+    $trait_name  = sanitize_text_field(wp_unslash($_POST['trait_name']));
+    $description = sanitize_text_field(wp_unslash($_POST['description'] ?? ''));
     $sort_order  = intval($_POST['sort_order']);
     $active      = isset($_POST['active']) ? 1 : 0;
 
@@ -57,7 +57,7 @@ if (isset($_GET['delete_trait']) && wp_verify_nonce($_GET['_wpnonce'], 'delete_t
 if (isset($_POST['save_question']) && wp_verify_nonce($_POST['question_nonce'], 'mmgr_save_question')) {
     $q_id         = intval($_POST['question_id']);
     $q_trait_id   = intval($_POST['q_trait_id']);
-    $question_text = sanitize_text_field($_POST['question_text']);
+    $question_text = sanitize_text_field(wp_unslash($_POST['question_text']));
     $q_sort       = intval($_POST['q_sort_order']);
     $q_active     = isset($_POST['q_active']) ? 1 : 0;
 

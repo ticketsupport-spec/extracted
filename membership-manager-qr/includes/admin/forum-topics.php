@@ -32,9 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_topic'])) {
         echo '<div class="notice notice-error"><p>Security check failed.</p></div>';
     } else {
         $topic_id   = isset($_POST['topic_id']) ? intval($_POST['topic_id']) : 0;
-        $topic_name = sanitize_text_field($_POST['topic_name']);
-        $description = sanitize_textarea_field($_POST['description']);
-        $icon       = sanitize_text_field($_POST['icon']);
+        $topic_name = sanitize_text_field(wp_unslash($_POST['topic_name']));
+        $description = sanitize_textarea_field(wp_unslash($_POST['description']));
+        $icon       = sanitize_text_field(wp_unslash($_POST['icon']));
         $active     = isset($_POST['active']) ? 1 : 0;
         $sort_order = intval($_POST['sort_order']);
         

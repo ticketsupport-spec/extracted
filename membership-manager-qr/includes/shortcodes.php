@@ -21,19 +21,19 @@ add_shortcode('membership_registration', function($atts){
             global $wpdb;
             $tbl = $wpdb->prefix . 'memberships';
             
-            $first_name = sanitize_text_field($_POST['first_name']);
-            $last_name = sanitize_text_field($_POST['last_name']);
+            $first_name = sanitize_text_field(wp_unslash($_POST['first_name']));
+            $last_name = sanitize_text_field(wp_unslash($_POST['last_name']));
             $email = sanitize_email($_POST['email']);
-            $phone = sanitize_text_field($_POST['phone']);
-            $sex = sanitize_text_field($_POST['sex']);
-            $dob = sanitize_text_field($_POST['dob']);
-            $level = sanitize_text_field($_POST['level']);
+            $phone = sanitize_text_field(wp_unslash($_POST['phone']));
+            $sex = sanitize_text_field(wp_unslash($_POST['sex']));
+            $dob = sanitize_text_field(wp_unslash($_POST['dob']));
+            $level = sanitize_text_field(wp_unslash($_POST['level']));
             $newsletter = isset($_POST['newsletter']) ? 1 : 0;
             
-            $partner_first_name = isset($_POST['partner_first_name']) ? sanitize_text_field($_POST['partner_first_name']) : '';
-            $partner_last_name = isset($_POST['partner_last_name']) ? sanitize_text_field($_POST['partner_last_name']) : '';
-            $partner_sex = isset($_POST['partner_sex']) ? sanitize_text_field($_POST['partner_sex']) : '';
-            $partner_dob = isset($_POST['partner_dob']) ? sanitize_text_field($_POST['partner_dob']) : '';
+            $partner_first_name = isset($_POST['partner_first_name']) ? sanitize_text_field(wp_unslash($_POST['partner_first_name'])) : '';
+            $partner_last_name = isset($_POST['partner_last_name']) ? sanitize_text_field(wp_unslash($_POST['partner_last_name'])) : '';
+            $partner_sex = isset($_POST['partner_sex']) ? sanitize_text_field(wp_unslash($_POST['partner_sex'])) : '';
+            $partner_dob = isset($_POST['partner_dob']) ? sanitize_text_field(wp_unslash($_POST['partner_dob'])) : '';
             
             // Check for an existing account with the same email or phone number.
             $existing = null;

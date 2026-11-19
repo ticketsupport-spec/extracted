@@ -64,7 +64,7 @@ function mmgr_admin_messages_page() {
         check_admin_referer('mmgr_admin_send_message');
         
         $to_member_id = intval($_POST['to_member_id']);
-        $message = sanitize_textarea_field($_POST['message']);
+        $message = sanitize_textarea_field(wp_unslash($_POST['message']));
         $image_url = null;
         
         // Handle image upload

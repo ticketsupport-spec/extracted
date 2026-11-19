@@ -8,7 +8,7 @@ $members_tbl = $wpdb->prefix . 'memberships';
 // Handle status update
 if (isset($_POST['update_status']) && isset($_POST['_wpnonce']) && wp_verify_nonce($_POST['_wpnonce'], 'mmgr_card_status')) {
     $request_id = intval($_POST['request_id']);
-    $new_status = sanitize_text_field($_POST['new_status']);
+    $new_status = sanitize_text_field(wp_unslash($_POST['new_status']));
     if (in_array($new_status, array('pending', 'ready', 'completed'))) {
         $update_data = array('status' => $new_status);
         if ($new_status === 'completed') {

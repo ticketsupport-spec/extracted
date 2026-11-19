@@ -220,38 +220,38 @@ function mmgr_settings_admin() {
 
     // Handle settings save
     if (isset($_POST['mmgr_save_settings']) && isset($_POST['mmgr_settings_nonce']) && wp_verify_nonce($_POST['mmgr_settings_nonce'], 'mmgr_settings')) {
-        update_option('mmgr_code_of_conduct', wp_kses_post($_POST['mmgr_code_of_conduct']));
-        update_option('mmgr_registration_title', sanitize_text_field($_POST['mmgr_registration_title']));
-        update_option('mmgr_registration_success_url', sanitize_text_field($_POST['mmgr_registration_success_url']));
-        update_option('mmgr_checkin_title', sanitize_text_field($_POST['mmgr_checkin_title']));
-        update_option('mmgr_checkin_default_mode', sanitize_text_field($_POST['mmgr_checkin_default_mode']));
+        update_option('mmgr_code_of_conduct', wp_kses_post(wp_unslash($_POST['mmgr_code_of_conduct'])));
+        update_option('mmgr_registration_title', sanitize_text_field(wp_unslash($_POST['mmgr_registration_title'])));
+        update_option('mmgr_registration_success_url', sanitize_text_field(wp_unslash($_POST['mmgr_registration_success_url'])));
+        update_option('mmgr_checkin_title', sanitize_text_field(wp_unslash($_POST['mmgr_checkin_title'])));
+        update_option('mmgr_checkin_default_mode', sanitize_text_field(wp_unslash($_POST['mmgr_checkin_default_mode'])));
         update_option('mmgr_enable_welcome_email', isset($_POST['mmgr_enable_welcome_email']) ? 1 : 0);
         update_option('mmgr_attach_qr_code', isset($_POST['mmgr_attach_qr_code']) ? 1 : 0);
         update_option('mmgr_enable_member_portal', isset($_POST['mmgr_enable_member_portal']) ? 1 : 0);
-        update_option('mmgr_email_from_name', sanitize_text_field($_POST['mmgr_email_from_name']));
+        update_option('mmgr_email_from_name', sanitize_text_field(wp_unslash($_POST['mmgr_email_from_name'])));
         update_option('mmgr_email_from_email', sanitize_email($_POST['mmgr_email_from_email']));
-        update_option('mmgr_email_subject', sanitize_text_field($_POST['mmgr_email_subject']));
-        update_option('mmgr_email_template', wp_kses_post($_POST['mmgr_email_template']));
-        update_option('mmgr_email_footer', wp_kses_post($_POST['mmgr_email_footer']));
+        update_option('mmgr_email_subject', sanitize_text_field(wp_unslash($_POST['mmgr_email_subject'])));
+        update_option('mmgr_email_template', wp_kses_post(wp_unslash($_POST['mmgr_email_template'])));
+        update_option('mmgr_email_footer', wp_kses_post(wp_unslash($_POST['mmgr_email_footer'])));
         update_option('mmgr_welcome_pm_enabled', isset($_POST['mmgr_welcome_pm_enabled']) ? 1 : 0);
-        update_option('mmgr_welcome_pm_message', wp_kses_post($_POST['mmgr_welcome_pm_message']));
+        update_option('mmgr_welcome_pm_message', wp_kses_post(wp_unslash($_POST['mmgr_welcome_pm_message'])));
         update_option('mmgr_registration_logo_id', isset($_POST['mmgr_registration_logo_id']) ? absint($_POST['mmgr_registration_logo_id']) : 0);
         update_option('mmgr_show_portal_titles', isset($_POST['mmgr_show_portal_titles']) ? 1 : 0);
         if (isset($_POST['mmgr_registration_blurb'])) {
-            update_option('mmgr_registration_blurb', wp_kses_post($_POST['mmgr_registration_blurb']));
+            update_option('mmgr_registration_blurb', wp_kses_post(wp_unslash($_POST['mmgr_registration_blurb'])));
         }
         if (isset($_POST['mmgr_fees_due_heading'])) {
-            update_option('mmgr_fees_due_heading', sanitize_text_field($_POST['mmgr_fees_due_heading']));
+            update_option('mmgr_fees_due_heading', sanitize_text_field(wp_unslash($_POST['mmgr_fees_due_heading'])));
         }
         if (isset($_POST['mmgr_fees_due_message'])) {
-            update_option('mmgr_fees_due_message', sanitize_textarea_field($_POST['mmgr_fees_due_message']));
+            update_option('mmgr_fees_due_message', sanitize_textarea_field(wp_unslash($_POST['mmgr_fees_due_message'])));
         }
         foreach ($portal_page_defaults as $pg => $defaults) {
             if (isset($_POST['mmgr_portal_nav_' . $pg])) {
-                update_option('mmgr_portal_nav_' . $pg, sanitize_text_field($_POST['mmgr_portal_nav_' . $pg]));
+                update_option('mmgr_portal_nav_' . $pg, sanitize_text_field(wp_unslash($_POST['mmgr_portal_nav_' . $pg])));
             }
             if ($defaults['title'] !== null && isset($_POST['mmgr_portal_title_' . $pg])) {
-                update_option('mmgr_portal_title_' . $pg, sanitize_text_field($_POST['mmgr_portal_title_' . $pg]));
+                update_option('mmgr_portal_title_' . $pg, sanitize_text_field(wp_unslash($_POST['mmgr_portal_title_' . $pg])));
             }
         }
         
