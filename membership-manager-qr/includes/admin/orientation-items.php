@@ -9,7 +9,7 @@ $success = $error = '';
 
 // ── Save (add / edit) ──────────────────────────────────────────────────────
 if (isset($_POST['save_orientation_item']) && wp_verify_nonce($_POST['orientation_item_nonce'], 'mmgr_save_orientation_item')) {
-    $title      = sanitize_text_field($_POST['title']);
+    $title      = sanitize_text_field(wp_unslash($_POST['title']));
     $sort_order = intval($_POST['sort_order']);
     $active     = isset($_POST['active']) ? 1 : 0;
     $item_id    = intval($_POST['item_id']);

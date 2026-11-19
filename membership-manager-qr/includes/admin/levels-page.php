@@ -7,10 +7,10 @@ $tbl = $wpdb->prefix . 'membership_levels';
 // Handle add/edit/delete
 if (isset($_POST['save_level'])) {
     $data = array(
-        'level_name' => sanitize_text_field($_POST['level_name']),
+        'level_name' => sanitize_text_field(wp_unslash($_POST['level_name'])),
         'price' => floatval($_POST['price']),
         'daily_fee' => floatval($_POST['daily_fee']),
-        'description' => sanitize_textarea_field($_POST['description'])
+        'description' => sanitize_textarea_field(wp_unslash($_POST['description']))
     );
     
     if (isset($_POST['level_id']) && !empty($_POST['level_id'])) {

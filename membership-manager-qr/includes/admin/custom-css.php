@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mmgr_save_custom_css'
     if (!isset($_POST['mmgr_custom_css_nonce']) || !wp_verify_nonce($_POST['mmgr_custom_css_nonce'], 'mmgr_save_custom_css')) {
         echo '<div class="notice notice-error"><p>Security check failed.</p></div>';
     } else {
-        $global_css = isset($_POST['mmgr_global_css']) ? wp_strip_all_tags($_POST['mmgr_global_css']) : '';
+        $global_css = isset($_POST['mmgr_global_css']) ? wp_strip_all_tags(wp_unslash($_POST['mmgr_global_css'])) : '';
         update_option('mmgr_custom_css', $global_css);
         echo '<div class="notice notice-success"><p>Custom CSS saved successfully!</p></div>';
     }

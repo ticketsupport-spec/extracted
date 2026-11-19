@@ -7,10 +7,10 @@ $tbl = $wpdb->prefix . 'membership_special_fees';
 // Handle save/delete
 if (isset($_POST['save_fee']) && isset($_POST['fee_nonce']) && wp_verify_nonce($_POST['fee_nonce'], 'mmgr_save_fee')) {
     $data = array(
-        'event_date'  => sanitize_text_field($_POST['fee_date']),
+        'event_date'  => sanitize_text_field(wp_unslash($_POST['fee_date'])),
         'fee_amount'  => floatval($_POST['fee_amount']),
-        'event_name'  => sanitize_text_field($_POST['event_name']),
-        'description' => sanitize_textarea_field($_POST['description'])
+        'event_name'  => sanitize_text_field(wp_unslash($_POST['event_name'])),
+        'description' => sanitize_textarea_field(wp_unslash($_POST['description']))
     );
     
     if (isset($_POST['fee_id']) && !empty($_POST['fee_id'])) {

@@ -79,7 +79,7 @@ function mmgr_admin_page() {
     // Handle fee selection form submission
     if (isset($_POST['submit_checkin']) && isset($_POST['checkin_nonce']) && wp_verify_nonce($_POST['checkin_nonce'], 'checkin_manual')) {
         $member_id = intval($_POST['member_id']);
-        $fee_type = sanitize_text_field($_POST['fee_type']);
+        $fee_type = sanitize_text_field(wp_unslash($_POST['fee_type']));
         $fee = 0;
         
         if ($fee_type === 'standard') {
@@ -104,7 +104,7 @@ function mmgr_admin_page() {
 
     if (isset($_GET['ban'])) {
         $ban_id = intval($_GET['ban']);
-        $reason = isset($_POST['ban_reason']) ? sanitize_text_field($_POST['ban_reason']) : '';
+        $reason = isset($_POST['ban_reason']) ? sanitize_text_field(wp_unslash($_POST['ban_reason'])) : '';
         if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['ban_confirm'])) {
             $wpdb->update($tbl, array('banned'=>1,'banned_reason'=>$reason,'banned_on'=>current_time('mysql')), array('id'=>$ban_id));
             echo "<div class='notice notice-warning'><p>✓ Member banned.</p></div>";
@@ -143,18 +143,18 @@ function mmgr_admin_page() {
 
     if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['mmgr_save']) && isset($_POST['member_nonce']) && wp_verify_nonce($_POST['member_nonce'], 'mmgr_save')) {
         $data = array(
-            'first_name' => sanitize_text_field($_POST['first_name']),
-            'last_name' => sanitize_text_field($_POST['last_name']),
-            'partner_first_name' => isset($_POST['partner_first_name']) ? sanitize_text_field($_POST['partner_first_name']) : '',
-            'partner_last_name' => isset($_POST['partner_last_name']) ? sanitize_text_field($_POST['partner_last_name']) : '',
-            'name' => sanitize_text_field($_POST['first_name']) . ' ' . sanitize_text_field($_POST['last_name']),
-            'phone' => sanitize_text_field($_POST['phone']),
+            'first_name' => sanitize_text_field(wp_unslash($_POST['first_name'])),
+            'last_name' => sanitize_text_field(wp_unslash($_POST['last_name'])),
+            'partner_first_name' => isset($_POST['partner_first_name']) ? sanitize_text_field(wp_unslash($_POST['partner_first_name'])) : '',
+            'partner_last_name' => isset($_POST['partner_last_name']) ? sanitize_text_field(wp_unslash($_POST['partner_last_name'])) : '',
+            'name' => sanitize_text_field(wp_unslash($_POST['first_name'])) . ' ' . sanitize_text_field(wp_unslash($_POST['last_name'])),
+            'phone' => sanitize_text_field(wp_unslash($_POST['phone'])),
             'email' => sanitize_email($_POST['email']),
-            'level' => sanitize_text_field($_POST['level']),
-            'sex' => sanitize_text_field($_POST['sex'] ?? ''),
-            'partner_sex' => isset($_POST['partner_sex']) ? sanitize_text_field($_POST['partner_sex']) : '',
-            'age' => sanitize_text_field($_POST['age']),
-            'partner_age' => isset($_POST['partner_age']) ? sanitize_text_field($_POST['partner_age']) : '',
+            'level' => sanitize_text_field(wp_unslash($_POST['level'])),
+            'sex' => sanitize_text_field(wp_unslash($_POST['sex'] ?? '')),
+            'partner_sex' => isset($_POST['partner_sex']) ? sanitize_text_field(wp_unslash($_POST['partner_sex'])) : '',
+            'age' => sanitize_text_field(wp_unslash($_POST['age'])),
+            'partner_age' => isset($_POST['partner_age']) ? sanitize_text_field(wp_unslash($_POST['partner_age'])) : '',
             'newsletter' => isset($_POST['newsletter']) ? 1 : 0,
             'agreed_terms' => isset($_POST['agreed_terms']) ? 1 : 0,
             'paid' => isset($_POST['paid']) ? 1 : 0,
@@ -335,9 +335,9 @@ function mmgr_admin_page() {
     }
     
     // SEARCH AND FILTER SECTION
-    $search_query = isset($_GET['search']) ? sanitize_text_field($_GET['search']) : '';
-    $filter_level = isset($_GET['filter_level']) ? sanitize_text_field($_GET['filter_level']) : '';
-    $filter_status = isset($_GET['filter_status']) ? sanitize_text_field($_GET['filter_status']) : '';
+    $search_query = isset($_GET['search']) ? sanitize_text_field(wp_unslash($_GET['search'])) : '';
+    $filter_level = isset($_GET['filter_level']) ? sanitize_text_field(wp_unslash($_GET['filter_level'])) : '';
+    $filter_status = isset($_GET['filter_status']) ? sanitize_text_field(wp_unslash($_GET['filter_status'])) : '';
     
     echo "<hr><h2>Search & Filter Members</h2>";
     echo '<form method="get" style="background:#f9f9f9;padding:15px;border-radius:6px;margin-bottom:20px;">';

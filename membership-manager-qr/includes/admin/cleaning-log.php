@@ -50,7 +50,7 @@ if (isset($_GET['clear_cleaning_log']) && isset($_GET['_wpnonce']) && wp_verify_
 // Filters
 $filter_room  = isset($_GET['filter_room'])  ? intval($_GET['filter_room'])                   : 0;
 $filter_staff = isset($_GET['filter_staff']) ? intval($_GET['filter_staff'])                  : 0;
-$filter_date  = isset($_GET['filter_date'])  ? sanitize_text_field($_GET['filter_date'])      : '';
+$filter_date  = isset($_GET['filter_date'])  ? sanitize_text_field(wp_unslash($_GET['filter_date']))      : '';
 
 // Pagination
 $per_page     = 50;

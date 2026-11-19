@@ -15,9 +15,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_help_topic'])) {
         echo '<div class="notice notice-error"><p>Security check failed.</p></div>';
     } else {
         $topic_id   = isset($_POST['topic_id']) ? intval($_POST['topic_id']) : 0;
-        $title      = sanitize_text_field($_POST['topic_title']);
-        $content    = wp_kses_post($_POST['topic_content']);
-        $category   = sanitize_text_field($_POST['topic_category']);
+        $title      = sanitize_text_field(wp_unslash($_POST['topic_title']));
+        $content    = wp_kses_post(wp_unslash($_POST['topic_content']));
+        $category   = sanitize_text_field(wp_unslash($_POST['topic_category']));
         $sort_order = intval($_POST['sort_order']);
         $active     = isset($_POST['active']) ? 1 : 0;
 

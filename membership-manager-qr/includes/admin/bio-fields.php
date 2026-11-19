@@ -24,9 +24,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_bio_field'])) {
         echo '<div class="notice notice-error"><p>Security check failed.</p></div>';
     } else {
         $field_id    = isset($_POST['field_id']) ? intval($_POST['field_id']) : 0;
-        $field_name  = sanitize_text_field($_POST['field_name']);
-        $field_type  = sanitize_text_field($_POST['field_type']);
-        $placeholder = sanitize_text_field($_POST['placeholder'] ?? '');
+        $field_name  = sanitize_text_field(wp_unslash($_POST['field_name']));
+        $field_type  = sanitize_text_field(wp_unslash($_POST['field_type']));
+        $placeholder = sanitize_text_field(wp_unslash($_POST['placeholder'] ?? ''));
         $sort_order  = intval($_POST['sort_order']);
         $active      = isset($_POST['active']) ? 1 : 0;
 

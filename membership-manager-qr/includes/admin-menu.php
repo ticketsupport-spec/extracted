@@ -359,7 +359,7 @@ add_action('wp_ajax_mmgr_mark_paid', function() {
     $tbl = $wpdb->prefix . 'memberships';
     
     $member_id = isset($_POST['member_id']) ? intval($_POST['member_id']) : 0;
-    $payment_method = isset($_POST['payment_method']) ? sanitize_text_field($_POST['payment_method']) : 'Cash';
+    $payment_method = isset($_POST['payment_method']) ? sanitize_text_field(wp_unslash($_POST['payment_method'])) : 'Cash';
     
     if (!$member_id) {
         wp_send_json_error(array('message' => 'Invalid member ID'));
@@ -422,7 +422,7 @@ function mmgr_members_page() {
     // Handle ban/unban
     if (isset($_GET['ban']) && isset($_GET['_wpnonce']) && wp_verify_nonce($_GET['_wpnonce'], 'ban_member_' . $_GET['ban'])) {
         $member_id = intval($_GET['ban']);
-        $reason = isset($_GET['reason']) ? sanitize_text_field($_GET['reason']) : 'No reason provided';
+        $reason = isset($_GET['reason']) ? sanitize_text_field(wp_unslash($_GET['reason'])) : 'No reason provided';
         $wpdb->update($tbl, 
             array('banned' => 1, 'banned_reason' => $reason, 'banned_on' => current_time('mysql')),
             array('id' => $member_id)

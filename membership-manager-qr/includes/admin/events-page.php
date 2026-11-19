@@ -76,11 +76,11 @@ if (isset($_POST['save_event']) && isset($_POST['event_nonce'])) {
         echo '<div class="notice notice-error"><p>Ticket limit must be a whole number of people, zero or greater.</p></div>';
     } else {
         $event_id = isset($_POST['event_id']) ? intval($_POST['event_id']) : null;
-        $event_name = sanitize_text_field($_POST['event_name']);
-        $event_date = sanitize_text_field($_POST['event_date']);
-        $start_time = sanitize_text_field($_POST['start_time'] ?? '');
-        $end_time = sanitize_text_field($_POST['end_time'] ?? '');
-        $location = sanitize_text_field($_POST['location'] ?? '');
+        $event_name = sanitize_text_field(wp_unslash($_POST['event_name']));
+        $event_date = sanitize_text_field(wp_unslash($_POST['event_date']));
+        $start_time = sanitize_text_field(wp_unslash($_POST['start_time'] ?? ''));
+        $end_time = sanitize_text_field(wp_unslash($_POST['end_time'] ?? ''));
+        $location = sanitize_text_field(wp_unslash($_POST['location'] ?? ''));
         $description = wp_kses_post(wp_unslash($_POST['description']));
         $active = isset($_POST['active']) ? 1 : 0;
         $sort_order = intval($_POST['sort_order'] ?? 0);

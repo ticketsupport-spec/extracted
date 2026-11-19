@@ -42,6 +42,7 @@ function mmgr_enforce_usercod($member) {}
 function nocache_headers() {}
 function sanitize_text_field($value) { return trim(strip_tags($value)); }
 function sanitize_textarea_field($value) { return sanitize_text_field($value); }
+function wp_unslash($value) { return is_array($value) ? array_map('wp_unslash', $value) : stripslashes($value); }
 function sanitize_email($value) { return $value; }
 function sanitize_key($value) { return $value; }
 function is_email($value) { return filter_var($value, FILTER_VALIDATE_EMAIL); }
@@ -249,6 +250,17 @@ expect(save_profile()->success && count($wpdb->updates) === $count + 1, 'Actual 
 $changes = json_decode(end($wpdb->updates)['changes'], true);
 expect(in_array('Community alias', array_column($changes, 'label')) && in_array('Custom text', array_column($changes, 'label')) && in_array('Orientation', array_column($changes, 'label')), 'Profile form records text, custom fields and selections together');
 expect(!in_array('email', array_column($changes, 'label')) && strpos(end($wpdb->updates)['changes'], 'new@example.com') === false, 'Contact details are not copied into moderation history');
+$wpdb->fields[3] = array('id' => 3, 'field_name' => 'Custom HTML', 'field_type' => 'html');
+$wpdb->fields[4] = array('id' => 4, 'field_name' => 'Custom text', 'field_type' => 'text');
+$submitted = "I'm \"new\" at C:\\events";
+$_POST['community_bio'] = addslashes($submitted);
+$_POST['bio_field_1'] = addslashes($submitted);
+$_POST['bio_field_3'] = addslashes('<strong>' . $submitted . '</strong>');
+$_POST['bio_field_4'] = addslashes($submitted);
+expect(save_profile()->success && $wpdb->member['community_bio'] === $submitted, 'Profile form saves quotes and literal backslashes without WordPress request slashes');
+expect($wpdb->values[1] === $submitted && $wpdb->values[3] === '<strong>' . $submitted . '</strong>' && $wpdb->values[4] === $submitted, 'Custom text, textarea and HTML fields preserve submitted characters');
+$changes = json_decode(end($wpdb->updates)['changes'], true);
+expect(in_array($submitted, array_column($changes, 'after'), true), 'Profile history records the actual submitted text');
 $count = count($wpdb->updates);
 expect(save_profile()->success && count($wpdb->updates) === $count, 'Repeated form submissions with unchanged values do not create unread updates');
 $_FILES = array(
