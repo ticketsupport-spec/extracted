@@ -18,7 +18,7 @@ function expect($condition, $message) {
     if (!$condition) throw new RuntimeException('FAIL: ' . $message);
     $passed++;
 }
-function add_action($name, $callback, ...$args) {}
+function add_action($name, $callback, ...$args) { global $actions; $actions[$name][] = $callback; }
 function add_filter($name, $callback, ...$args) { global $filters; $filters[$name] = $callback; }
 function add_shortcode($name, $callback) { global $shortcodes; $shortcodes[$name] = $callback; }
 function home_url($path) { return 'https://example.test' . $path; }
@@ -100,13 +100,34 @@ foreach (array('', "## Rules ##\n* Be respectful") as $conduct_content) {
 $member = null;
 $conduct = $shortcodes['membership_code_of_conduct'](array());
 expect(strpos($conduct, 'Be respectful') !== false && strpos($conduct, 'action=logout') === false, 'Conduct remains public without showing member navigation');
-$member = array('id' => 7, 'email' => 'member@example.test', 'member_code' => 'ABC');
-$_GET['action'] = 'logout';
-expect(strpos($shortcodes['mmgr_member_dashboard'](), 'logged out') !== false && $logged_out, 'Logout completes without a redirect');
-expect($shortcodes['mmgr_upcoming_events'](array()) === '', 'Event widget is hidden immediately after logout');
-expect(strpos($shortcodes['mmgr_portal_footer'](array()), 'Upcoming Events') === false, 'Portal footer does not expose events after logout');
+foreach (array(null, 'WRONG', 'ABC') as $usercod) {
+    $member = array('id' => 7, 'email' => 'member@example.test', 'member_code' => 'ABC');
+    $logged_out = false;
+    $_GET = array('action' => 'logout');
+    if ($usercod !== null) $_GET['usercod'] = $usercod;
+    $page_slug = 'member-dashboard';
+    foreach ($actions['template_redirect'] as $callback) $callback();
+    expect($logged_out && $member === null, 'Logout runs before rendering regardless of usercod');
+    expect($shortcodes['mmgr_upcoming_events'](array()) === '', 'Event widget is hidden before the dashboard shortcode renders');
+    expect(strpos($shortcodes['mmgr_portal_footer'](array()), 'mmgr-events-widget') === false, 'Portal footer does not expose events after logout');
+    expect(strpos($shortcodes['mmgr_member_dashboard'](), 'logged out') !== false, 'Logout displays confirmation');
+}
+$_GET = array();
 expect(strpos($shortcodes['mmgr_member_dashboard'](), 'Please log in') !== false, 'Logged-out dashboard URL offers login rather than member content');
 expect(strpos($shortcodes['mmgr_member_events'](), 'Please log in') !== false, 'Logged-out events page offers login');
+
+$member = array('id' => 7, 'email' => 'member@example.test', 'member_code' => 'ABC');
+$page_slug = '';
+$page_content = '[mmgr_member_dashboard]';
+$_GET = array('action' => 'logout');
+foreach ($actions['template_redirect'] as $callback) $callback();
+expect($member === null, 'Logout runs early on custom dashboard pages');
+
+$member = array('id' => 7, 'email' => 'member@example.test', 'member_code' => 'ABC');
+$page_content = '';
+foreach ($actions['template_redirect'] as $callback) $callback();
+expect($member !== null, 'Logout action on an unrelated page does not end the session');
+expect(strpos($shortcodes['mmgr_member_dashboard'](), 'logged out') !== false && $member === null, 'Dashboard shortcode also handles logout when rendered outside the page hook');
 
 $member = null;
 $_GET = array();
@@ -124,6 +145,7 @@ expect(strpos($registration, 'Registration successful!') !== false && strpos($re
 expect(strpos($registration, 'window.location') === false && strpos($registration, '<form') === false, 'Registration does not navigate automatically or offer the completed form again');
 
 $headers = array('Cache-Control' => 'public, max-age=3600', 'ETag' => 'cached');
+$page_content = '';
 $result = $filters['wp_headers']($headers);
 expect($result === $headers, 'Unrelated public pages retain their cache policy');
 $page_slug = 'member-dashboard';
