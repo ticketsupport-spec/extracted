@@ -2,6 +2,20 @@
 
 A WordPress plugin for complete membership management with QR code check-ins.
 
+## Member portal redirects and caching
+
+Registration and the portal show links instead of automatically redirecting
+members to login, the dashboard, or a corrected member-specific URL. Members
+must click the link to continue. Redirects that prevent duplicate form
+submissions remain in place.
+
+Portal responses and requests carrying a member session request private,
+no-store caching and set `DONOTCACHEPAGE`. Configure the web server, CDN, and
+any page-cache plugin to bypass member portal pages and requests with the
+`mmgr_session` cookie: a cache that serves a response before WordPress runs
+cannot be controlled by the plugin. Purge any previously cached portal pages.
+Server and other plugin redirects are outside this plugin's control.
+
 ## Admin unread messages
 
 In **Memberships → Messages**, **SHOW ALL UNREAD** displays every unread incoming
