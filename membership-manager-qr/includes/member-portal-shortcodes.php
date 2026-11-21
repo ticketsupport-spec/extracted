@@ -6,6 +6,18 @@ function mmgr_portal_login_notice() {
         . esc_url(home_url('/member-login/')) . '">Member login</a></p></div>';
 }
 
+add_action('template_redirect', function() {
+    if (!isset($_GET['action']) || $_GET['action'] !== 'logout') {
+        return;
+    }
+
+    $page = get_queried_object();
+    if (is_page(array('member-dashboard')) ||
+        (!empty($page->post_content) && has_shortcode($page->post_content, 'mmgr_member_dashboard'))) {
+        mmgr_logout_member();
+    }
+});
+
 function mmgr_get_portal_navigation($active_page = '', $member = null) {
     // Build a member-specific query suffix so that each member's URLs are unique.
     // This prevents NGINX from serving a page cached for one member to another.
@@ -1107,6 +1119,12 @@ add_shortcode('mmgr_member_dashboard', function() {
     // Caching a member's personalised dashboard and then serving it to a
     // different visitor would expose private account information.
     nocache_headers();
+
+    if (isset($_GET['action']) && $_GET['action'] === 'logout') {
+        mmgr_logout_member();
+        return '<div class="mmgr-portal-card"><p>You have logged out.</p><p><a href="'
+            . esc_url(home_url('/member-login/')) . '">Member login</a></p></div>';
+    }
     
     // ADMIN BYPASS: Allow admins to view as any member
     if (current_user_can('manage_options') && isset($_GET['view_member'])) {
@@ -1136,13 +1154,6 @@ add_shortcode('mmgr_member_dashboard', function() {
     // Enforce ?usercod= parameter for NGINX cache isolation (skip for admin view-as-member).
     if (!($admin_mode ?? false)) {
         if ($notice = mmgr_enforce_usercod($member)) return $notice;
-    }
-    
-    // Handle logout
-    if (isset($_GET['action']) && $_GET['action'] === 'logout') {
-        mmgr_logout_member();
-        return '<div class="mmgr-portal-card"><p>You have logged out.</p><p><a href="'
-            . esc_url(home_url('/member-login/')) . '">Member login</a></p></div>';
     }
     
     $qr_url = admin_url('admin-ajax.php?action=mmgr_qrcode&code=' . urlencode($member['member_code']));
