@@ -30,6 +30,7 @@ function mmgr_is_portal_cache_request() {
         'mmgr_member_dashboard', 'mmgr_member_activity', 'mmgr_member_profile',
         'mmgr_member_community', 'mmgr_members_directory', 'mmgr_member_community_profile',
         'mmgr_member_messages', 'mmgr_member_events', 'mmgr_member_help',
+        'membership_code_of_conduct',
     ) as $shortcode) {
         if (has_shortcode($page->post_content, $shortcode)) {
             return true;

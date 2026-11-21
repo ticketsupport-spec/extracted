@@ -1136,13 +1136,14 @@ add_shortcode('membership_checkin', function($atts){
 
 // Code of Conduct Display Shortcode
 add_shortcode('membership_code_of_conduct', function($atts){
+    $member = mmgr_get_current_member();
     $content = get_option('mmgr_code_of_conduct', '');
     if (empty($content)) {
         ob_start();
         ?>
         <div class="mmgr-portal-container">
             <!-- Navigation -->
-            <?php echo mmgr_get_portal_navigation('coc'); ?>
+            <?php if ($member) echo mmgr_get_portal_navigation('coc', $member); ?>
             <div class="mmgr-portal-titlecc">
                 <h1><?php echo esc_html(get_option('mmgr_portal_title_coc', 'Code of Conduct 📜')); ?></h1>
             </div>
@@ -1208,7 +1209,7 @@ add_shortcode('membership_code_of_conduct', function($atts){
     ?>
     <div class="mmgr-portal-container">
         <!-- Navigation -->
-        <?php echo mmgr_get_portal_navigation('coc'); ?>
+        <?php if ($member) echo mmgr_get_portal_navigation('coc', $member); ?>
         <div class="mmgr-portal-titlecc">
             <h1><?php echo esc_html(get_option('mmgr_portal_title_coc', 'Code of Conduct 📜')); ?></h1>
         </div>
