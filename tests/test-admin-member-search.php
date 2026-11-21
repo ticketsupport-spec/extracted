@@ -22,6 +22,7 @@ function esc_url($value) { return esc_html($value); }
 function esc_js($value) { return addslashes($value); }
 function wp_create_nonce($action) { return 'test-nonce'; }
 function wp_nonce_url($url, $action) { return $url . '&_wpnonce=test-nonce'; }
+function add_query_arg($key, $value, $url) { return $url . '&' . rawurlencode($key) . '=' . rawurlencode($value); }
 
 class MemberSearchDatabase {
     public $prefix = 'site_2_';
@@ -31,6 +32,8 @@ class MemberSearchDatabase {
     public $args = array();
     public $bio_fields_table_exists = false;
     public $bio_values_table_exists = false;
+    public $total = 12;
+    public $matching_total = null;
 
     public function esc_like($value) {
         return addcslashes($value, '_%\\');
@@ -39,11 +42,11 @@ class MemberSearchDatabase {
         $args = is_array($args) ? $args : array($args);
         if (strpos($query, 'SELECT * FROM site_2_memberships') === 0) {
             $this->prepared_query = $query;
-            $this->args = $args;
+            $this->args = array_slice($args, 0, -2);
         }
         foreach ($args as $arg) {
-            $query = preg_replace_callback('/%s/', function() use ($arg) {
-                return "'" . str_replace("'", "''", $arg) . "'";
+            $query = preg_replace_callback('/%[sd]/', function($match) use ($arg) {
+                return $match[0] === '%d' ? (string) (int) $arg : "'" . str_replace("'", "''", $arg) . "'";
             }, $query, 1);
         }
         return $query;
@@ -51,7 +54,8 @@ class MemberSearchDatabase {
     public function get_results($query, $format) {
         if (strpos($query, 'SELECT * FROM site_2_memberships') === 0) {
             $this->query = $query;
-            return $this->members;
+            preg_match('/LIMIT (\d+) OFFSET (\d+)$/', $query, $matches);
+            return array_slice($this->members, (int) $matches[2], (int) $matches[1]);
         }
         return array();
     }
@@ -63,7 +67,10 @@ class MemberSearchDatabase {
             return $this->bio_values_table_exists ? 'site_2_membership_bio_field_values' : null;
         }
         if ($query === 'SELECT COUNT(*) FROM site_2_memberships') {
-            return 12;
+            return $this->total;
+        }
+        if (strpos($query, 'SELECT COUNT(*) FROM site_2_memberships WHERE ') === 0) {
+            return $this->matching_total === null ? count($this->members) : $this->matching_total;
         }
         if (strpos($query, 'WHERE paid = 0') !== false) {
             return 3;
@@ -75,9 +82,10 @@ class MemberSearchDatabase {
 $wpdb = new MemberSearchDatabase();
 require __DIR__ . '/../membership-manager-qr/includes/admin-menu.php';
 
-function render_members($search = null) {
+function render_members($search = null, $page = null) {
     global $wpdb;
     $_GET = $search === null ? array() : array('member_search' => $search);
+    if ($page !== null) $_GET['paged'] = $page;
     $wpdb->prepared_query = '';
     $wpdb->args = array();
     ob_start();
@@ -86,7 +94,7 @@ function render_members($search = null) {
 }
 
 $html = render_members();
-expect($wpdb->query === 'SELECT * FROM site_2_memberships ORDER BY paid ASC, id DESC', 'Unfiltered list keeps existing ordering');
+expect($wpdb->query === 'SELECT * FROM site_2_memberships ORDER BY id DESC LIMIT 25 OFFSET 0', 'First page loads only the 25 newest members');
 expect(strpos($html, 'name="page" value="membership_manager"') !== false, 'Search retains the admin page route');
 expect(strpos($html, 'Add your first member') !== false, 'Empty unfiltered list offers member creation');
 expect(strpos($html, 'Clear search') === false, 'Unfiltered list does not show reset control');
@@ -141,7 +149,7 @@ expect(end($wpdb->args) === '%100\\%\\_match%', 'Fetlife search treats SQL wildc
 render_members('+1 (555) 123-4567');
 expect($wpdb->args[4] === '%15551234567%' && end($wpdb->args) === '%+1 (555) 123-4567%', 'Phone normalization remains available alongside Fetlife matching');
 render_members();
-expect($wpdb->query === 'SELECT * FROM site_2_memberships ORDER BY paid ASC, id DESC', 'Bio tables do not affect the unfiltered member query');
+expect($wpdb->query === 'SELECT * FROM site_2_memberships ORDER BY id DESC LIMIT 25 OFFSET 0', 'Bio tables do not affect the unfiltered member query');
 
 $wpdb->members = array(array(
     'id' => 7, 'name' => 'Jane Smith', 'partner_name' => 'John Smith',
@@ -152,6 +160,7 @@ $wpdb->members = array(array(
 $html = render_members('Jane');
 expect(strpos($html, '1 matching member(s)') !== false, 'Search reports the matching member count');
 expect(strpos($html, 'Jane Smith') !== false && strpos($html, 'John Smith') !== false, 'Member and partner remain visible');
+expect(strpos($html, '<img src="https://example.com/wp-admin/admin-ajax.php?action=mmgr_qrcode&amp;code=ABC123" loading="lazy"') !== false, 'Member QR images load lazily');
 foreach (array('Photo', 'QR Code', 'Member', 'Contact', 'Level', 'Payment', 'Status', 'Expires', 'Last Visit', 'Actions') as $label) {
     expect(strpos($html, 'class="mmgr-mobile-label" aria-hidden="true">' . $label) !== false, "Mobile cards label $label");
 }
@@ -166,5 +175,27 @@ $wpdb->members[0]['paid'] = 1;
 $html = render_members();
 expect(strpos($html, '>Unban</a>') !== false && strpos($html, '⛔ BANNED') !== false, 'Paid banned members keep their status and unban action');
 expect(strpos($html, '💰 Mark Paid') === false, 'Paid members do not display the payment action');
+
+$template = $wpdb->members[0];
+$wpdb->members = array();
+for ($id = 53; $id > 0; $id--) {
+    $member = $template;
+    $member['id'] = $id;
+    $member['member_code'] = 'CODE' . $id;
+    $wpdb->members[] = $member;
+}
+$wpdb->total = 53;
+$html = render_members();
+expect(substr_count($html, 'loading="lazy"') === 25 && strpos($html, 'code=CODE53') !== false && strpos($html, 'code=CODE28') === false, 'First page renders QR codes only for the newest 25 members');
+expect(strpos($html, 'Page 1 of 3') !== false && strpos($html, 'paged=2') !== false, 'First page links to the next page');
+$html = render_members('Jane & John', 2);
+expect(strpos($wpdb->query, 'ORDER BY id DESC LIMIT 25 OFFSET 25') !== false, 'Second search page uses the correct database offset');
+expect(substr_count($html, 'loading="lazy"') === 25 && strpos($html, 'code=CODE28') !== false, 'Second page renders the next 25 members');
+expect(strpos($html, '53 matching member(s)') !== false && strpos($html, 'member_search=Jane%20%26%20John&amp;paged=3') !== false, 'Search count and pagination preserve the search across all matches');
+$html = render_members(null, 999);
+expect(strpos($wpdb->query, 'LIMIT 25 OFFSET 50') !== false && substr_count($html, 'loading="lazy"') === 3, 'Out-of-range page is clamped to the last page');
+expect(strpos($html, 'Page 3 of 3') !== false && strpos($html, 'paged=2') !== false, 'Last page offers a previous link');
+$html = render_members(null, array('2'));
+expect(strpos($wpdb->query, 'LIMIT 25 OFFSET 0') !== false, 'Invalid page input falls back to the first page');
 
 echo "\nResults: $passed passed, 0 failed\n";

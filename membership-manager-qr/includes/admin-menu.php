@@ -444,7 +444,8 @@ function mmgr_members_page() {
         $wpdb->get_var("SHOW TABLES LIKE '$bio_values_tbl'") === $bio_values_tbl;
     $search = isset($_GET['member_search']) && is_string($_GET['member_search'])
         ? sanitize_text_field(wp_unslash($_GET['member_search'])) : '';
-    $members_query = "SELECT * FROM $tbl";
+    $where = '';
+    $args = array();
     if ($search !== '') {
         $like = '%' . $wpdb->esc_like($search) . '%';
         $where = '(name LIKE %s OR partner_name LIKE %s OR email LIKE %s OR phone LIKE %s';
@@ -462,11 +463,25 @@ function mmgr_members_page() {
             $args[] = 'fetlife name';
             $args[] = $like;
         }
-        $members_query .= ' WHERE ' . $where . ')';
-        $members_query = $wpdb->prepare($members_query, $args);
+        $where = ' WHERE ' . $where . ')';
     }
-    $members = $wpdb->get_results($members_query . ' ORDER BY paid ASC, id DESC', ARRAY_A);
-    $total = $search === '' ? count($members) : (int) $wpdb->get_var("SELECT COUNT(*) FROM $tbl");
+    $total = (int) $wpdb->get_var("SELECT COUNT(*) FROM $tbl");
+    $matching_total = $search === '' ? $total : (int) $wpdb->get_var(
+        $wpdb->prepare("SELECT COUNT(*) FROM $tbl" . $where, $args)
+    );
+    $per_page = 25;
+    $total_pages = max(1, (int) ceil($matching_total / $per_page));
+    $requested_page = isset($_GET['paged']) && is_scalar($_GET['paged']) && ctype_digit((string) $_GET['paged'])
+        ? (int) $_GET['paged'] : 1;
+    $current_page = min($total_pages, max(1, $requested_page));
+    $members = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM $tbl" . $where . ' ORDER BY id DESC LIMIT %d OFFSET %d',
+        array_merge($args, array($per_page, ($current_page - 1) * $per_page))
+    ), ARRAY_A);
+    $pagination_url = admin_url('admin.php?page=membership_manager');
+    if ($search !== '') {
+        $pagination_url = add_query_arg('member_search', $search, $pagination_url);
+    }
 
     $fetlife_names = array();
     if ($has_bio_tables) {
@@ -537,7 +552,7 @@ function mmgr_members_page() {
             <?php endif; ?>
         </form>
         <?php if ($search !== ''): ?>
-            <p role="status"><?php echo count($members); ?> matching member(s) for “<?php echo esc_html($search); ?>”.</p>
+            <p role="status"><?php echo $matching_total; ?> matching member(s) for “<?php echo esc_html($search); ?>”.</p>
         <?php endif; ?>
         
         <!-- Stats -->
@@ -620,7 +635,7 @@ function mmgr_members_page() {
                         <td>
                             <span class="mmgr-mobile-label" aria-hidden="true">QR Code</span>
                             <a href="<?php echo esc_url($qr_url); ?>" target="_blank">
-                                <img src="<?php echo esc_url($qr_url); ?>" 
+                                <img src="<?php echo esc_url($qr_url); ?>" loading="lazy"
                                      style="width:60px;height:60px;border:1px solid #ccc;" 
                                      alt="QR Code">
                             </a>
@@ -742,6 +757,19 @@ function mmgr_members_page() {
                 <?php endif; ?>
             </tbody>
         </table>
+        <?php if ($total_pages > 1): ?>
+            <nav class="tablenav" aria-label="Member list pagination">
+                <div class="tablenav-pages">
+                    <?php if ($current_page > 1): ?>
+                        <a class="button" href="<?php echo esc_url(add_query_arg('paged', $current_page - 1, $pagination_url)); ?>">Previous</a>
+                    <?php endif; ?>
+                    <span>Page <?php echo $current_page; ?> of <?php echo $total_pages; ?></span>
+                    <?php if ($current_page < $total_pages): ?>
+                        <a class="button" href="<?php echo esc_url(add_query_arg('paged', $current_page + 1, $pagination_url)); ?>">Next</a>
+                    <?php endif; ?>
+                </div>
+            </nav>
+        <?php endif; ?>
     </div>
     
     <script>
