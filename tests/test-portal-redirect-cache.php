@@ -9,6 +9,7 @@ $page_slug = '';
 $page_content = '';
 $is_admin_request = false;
 $session_created = false;
+$redirect_url = '';
 $logged_out = false;
 $conduct_content = '';
 $passed = 0;
@@ -18,6 +19,7 @@ function expect($condition, $message) {
     if (!$condition) throw new RuntimeException('FAIL: ' . $message);
     $passed++;
 }
+class TestRedirectException extends Exception {}
 function add_action($name, $callback, ...$args) { global $actions; $actions[$name][] = $callback; }
 function add_filter($name, $callback, ...$args) { global $filters; $filters[$name] = $callback; }
 function add_shortcode($name, $callback) { global $shortcodes; $shortcodes[$name] = $callback; }
@@ -33,6 +35,7 @@ function add_query_arg($key, $value, $url = null) {
     return $url . (strpos($url, '?') === false ? '?' : '&') . rawurlencode($key) . '=' . rawurlencode($value);
 }
 function nocache_headers() {}
+function wp_safe_redirect($url) { global $redirect_url; $redirect_url = $url; throw new TestRedirectException(); }
 function current_user_can($capability) { return false; }
 function mmgr_get_current_member() { global $member; return $member; }
 function mmgr_create_member_session($id, $email = '') { global $session_created; $session_created = true; }
@@ -133,8 +136,15 @@ $member = null;
 $_GET = array();
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_POST = array('member_login' => '1', 'login_nonce' => 'valid', 'email' => 'member@example.test', 'password' => 'secret');
-$login = $shortcodes['mmgr_member_login']();
-expect($session_created && strpos($login, 'usercod=ABC') !== false, 'Successful login creates a session and offers a dashboard link');
+$page_slug = 'member-login';
+$page_content = '[mmgr_member_login]';
+try {
+    foreach ($actions['template_redirect'] as $callback) $callback();
+} catch (TestRedirectException $e) {
+}
+expect($session_created && $redirect_url === 'https://example.test/member-dashboard/?usercod=ABC', 'Successful login creates a session and sends members directly to their dashboard');
+$page_slug = '';
+$page_content = '';
 
 $wpdb->registration = true;
 $_POST = array('mmgr_register' => '1', 'reg_nonce' => 'valid', 'first_name' => 'Test',

@@ -18,6 +18,55 @@ add_action('template_redirect', function() {
     }
 });
 
+add_action('template_redirect', function() {
+    $page = get_queried_object();
+    if (!is_page(array('member-login')) &&
+        (empty($page->post_content) || !has_shortcode($page->post_content, 'mmgr_member_login'))) {
+        return;
+    }
+
+    $member = mmgr_get_current_member();
+    if ($member) {
+        $dashboard_url = add_query_arg('usercod', $member['member_code'], home_url('/member-dashboard/'));
+        wp_safe_redirect($dashboard_url);
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['member_login'])) {
+        return;
+    }
+
+    if (!isset($_POST['login_nonce']) || !wp_verify_nonce($_POST['login_nonce'], 'mmgr_member_login')) {
+        $GLOBALS['mmgr_member_login_error'] = 'Security check failed.';
+        return;
+    }
+
+    $email = sanitize_email($_POST['email']);
+    $password = $_POST['password'];
+
+    global $wpdb;
+    $member_for_log = $wpdb->get_row($wpdb->prepare(
+        "SELECT id, email FROM {$wpdb->prefix}memberships WHERE email = %s",
+        $email
+    ), ARRAY_A);
+
+    $result = mmgr_verify_member_login($email, $password);
+
+    if (is_array($result) && isset($result['error']) && $result['error'] === 'no_password') {
+        mmgr_log_login_attempt($email, $member_for_log ? $member_for_log['id'] : null, $member_for_log ? $member_for_log['email'] : null, false, 'no_password');
+        $GLOBALS['mmgr_member_login_error'] = 'You haven\'t set up your password yet. Please check your email for the setup link.';
+    } elseif ($result) {
+        mmgr_log_login_attempt($email, $result['id'], $result['email'], true);
+        mmgr_create_member_session($result['id'], $email);
+        $dashboard_url = add_query_arg('usercod', $result['member_code'], home_url('/member-dashboard/'));
+        wp_safe_redirect($dashboard_url);
+        exit;
+    } else {
+        mmgr_log_login_attempt($email, $member_for_log ? $member_for_log['id'] : null, $member_for_log ? $member_for_log['email'] : null, false, 'invalid_credentials');
+        $GLOBALS['mmgr_member_login_error'] = 'Invalid email or password.';
+    }
+});
+
 function mmgr_get_portal_navigation($active_page = '', $member = null) {
     // Build a member-specific query suffix so that each member's URLs are unique.
     // This prevents NGINX from serving a page cached for one member to another.
@@ -951,41 +1000,11 @@ add_shortcode('mmgr_member_login', function() {
             . '">Continue to your dashboard</a></p></div>';
     }
 
-    $error = '';
+    $error = isset($GLOBALS['mmgr_member_login_error']) ? $GLOBALS['mmgr_member_login_error'] : '';
     $recovery_error = '';
     $recovery_notice = '';
     
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['member_login'])) {
-        if (!isset($_POST['login_nonce']) || !wp_verify_nonce($_POST['login_nonce'], 'mmgr_member_login')) {
-            $error = 'Security check failed.';
-        } else {
-            $email = sanitize_email($_POST['email']);
-            $password = $_POST['password'];
-
-            // Pre-fetch member info so we can log the attempt regardless of outcome.
-            global $wpdb;
-            $member_for_log = $wpdb->get_row($wpdb->prepare(
-                "SELECT id, email FROM {$wpdb->prefix}memberships WHERE email = %s",
-                $email
-            ), ARRAY_A);
-
-            $result = mmgr_verify_member_login($email, $password);
-            
-            if (is_array($result) && isset($result['error']) && $result['error'] === 'no_password') {
-                mmgr_log_login_attempt($email, $member_for_log ? $member_for_log['id'] : null, $member_for_log ? $member_for_log['email'] : null, false, 'no_password');
-                $error = 'You haven\'t set up your password yet. Please check your email for the setup link.';
-            } elseif ($result) {
-                mmgr_log_login_attempt($email, $result['id'], $result['email'], true);
-                mmgr_create_member_session($result['id'], $email);
-                return '<div class="mmgr-portal-card"><p>Login successful.</p><p><a href="'
-                    . esc_url(add_query_arg('usercod', $result['member_code'], home_url('/member-dashboard/')))
-                    . '">Continue to your dashboard</a></p></div>';
-            } else {
-                mmgr_log_login_attempt($email, $member_for_log ? $member_for_log['id'] : null, $member_for_log ? $member_for_log['email'] : null, false, 'invalid_credentials');
-                $error = 'Invalid email or password.';
-            }
-        }
-    } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_password_reset'])) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_password_reset'])) {
         if (!isset($_POST['reset_nonce']) || !wp_verify_nonce($_POST['reset_nonce'], 'mmgr_request_password_reset')) {
             $recovery_error = 'Security check failed.';
         } else {
