@@ -133,12 +133,14 @@ function mmgr_get_portal_navigation($active_page = '', $member = null) {
  * Upcoming Events Widget for Portal Footer
  */
 add_shortcode('mmgr_upcoming_events', function($atts) {
+    $current_member = mmgr_get_current_member();
+    if (!$current_member) {
+        return '';
+    }
+
     global $wpdb;
     $events_table = $wpdb->prefix . 'membership_events';
     $rsvps_table  = $wpdb->prefix . 'membership_event_rsvps';
-
-    // Get current member (may be null for non-logged-in visitors)
-    $current_member = mmgr_get_current_member();
 
     // Get only future events
     $events = $wpdb->get_results(

@@ -10,6 +10,7 @@ $page_content = '';
 $is_admin_request = false;
 $session_created = false;
 $logged_out = false;
+$conduct_content = '';
 $passed = 0;
 
 function expect($condition, $message) {
@@ -23,6 +24,9 @@ function add_shortcode($name, $callback) { global $shortcodes; $shortcodes[$name
 function home_url($path) { return 'https://example.test' . $path; }
 function esc_url($value) { return htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); }
 function esc_url_raw($value) { return $value; }
+function esc_html($value) { return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'); }
+function esc_sql($value) { return $value; }
+function wp_kses_post($value) { return $value; }
 function wp_unslash($value) { return $value; }
 function add_query_arg($key, $value, $url = null) {
     $url = $url ?? 'https://example.test/member-messages/?chat=3';
@@ -34,11 +38,11 @@ function mmgr_get_current_member() { global $member; return $member; }
 function mmgr_create_member_session($id, $email = '') { global $session_created; $session_created = true; }
 function mmgr_verify_member_login($email, $password) { return array('id' => 7, 'email' => $email, 'member_code' => 'ABC'); }
 function mmgr_log_login_attempt(...$args) {}
-function mmgr_logout_member() { global $logged_out; $logged_out = true; }
+function mmgr_logout_member() { global $logged_out, $member; $logged_out = true; $member = null; }
 function wp_verify_nonce($nonce, $action) { return $nonce === 'valid'; }
 function sanitize_email($value) { return $value; }
 function sanitize_text_field($value) { return $value; }
-function get_option($key, $default = '') { return $default; }
+function get_option($key, $default = '') { global $conduct_content; return $key === 'mmgr_code_of_conduct' ? $conduct_content : $default; }
 function mmgr_validate_age($dob) { return true; }
 function mmgr_generate_member_code($name) { return 'NEWCODE'; }
 function mmgr_generate_qr_file($code) {}
@@ -48,11 +52,14 @@ function is_admin() { global $is_admin_request; return $is_admin_request; }
 function is_page($slugs) { global $page_slug; return in_array($page_slug, $slugs, true); }
 function get_queried_object() { global $page_content; return (object) array('post_content' => $page_content); }
 function has_shortcode($content, $shortcode) { return strpos($content, '[' . $shortcode . ']') !== false; }
+function do_shortcode($content) { global $shortcodes; return $shortcodes['mmgr_upcoming_events'](array()); }
+function bloginfo($name) { echo 'Example'; }
 class TestPortalDatabase {
     public $prefix = 'wp_';
     public $insert_id = 7;
     public $registration = false;
     public function prepare($sql, ...$args) { return $sql; }
+    public function get_var($sql) { return null; }
     public function get_row($sql, $format) { return $this->registration ? null : array('id' => 7, 'email' => 'member@example.test'); }
     public function insert($table, $data) { return 1; }
 }
@@ -83,8 +90,23 @@ $notice = mmgr_enforce_usercod($member);
 expect(strpos($notice, 'chat=3&amp;usercod=ABC') !== false, 'Corrected link preserves other arguments');
 $_GET['usercod'] = 'ABC';
 expect(mmgr_enforce_usercod($member) === '', 'Matching member code proceeds without a redirect');
+
+foreach (array('', "## Rules ##\n* Be respectful") as $conduct_content) {
+    $conduct = $shortcodes['membership_code_of_conduct'](array());
+    expect(strpos($conduct, '/member-dashboard/?usercod=ABC') !== false, 'Conduct navigation keeps the member-specific dashboard link');
+    expect(strpos($conduct, '/member-profile/?usercod=ABC') !== false, 'Conduct navigation keeps the member-specific profile link');
+    expect(strpos($conduct, '/member-dashboard/?usercod=ABC&amp;action=logout') !== false, 'Conduct navigation keeps the member-specific logout link');
+}
+$member = null;
+$conduct = $shortcodes['membership_code_of_conduct'](array());
+expect(strpos($conduct, 'Be respectful') !== false && strpos($conduct, 'action=logout') === false, 'Conduct remains public without showing member navigation');
+$member = array('id' => 7, 'email' => 'member@example.test', 'member_code' => 'ABC');
 $_GET['action'] = 'logout';
 expect(strpos($shortcodes['mmgr_member_dashboard'](), 'logged out') !== false && $logged_out, 'Logout completes without a redirect');
+expect($shortcodes['mmgr_upcoming_events'](array()) === '', 'Event widget is hidden immediately after logout');
+expect(strpos($shortcodes['mmgr_portal_footer'](array()), 'Upcoming Events') === false, 'Portal footer does not expose events after logout');
+expect(strpos($shortcodes['mmgr_member_dashboard'](), 'Please log in') !== false, 'Logged-out dashboard URL offers login rather than member content');
+expect(strpos($shortcodes['mmgr_member_events'](), 'Please log in') !== false, 'Logged-out events page offers login');
 
 $member = null;
 $_GET = array();
@@ -112,6 +134,8 @@ expect(strpos($filters['nocache_headers'](array())['Cache-Control'], 'private') 
 $page_slug = '';
 $page_content = '[mmgr_member_messages]';
 expect(mmgr_is_portal_cache_request(), 'Portal shortcodes on custom pages are not cached');
+$page_content = '[membership_code_of_conduct]';
+expect(mmgr_is_portal_cache_request(), 'Conduct shortcodes on custom pages are not cached');
 $page_content = '';
 $_COOKIE['mmgr_session'] = 'test';
 expect(mmgr_is_portal_cache_request(), 'Member-session requests are not cached');

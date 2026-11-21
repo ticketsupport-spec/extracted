@@ -263,7 +263,7 @@ expect(!str_contains($html, '123 Secret Street'), 'Private note is not exposed i
 expect(str_contains($html, '/member-events/?usercod=CODE8&amp;tickets=5'), 'Widget button links to ticket page');
 $current_member = null;
 $html = $shortcodes['mmgr_upcoming_events'](array());
-expect(!str_contains($html, 'BUY TICKETS'), 'Visitors do not see BUY TICKETS');
+expect($html === '', 'Visitors do not see upcoming events or attendee details');
 
 $current_member = $paid;
 unset($_GET['tickets']);
