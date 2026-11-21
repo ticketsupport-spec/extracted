@@ -1046,14 +1046,13 @@ if (!function_exists('mmgr_is_member_logged_in')) {
  * makes every member's portal URLs unique, preventing NGINX from serving a
  * cached page belonging to one member to a different member.
  *
- * If the ?usercod parameter is absent or does not match the logged-in member's
- * member_code, the visitor is redirected to the same URL with the correct value.
- * All other existing query parameters are preserved in the redirect.
+ * If the parameter is missing or incorrect, do not render private content.
+ * Offer a link with the correct parameter rather than redirecting automatically.
  */
 if (!function_exists('mmgr_enforce_usercod')) {
     function mmgr_enforce_usercod($member) {
         if (empty($member['member_code'])) {
-            return;
+            return '';
         }
 
         $expected = $member['member_code'];
@@ -1063,8 +1062,8 @@ if (!function_exists('mmgr_enforce_usercod')) {
             // Preserve all current query args (e.g. ?chat=, ?topic=, ?profile_updated=)
             // and replace/add the correct usercod value.
             $redirect_url = esc_url_raw(add_query_arg('usercod', $expected));
-            wp_redirect($redirect_url);
-            exit;
+            return '<div class="mmgr-portal-card"><p>Please continue using your member-specific link.</p>'
+                . '<p><a href="' . esc_url($redirect_url) . '">Continue to this page</a></p></div>';
         }
 
         // Send X-Accel-Expires: 0 so that NGINX proxy/FastCGI caches also treat
@@ -1072,6 +1071,7 @@ if (!function_exists('mmgr_enforce_usercod')) {
         if (!headers_sent()) {
             header('X-Accel-Expires: 0');
         }
+        return '';
     }
 }
 

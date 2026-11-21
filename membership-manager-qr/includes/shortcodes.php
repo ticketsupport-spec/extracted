@@ -114,7 +114,7 @@ add_shortcode('membership_registration', function($atts){
 				
                 echo '<div class="mmgr-success">Registration successful! Check your email for login details.</div>';
                 
-                // Get redirect URL from settings, default to login page
+                // Get the continuation URL from settings, default to login page.
                 $redirect_url = get_option('mmgr_registration_success_url', '');
                 if (empty($redirect_url)) {
                     $redirect_url = home_url('/member-login/');
@@ -122,11 +122,8 @@ add_shortcode('membership_registration', function($atts){
                     $redirect_url = mmgr_get_absolute_url($redirect_url);
                 }
                 
-                echo '<script>
-                    setTimeout(function() {
-                        window.location.href = "'.esc_url($redirect_url).'";
-                    }, 2000);
-                </script>';
+                echo '<p><a href="' . esc_url($redirect_url) . '">Continue</a></p>';
+                return ob_get_clean();
             }
         }
     }

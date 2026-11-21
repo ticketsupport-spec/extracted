@@ -1,6 +1,10 @@
 <?php
 if (!defined('ABSPATH')) exit;
 
+function mmgr_portal_login_notice() {
+    return '<div class="mmgr-portal-card"><p>Please log in to access this page.</p><p><a href="'
+        . esc_url(home_url('/member-login/')) . '">Member login</a></p></div>';
+}
 
 function mmgr_get_portal_navigation($active_page = '', $member = null) {
     // Build a member-specific query suffix so that each member's URLs are unique.
@@ -597,11 +601,10 @@ add_shortcode('mmgr_member_events', function() {
 
     $member = mmgr_get_current_member();
     if (!$member) {
-        wp_redirect(home_url('/member-login/'));
-        exit;
+        return mmgr_portal_login_notice();
     }
 
-    mmgr_enforce_usercod($member);
+    if ($notice = mmgr_enforce_usercod($member)) return $notice;
 
     if (isset($_GET['tickets'])) {
         return mmgr_render_event_tickets_page($member, intval($_GET['tickets']));
@@ -873,12 +876,8 @@ add_shortcode('mmgr_password_setup', function() {
                 <div style="text-align:center;padding:40px 20px;">
                     <div style="font-size:64px;margin-bottom:20px;">✓</div>
                     <h2 style="color:#159742;margin-bottom:10px;">Password Set Successfully!</h2>
-                    <p>Your account is now ready. Redirecting to your dashboard...</p>
-                    <script>
-                        setTimeout(function() {
-                            window.location.href = '<?php echo esc_url(home_url('/member-dashboard/')); ?>';
-                        }, 2000);
-                    </script>
+                    <p>Your account is now ready.</p>
+                    <p><a href="<?php echo esc_url(home_url('/member-dashboard/')); ?>">Continue to your dashboard</a></p>
                 </div>
             </div>
         <?php else: ?>
@@ -931,12 +930,11 @@ add_shortcode('mmgr_password_setup', function() {
  */
 add_shortcode('mmgr_member_login', function() {
     nocache_headers();
-    // Auto-redirect to dashboard if the member already has a valid session.
-    // This lets members on their own trusted devices skip the login form entirely.
     $existing_member = mmgr_get_current_member();
     if ($existing_member) {
-        wp_redirect(add_query_arg('usercod', $existing_member['member_code'], home_url('/member-dashboard/')));
-        exit;
+        return '<div class="mmgr-portal-card"><p>You are already logged in.</p><p><a href="'
+            . esc_url(add_query_arg('usercod', $existing_member['member_code'], home_url('/member-dashboard/')))
+            . '">Continue to your dashboard</a></p></div>';
     }
 
     $error = '';
@@ -965,8 +963,9 @@ add_shortcode('mmgr_member_login', function() {
             } elseif ($result) {
                 mmgr_log_login_attempt($email, $result['id'], $result['email'], true);
                 mmgr_create_member_session($result['id'], $email);
-                wp_redirect(add_query_arg('usercod', $result['member_code'], home_url('/member-dashboard/')));
-                exit;
+                return '<div class="mmgr-portal-card"><p>Login successful.</p><p><a href="'
+                    . esc_url(add_query_arg('usercod', $result['member_code'], home_url('/member-dashboard/')))
+                    . '">Continue to your dashboard</a></p></div>';
             } else {
                 mmgr_log_login_attempt($email, $member_for_log ? $member_for_log['id'] : null, $member_for_log ? $member_for_log['email'] : null, false, 'invalid_credentials');
                 $error = 'Invalid email or password.';
@@ -1126,8 +1125,7 @@ add_shortcode('mmgr_member_dashboard', function() {
         $member = mmgr_get_current_member();
         
         if (!$member) {
-            wp_redirect(home_url('/member-login/'));
-            exit;
+            return mmgr_portal_login_notice();
         }
         
         $admin_mode = false;
@@ -1135,14 +1133,14 @@ add_shortcode('mmgr_member_dashboard', function() {
 
     // Enforce ?usercod= parameter for NGINX cache isolation (skip for admin view-as-member).
     if (!($admin_mode ?? false)) {
-        mmgr_enforce_usercod($member);
+        if ($notice = mmgr_enforce_usercod($member)) return $notice;
     }
     
     // Handle logout
     if (isset($_GET['action']) && $_GET['action'] === 'logout') {
         mmgr_logout_member();
-        wp_redirect(home_url('/member-login/'));
-        exit;
+        return '<div class="mmgr-portal-card"><p>You have logged out.</p><p><a href="'
+            . esc_url(home_url('/member-login/')) . '">Member login</a></p></div>';
     }
     
     $qr_url = admin_url('admin-ajax.php?action=mmgr_qrcode&code=' . urlencode($member['member_code']));
@@ -1406,11 +1404,10 @@ add_shortcode('mmgr_member_activity', function() {
     $member = mmgr_get_current_member();
     
     if (!$member) {
-        wp_redirect(home_url('/member-login/'));
-        exit;
+        return mmgr_portal_login_notice();
     }
 
-    mmgr_enforce_usercod($member);
+    if ($notice = mmgr_enforce_usercod($member)) return $notice;
     
     // Get visit history
     global $wpdb;
@@ -1591,7 +1588,7 @@ add_shortcode('mmgr_member_activity', function() {
                         $req_alias   = esc_html(mmgr_unescape_alias($req['community_alias'] ?: 'Member'));
                         $req_id      = (int) $req['requester_id'];
                         $req_photo   = $req['community_photo_url'];
-                        $profile_url = esc_url(home_url('/member-community-profile/?id=' . $req_id));
+                        $profile_url = esc_url(home_url('/member-community-profile/?id=' . $req_id . '&usercod=' . rawurlencode($member['member_code'])));
                         $nonce_res   = wp_create_nonce('mmgr_friend_respond');
                         $nonce_unf   = wp_create_nonce('mmgr_unfriend');
                     ?>
@@ -1632,7 +1629,7 @@ add_shortcode('mmgr_member_activity', function() {
                         $sreq_alias   = esc_html(mmgr_unescape_alias($sreq['community_alias'] ?: 'Member'));
                         $sreq_id      = (int) $sreq['requestee_id'];
                         $sreq_photo   = $sreq['community_photo_url'];
-                        $sreq_url     = esc_url(home_url('/member-community-profile/?id=' . $sreq_id));
+                        $sreq_url     = esc_url(home_url('/member-community-profile/?id=' . $sreq_id . '&usercod=' . rawurlencode($member['member_code'])));
                         $nonce_unf    = wp_create_nonce('mmgr_unfriend');
                     ?>
                     <div id="sreq-row-<?php echo $sreq_id; ?>" style="display:flex;align-items:center;gap:12px;padding:10px;background:#f9f9f9;border-radius:8px;border-left:4px solid #aaa;">
@@ -1913,11 +1910,10 @@ add_shortcode('mmgr_member_profile', function() {
     $member = mmgr_get_current_member();
     
     if (!$member) {
-        wp_redirect(home_url('/member-login/'));
-        exit;
+        return mmgr_portal_login_notice();
     }
 
-    mmgr_enforce_usercod($member);
+    if ($notice = mmgr_enforce_usercod($member)) return $notice;
     
     $success = $error = '';
 
@@ -2867,11 +2863,10 @@ add_shortcode('mmgr_member_community', function() {
     $member = mmgr_get_current_member();
     
     if (!$member) {
-        wp_redirect(home_url('/member-login/'));
-        exit;
+        return mmgr_portal_login_notice();
     }
 
-    mmgr_enforce_usercod($member);
+    if ($notice = mmgr_enforce_usercod($member)) return $notice;
     
     global $wpdb;
     $posts_tbl       = $wpdb->prefix . 'membership_forum_posts';
@@ -3086,7 +3081,7 @@ add_shortcode('mmgr_member_community', function() {
             <h3>📋 Discussion Topics</h3>
             <div style="display:flex;flex-wrap:wrap;gap:10px;">
                 <?php foreach ($topics as $topic): ?>
-                    <a href="?topic=<?php echo $topic['id']; ?>" 
+                    <a href="?topic=<?php echo intval($topic['id']); ?>&amp;usercod=<?php echo esc_attr(rawurlencode($member['member_code'])); ?>"
                        style="padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;transition:all 0.3s;<?php echo $topic['id'] == $selected_topic_id ? 'background:#FF2197;color:white;' : 'background:#eec2ff;color:#333;'; ?>">
                         <?php echo esc_html($topic['topic_name']); ?>
                     </a>
@@ -3098,7 +3093,7 @@ add_shortcode('mmgr_member_community', function() {
                     <?php foreach ($topic_moderators as $i => $tm): ?>
                         <?php 
                         $mod_display = !empty($tm['community_alias']) ? mmgr_unescape_alias($tm['community_alias']) : $tm['name'];
-                        $mod_url = esc_url(home_url('/member-community-profile/?id=' . intval($tm['member_id'])));
+                        $mod_url = esc_url(home_url('/member-community-profile/?id=' . intval($tm['member_id']) . '&usercod=' . rawurlencode($member['member_code'])));
                         ?>
                         <a href="<?php echo $mod_url; ?>" style="color:#0073aa;text-decoration:none;"><?php echo esc_html($mod_display); ?></a><?php echo $i < count($topic_moderators) - 1 ? ', ' : ''; ?>
                     <?php endforeach; ?>
@@ -3784,11 +3779,10 @@ add_shortcode('mmgr_member_messages', function() {
     $member = mmgr_get_current_member();
     
     if (!$member) {
-        wp_redirect(home_url('/member-login/'));
-        exit;
+        return mmgr_portal_login_notice();
     }
 
-    mmgr_enforce_usercod($member);
+    if ($notice = mmgr_enforce_usercod($member)) return $notice;
     
     $success = $error = '';
     $active_conversation = isset($_GET['chat']) ? intval($_GET['chat']) : null;
@@ -3932,7 +3926,7 @@ add_shortcode('mmgr_member_messages', function() {
                     <?php else: ?>
                         <?php foreach ($conversations as $conv): ?>
                             <div class="mmgr-conversation-item <?php echo ($active_conversation == $conv['member']['id']) ? 'active' : ''; ?>" 
-                                 onclick="window.location.href='?chat=<?php echo $conv['member']['id']; ?>'">
+                                 onclick="window.location.href='?chat=<?php echo intval($conv['member']['id']); ?>&amp;usercod=<?php echo esc_attr(rawurlencode($member['member_code'])); ?>'">
                                 
                                 <?php if (!empty($conv['member']['photo_url'])): ?>
                                     <img src="<?php echo esc_url($conv['member']['photo_url']); ?>" class="mmgr-conversation-avatar" alt="Avatar">
@@ -3962,7 +3956,7 @@ add_shortcode('mmgr_member_messages', function() {
                 <!-- Contacts Tab -->
                 <div id="contacts-tab" class="mmgr-tab-content" style="display:none;">
                     <?php foreach ($contacts as $contact): ?>
-                        <div class="mmgr-conversation-item" onclick="window.location.href='?chat=<?php echo $contact['id']; ?>'">
+                        <div class="mmgr-conversation-item" onclick="window.location.href='?chat=<?php echo intval($contact['id']); ?>&amp;usercod=<?php echo esc_attr(rawurlencode($member['member_code'])); ?>'">
                             <?php if (!empty($contact['photo_url'])): ?>
                                 <img src="<?php echo esc_url($contact['photo_url']); ?>" class="mmgr-conversation-avatar" alt="Avatar">
                             <?php else: ?>
@@ -3999,7 +3993,7 @@ add_shortcode('mmgr_member_messages', function() {
                     <?php else: ?>
                         <?php foreach ($archived_conversations as $conv): ?>
                             <div class="mmgr-conversation-item <?php echo ($active_conversation == $conv['member']['id']) ? 'active' : ''; ?>"
-                                 onclick="window.location.href='?chat=<?php echo $conv['member']['id']; ?>'">
+                                 onclick="window.location.href='?chat=<?php echo intval($conv['member']['id']); ?>&amp;usercod=<?php echo esc_attr(rawurlencode($member['member_code'])); ?>'">
                                 
                                 <?php if (!empty($conv['member']['photo_url'])): ?>
                                     <img src="<?php echo esc_url($conv['member']['photo_url']); ?>" class="mmgr-conversation-avatar" alt="Avatar">
@@ -4824,7 +4818,7 @@ add_action('wp_ajax_mmgr_poll_conversations', function() {
             $display_name = esc_html(mmgr_get_display_name($conv['member']));
             $time_ago     = esc_html(human_time_diff(strtotime($conv['last_message_time']), current_time('timestamp')) . ' ago');
 
-            $html .= '<div class="mmgr-conversation-item ' . $active_class . '" onclick="window.location.href=\'?chat=' . $mid . '\'">';
+            $html .= '<div class="mmgr-conversation-item ' . $active_class . '" onclick="window.location.href=\'?chat=' . $mid . '&amp;usercod=' . esc_attr(rawurlencode($member['member_code'])) . '\'">';
 
             if (!empty($conv['member']['photo_url'])) {
                 $html .= '<img src="' . esc_url($conv['member']['photo_url']) . '" class="mmgr-conversation-avatar" alt="Avatar">';
@@ -4979,11 +4973,10 @@ add_shortcode('mmgr_members_directory', function() {
     $member = mmgr_get_current_member();
     
     if (!$member) {
-        wp_redirect(home_url('/member-login/'));
-        exit;
+        return mmgr_portal_login_notice();
     }
 
-    mmgr_enforce_usercod($member);
+    if ($notice = mmgr_enforce_usercod($member)) return $notice;
     
     global $wpdb;
 
@@ -5477,11 +5470,10 @@ add_shortcode('mmgr_member_community_profile', function() {
     $current_member = mmgr_get_current_member();
     
     if (!$current_member) {
-        wp_redirect(home_url('/member-login/'));
-        exit;
+        return mmgr_portal_login_notice();
     }
 
-    mmgr_enforce_usercod($current_member);
+    if ($notice = mmgr_enforce_usercod($current_member)) return $notice;
     
     // Get profile member ID from URL
     $profile_member_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
@@ -5763,9 +5755,9 @@ add_shortcode('mmgr_member_community_profile', function() {
                 <div style="margin-bottom:16px;">
                     <p style="font-size:14px;color:#666;margin:0 0 8px 0;">
                         👥 <?php echo count($mutual_friends); ?> mutual friend<?php echo count($mutual_friends) !== 1 ? 's' : ''; ?>:
-                        <?php $mf_links = array_map(function($mf) {
+                        <?php $mf_links = array_map(function($mf) use ($current_member) {
                             $name = esc_html(mmgr_unescape_alias($mf['community_alias'] ?: $mf['name']));
-                            $url  = esc_url(home_url('/member-community-profile/?id=' . intval($mf['id'])));
+                            $url  = esc_url(home_url('/member-community-profile/?id=' . intval($mf['id']) . '&usercod=' . rawurlencode($current_member['member_code'])));
                             return '<a href="' . $url . '" style="color:#0073aa;text-decoration:none;">' . $name . '</a>';
                         }, $mutual_friends); echo implode(', ', $mf_links); ?>
                     </p>
@@ -5783,7 +5775,7 @@ add_shortcode('mmgr_member_community_profile', function() {
                 <?php if (!empty($activity)): ?>
                     <div style="display:flex;flex-direction:column;gap:15px;">
                         <?php foreach ($activity as $act): ?>
-                            <?php $topic_url = esc_url(home_url('/member-community/') . '?topic=' . intval($act['topic_id'])); ?>
+                            <?php $topic_url = esc_url(home_url('/member-community/') . '?topic=' . intval($act['topic_id']) . '&usercod=' . rawurlencode($current_member['member_code'])); ?>
                             <a href="<?php echo $topic_url; ?>" style="text-decoration:none;display:block;">
                             <div style="background:white;padding:15px;border-radius:6px;border-left:4px solid #FF2197;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -7165,11 +7157,10 @@ add_shortcode('mmgr_member_help', function() {
 
     $current_member = mmgr_get_current_member();
     if (!$current_member) {
-        wp_redirect(home_url('/member-login/'));
-        exit;
+        return mmgr_portal_login_notice();
     }
 
-    mmgr_enforce_usercod($current_member);
+    if ($notice = mmgr_enforce_usercod($current_member)) return $notice;
 
     global $wpdb;
 
